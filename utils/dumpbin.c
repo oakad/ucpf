@@ -1,3 +1,7 @@
+/*
+ * A simple testcase for the bin2str program.
+ */
+
 #include <stdio.h>
 
 struct incfile {
