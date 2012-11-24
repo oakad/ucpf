@@ -1,0 +1,9 @@
+using gcc ;
+
+BOOST_LIB_VERSION = [ SHELL "echo -n `sed -n -e '/^#define BOOST_LIB_VERSION \\\"\\\(.*\\\)\\\"/!d' -e 's//\\\1/p' /usr/include/boost/version.hpp`" ] ;
+
+lib unit_test_framework : : <name>boost_unit_test_framework-mt-$(BOOST_LIB_VERSION) ;
+lib test_exec_monitor : : <name>boost_test_exec_monitor-mt-$(BOOST_LIB_VERSION) ;
+
+project gdkxx : requirements <cxxflags>-std=c++0x <threading>multi
+	      : default-build debug ;

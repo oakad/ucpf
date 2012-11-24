@@ -1,3 +1,8 @@
 Useful Components for the Prosperous Future
 
-There should be a way to make computers less annoying.
+* utils
+Useful command line utilities, not quite fitting elsewhere.
+
+* rasham
+Simple and lightweight logging library supporting hierarchical categorization
+of messages. Also contains some basic support classes (for a time being).

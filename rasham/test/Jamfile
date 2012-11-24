@@ -1,0 +1,11 @@
+import testing ;
+
+run basic.cpp : : : <include>..
+		    <library>../src//rasham
+		    <library>..//unit_test_framework
+		    <library>..//test_exec_monitor ;
+
+run parse.cpp : : : <include>..
+		    <library>../src//rasham
+		    <library>..//unit_test_framework
+		    <library>..//test_exec_monitor ;

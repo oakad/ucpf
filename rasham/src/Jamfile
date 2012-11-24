@@ -1,0 +1,2 @@
+
+lib rasham : [ glob *.cpp ] : <include>.. ;
