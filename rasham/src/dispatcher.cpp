@@ -64,8 +64,8 @@ sink_nentry dispatcher::get_locus_nentry(locus const *loc)
 		if (check) {
 			check = false;
 			sink_nentry::type::apply_up(
-				r, [&check](sink_nentry r_) -> bool {
-					auto e(r_->get_entry());
+				r, [&check](sink_nentry r) -> bool {
+					auto e(r->get_entry());
 					if (!e.active.empty()) {
 						check = true;
 						return false;
@@ -91,8 +91,8 @@ void dispatcher::submit_message(locus const *loc, message msg)
 		return;
 
 	sink_nentry::type::apply_up(
-		r, [loc, msg](sink_nentry r_) -> bool {
-			auto e(r_->get_entry());
+		r, [loc, msg](sink_nentry r) -> bool {
+			auto e(r->get_entry());
 			for (auto sink : e.active)
 				sink->submit_message(loc, msg);
 
@@ -108,9 +108,10 @@ auto dispatcher::dump_tree(std::basic_ostream<char_type, traits_type> &os)
 	std::lock_guard<std::mutex> l_g(lock);
 	return sink_nentry::type::dump<char_type, traits_type>(
 		root, os,
-		[] (sink_set const &s, decltype(os) &os_) -> decltype(os) {
-			os_ << "loci: " << s.loci.size() << ", sinks a/p: "
-			    << s.active.size() << '/' << s.passive.size();
+		[] (sink_set const &e, decltype(os) &os_) -> decltype(os) {
+			os_ << "loci: " << e.loci.size() << ", sinks a/p: "
+			    << e.active.size() << '/' << e.passive.size();
+
 			return os_;
 		}
 	);
@@ -128,11 +129,11 @@ void dispatcher::bind_sink(char const *dest, sink *s)
 	sink_nentry a;
 
 	sink_nentry r(sink_nentry::type::apply_to_path(
-		root, dest, [&a, s](sink_nentry r_) -> bool {
-			auto e(r_->get_entry());
+		root, dest, [&a, s](sink_nentry r) -> bool {
+			auto e(r->get_entry());
 			if (!a) {
 				if (e.active.find(s) != e.active.end())
-					a = r_;
+					a = r;
 			}
 			return true;
 		},
@@ -150,8 +151,8 @@ void dispatcher::bind_sink(char const *dest, sink *s)
 		return;
 
 	sink_nentry::type::apply_down(
-		r, [s](sink_nentry r_) -> bool {
-			auto &e(r_->get_entry());
+		r, [s](sink_nentry r) -> bool {
+			auto &e(r->get_entry());
 			e.active.erase(s);
 
 			for (auto l : e.loci)
@@ -169,13 +170,123 @@ void dispatcher::bind_sink(char const *dest, sink *s)
 	}
 }
 
+void dispatcher::unbind_sink(char const *dest, sink *s_ptr)
+{
+	std::lock_guard<std::mutex> l_g(lock);
+	size_t a_count(0);
+	auto r(sink_nentry::type::apply_to_path(
+		root, dest, [&a_count](sink_nentry r) -> bool {
+			auto &e(r->get_entry());
+			a_count += e.active.size();
+			return true;
+		},
+		false
+	));
+
+	if (!r)
+		return;
+
+	r->lock();
+	auto &e(r->get_entry());
+	e.passive.erase(s_ptr);
+	auto iter(e.active.find(s_ptr));
+	if (iter == e.active.end()) {
+		r->unlock();
+		return;
+	} else
+		e.active.erase(iter);
+
+	if (a_count > 1) {
+		r->unlock();
+		return;
+	}
+
+	for (auto l : e.loci)
+		*(l->cond) = 0;
+
+	r->unlock();
+	bool skip(true);
+
+	sink_nentry::type::apply_down(
+		r, [s_ptr, &skip](sink_nentry r) -> bool {
+			if (skip) {
+				skip = false;
+				return true;
+			}
+			auto &e(r->get_entry());
+			bool is_active(!e.active.empty());
+
+			auto iter(e.passive.find(s_ptr));
+			if (iter != e.passive.end()) {
+				e.active.emplace(s_ptr);
+
+				if (is_active)
+					return false;
+
+				r->unlock();
+				sink_nentry::type::apply_down(
+					r, [](sink_nentry r) -> bool {
+						auto &e(r->get_entry());
+						for (auto l : e.loci)
+							*(l->cond) = 1;
+
+						return true;
+					}
+				);
+				r->lock();
+				return false;
+			} else {
+				if (is_active)
+					return false;
+			}
+
+			for (auto l : e.loci)
+				*(l->cond) = 0;
+
+			return true;
+		}
+	);
+}
+
+void dispatcher::unbind_sink(sink *s_ptr)
+{
+	std::lock_guard<std::mutex> l_g(lock);
+	sink_nentry::type::apply_down(
+		root, [s_ptr](sink_nentry r) -> bool {
+			auto &e(r->get_entry());
+
+			e.active.erase(s_ptr);
+			e.passive.erase(s_ptr);
+
+			if (e.active.empty()) {
+				for (auto l : e.loci)
+					*(l->cond) = 0;
+
+				return true;
+			} else {
+				r->unlock();
+				sink_nentry::type::apply_down(
+					r, [s_ptr](sink_nentry r) -> bool {
+						auto &e(r->get_entry());
+						e.active.erase(s_ptr);
+						e.passive.erase(s_ptr);
+						return true;
+					}
+				);
+				r->lock();
+				return false;
+			}
+		}
+	);
+}
+
 void dispatcher::unbind_sink()
 {
 	std::lock_guard<std::mutex> l_g(lock);
 
 	sink_nentry::type::apply_down(
-		root, [](sink_nentry r_) -> bool {
-			auto &e(r_->get_entry());
+		root, [](sink_nentry r) -> bool {
+			auto &e(r->get_entry());
 			e.active.clear();
 			e.passive.clear();
 
@@ -185,6 +296,27 @@ void dispatcher::unbind_sink()
 			return true;
 		}
 	);
+}
+
+fd_sink::~fd_sink()
+{
+	if (owned)
+		close(fd);
+}
+
+void fd_sink::submit_message(locus const *loc, message msg)
+{
+	char *msg_out(nullptr);
+	int msg_cnt(asprintf(
+		&msg_out, "[%ld.%06ld] %s: %s\n", msg->time_stamp.tv_sec,
+		msg->time_stamp.tv_nsec / 1000, msg->origin->dest,
+		msg.get_extra<char>()
+	));
+
+	if (msg_cnt > 0) {
+		write(fd, msg_out, msg_cnt);
+		free(msg_out);
+	}
 }
 
 message make_message(char const *fmt, va_list ap)
@@ -228,7 +360,7 @@ void bind_sink(char const *dest, sink *s)
 	auto d(get_global_dispatcher());
 	d->bind_sink(dest, s);
 }
-/*
+
 void unbind_sink(char const *dest, sink *s)
 {
 	auto d(get_global_dispatcher());
@@ -240,7 +372,7 @@ void unbind_sink(sink *s)
 	auto d(get_global_dispatcher());
 	d->unbind_sink(s);
 }
-*/
+
 void unbind_sink()
 {
 	auto d(get_global_dispatcher());

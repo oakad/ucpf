@@ -42,8 +42,8 @@ struct dispatcher {
 	-> decltype(os) &;
 
 	void bind_sink(char const *dest, sink *s);
-	void unbind_sink(char const *dest, sink *s);
-	void unbind_sink(sink *s);
+	void unbind_sink(char const *dest, sink *s_ptr);
+	void unbind_sink(sink *s_ptr);
 	void unbind_sink();
 
 private:

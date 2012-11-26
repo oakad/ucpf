@@ -15,21 +15,41 @@
 namespace rasham
 {
 
+struct sink;
+
+void bind_sink(char const *dest, sink *s);
+void unbind_sink(char const *dest, sink *s);
+void unbind_sink(sink *s);
+void unbind_sink();
+
 struct sink {
 	sink(sink const &) = delete;
 	sink &operator=(sink const &) = delete;
 
-	virtual ~sink() {}
+	virtual ~sink()
+	{
+		unbind_sink(this);
+	}
+
 	virtual void submit_message(locus const *loc, message msg) = 0;
 
 protected:
 	sink() {}
 };
 
-void bind_sink(char const *dest, sink *s);
-void unbind_sink(char const *dest, sink *s);
-void unbind_sink(sink *s);
-void unbind_sink();
+struct fd_sink : public sink {
+	fd_sink(int fd_, bool owned_)
+	: fd(fd_), owned(owned_)
+	{}
+
+	virtual ~fd_sink();
+	virtual void submit_message(locus const *loc, message msg);
+
+private:
+	int fd;
+	bool owned;
+};
+
 
 std::ostream &dump_hierarchy(std::ostream &os);
 
