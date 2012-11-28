@@ -19,73 +19,77 @@ namespace rasham
 
 namespace qi = boost::spirit::qi;
 
-template <typename entry_type>
+template <typename entry_type, typename char_type, typename traits_type>
 struct nentry_t;
 
-template <typename entry_type>
-using nentry = counted_ptr<nentry_t<entry_type>>;
+template <
+	typename entry_type, typename char_type = char,
+	typename traits_type = std::char_traits<char_type>
+> using nentry = counted_ptr<nentry_t<entry_type, char_type, traits_type>>;
 
-template <typename entry_type>
-using nentry_func = std::function<bool (nentry<entry_type>)>;
+template <
+	typename entry_type, typename char_type = char,
+	typename traits_type = std::char_traits<char_type>
+> using nentry_func = std::function<
+	bool (nentry<entry_type, char_type, traits_type>)
+>;
 
-template <typename entry_type>
+template <typename entry_type, typename char_type = char,
+	  typename traits_type = std::char_traits<char_type>>
 struct nentry_t {
-	friend struct ref_count_val<nentry_t<entry_type>>;
+	typedef nentry_t<entry_type, char_type, traits_type> self_type;
+	typedef nentry<entry_type, char_type, traits_type> wrapper_type;
+	typedef nentry_func<entry_type, char_type, traits_type> func_type;
+	typedef std::basic_string<char_type, traits_type> string_type;
 
-	static nentry<entry_type> make(std::string name_ = std::string())
+	friend struct ref_count_val<self_type>;
+
+	static wrapper_type make(string_type name_ = string_type())
 	{
-		auto p(make_counted<nentry_t<entry_type>>(name_));
+		auto p(make_counted<self_type>(name_));
 		return p;
 	}
 
-	static nentry<entry_type> get_child(
-		std::string name_, nentry<entry_type> parent_,
-		bool create = false
+	static wrapper_type get_child(
+		string_type name_, wrapper_type parent_, bool create = false
 	)
 	{
 		std::lock_guard<std::mutex> l_g(parent_->m_lock);
 		auto child(parent_->children.find(name_));
 		if (child)
-			return nentry<entry_type>(*child);
+			return wrapper_type(*child);
 
 		if (!create)
-			return nentry<entry_type>();
+			return wrapper_type();
 
-		nentry<entry_type> p(make_counted<nentry_t<entry_type>>(
-			name_, parent_)
-		);
+		wrapper_type p(make_counted<self_type>(name_, parent_));
 		parent_->children.add(name_, p);
 		return p;
 	}
 
-	static nentry<entry_type> apply_to_path(
-		nentry<entry_type> r, char const *path,
-		nentry_func<entry_type> f, bool create = false
+	static wrapper_type apply_to_path(
+		wrapper_type r, string_type path, func_type f,
+		bool create = false
 	);
 
-	static void apply_up(
-		nentry<entry_type> r, nentry_func<entry_type> f
-	);
+	static void apply_up(wrapper_type r, func_type f);
 
 	template <bool postorder = false>
-	static void apply_down(
-		nentry<entry_type> r, nentry_func<entry_type> f
-	);
+	static void apply_down(wrapper_type r, func_type f);
 
-	static nentry<entry_type> lookup_path(
-		nentry<entry_type> r, char const *path, bool create = false
+	static wrapper_type lookup_path(
+		wrapper_type r, string_type path, bool create = false
 	)
 	{
 		return apply_to_path(
 			r, path,
-			[](nentry<entry_type> r_) -> bool { return true; },
+			[](wrapper_type r) -> bool { return true; },
 			create
 		);
 	}
 
-	template <typename char_type, typename traits_type>
 	static std::basic_ostream<char_type, traits_type> &dump(
-		nentry<entry_type> r,
+		wrapper_type r,
 		std::basic_ostream<char_type, traits_type> &os,
 		std::function<decltype(os) & (entry_type const &,
 					      decltype(os) &)> entry_dumper
@@ -93,16 +97,14 @@ struct nentry_t {
 	{
 		if (r) {
 			std::lock_guard<std::mutex> l_g(r->m_lock);
-			os << '\'' << r->children.name() << "\' <"
+			os << '\'' << r->name() << "\' <"
 			   << static_cast<void *>(r.get()) << "> ";
 			{
 				auto &e(r->get_entry());
 				entry_dumper(e, os);
 			}
 			os << '\n';
-			tree_dumper<char_type, traits_type> dumper(
-				os, entry_dumper
-			);
+			tree_dumper dumper(os, entry_dumper);
 			r->children.for_each(std::ref(dumper));
 			if (dumper.last_entry)
 				dumper(dumper.last_name, dumper.last_entry);
@@ -112,20 +114,20 @@ struct nentry_t {
 			return os;
 	}
 
-	static void cull_tree(nentry<entry_type> r);
+	static void cull_tree(wrapper_type r);
 
 	virtual ~nentry_t()
 	{
 		if (parent) {
 			std::lock_guard<std::mutex> l_g(parent->m_lock);
 
-			parent->children.remove(children.name());
+			parent->children.remove(name());
 		}
 	}
 
-	std::string name() const
+	string_type name() const
 	{
-		return children.name();
+		return entry_name;
 	}
 
 	entry_type &get_entry()
@@ -145,21 +147,19 @@ struct nentry_t {
 
 	void submit_message(message msg);
 private:
-	nentry_t(std::string name_)
-	: children(name_) {}
+	nentry_t(string_type name_) : entry_name(name_) {}
 
-	nentry_t(std::string name_, nentry<entry_type> parent_)
-	: children(name_), parent(parent_) {}
+	nentry_t(string_type name_, wrapper_type parent_)
+	: entry_name(name_), parent(parent_) {}
 
-	template <typename char_type, typename traits_type>
 	struct tree_dumper {
 		std::basic_ostream<char_type, traits_type> &os;
 		std::function<
 			decltype(os) & (entry_type const &, decltype(os) &)
 		> &entry_dumper;
 		boost::dynamic_bitset<> b;
-		std::basic_string<char_type, traits_type> last_name;
-		nentry<entry_type> last_entry;
+		string_type last_name;
+		wrapper_type last_entry;
 
 		tree_dumper(
 			decltype(os) &os_, decltype(entry_dumper) &entry_dumper_
@@ -177,31 +177,26 @@ private:
 			b.push_back(next_bit);
 		}
 
-		void operator()(
-			std::basic_string<char_type, traits_type> const &s,
-			nentry<entry_type> d
-		);
+		void operator()(string_type const &s, wrapper_type d);
 	};
 
 	struct child_finder {
-		child_finder(
-			nentry<entry_type> &p_,
-			nentry_func<entry_type> f_, bool create_
-		)
+		child_finder(wrapper_type &p_, func_type f_, bool create_)
 		: p(p_), f(f_), create(create_) {}
 
 		template <typename context_type>
-		void operator()(std::string const &name, context_type &ctx,
+		void operator()(string_type const &name, context_type &ctx,
 				bool &pass) const;
 
-		nentry<entry_type> &p;
-		nentry_func<entry_type> f;
+		wrapper_type &p;
+		func_type f;
 		bool create;
 	};
 
 	std::mutex m_lock;
-	boost::spirit::qi::symbols<char, nentry<entry_type>> children;
-	nentry<entry_type> parent;
+	string_type entry_name;
+	boost::spirit::qi::symbols<char_type, wrapper_type> children;
+	wrapper_type parent;
 	entry_type entry;
 };
 

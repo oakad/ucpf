@@ -101,12 +101,10 @@ void dispatcher::submit_message(locus const *loc, message msg)
 	);
 }
 
-template <typename char_type, typename traits_type>
-auto dispatcher::dump_tree(std::basic_ostream<char_type, traits_type> &os)
--> decltype(os) &
+std::ostream &dispatcher::dump_tree(std::ostream &os)
 {
 	std::lock_guard<std::mutex> l_g(lock);
-	return sink_nentry::type::dump<char_type, traits_type>(
+	return sink_nentry::type::dump(
 		root, os,
 		[] (sink_set const &e, decltype(os) &os_) -> decltype(os) {
 			os_ << "loci: " << e.loci.size() << ", sinks a/p: "
@@ -123,7 +121,7 @@ std::ostream &dump_hierarchy(std::ostream &os)
 	return d->dump_tree(os);
 }
 
-void dispatcher::bind_sink(char const *dest, sink *s)
+void dispatcher::bind_sink(std::string dest, sink *s)
 {
 	std::lock_guard<std::mutex> l_g(lock);
 	sink_nentry a;
@@ -170,7 +168,7 @@ void dispatcher::bind_sink(char const *dest, sink *s)
 	}
 }
 
-void dispatcher::unbind_sink(char const *dest, sink *s_ptr)
+void dispatcher::unbind_sink(std::string dest, sink *s_ptr)
 {
 	std::lock_guard<std::mutex> l_g(lock);
 	size_t a_count(0);

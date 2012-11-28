@@ -12,11 +12,9 @@
 namespace rasham
 {
 
-template <typename entry_type>
-template <typename char_type, typename traits_type>
-void nentry_t<entry_type>::tree_dumper<char_type, traits_type>::operator()(
-	std::basic_string<char_type, traits_type> const &s,
-	nentry<entry_type> d
+template <typename entry_type, typename char_type, typename traits_type>
+void nentry_t<entry_type, char_type, traits_type>::tree_dumper::operator()(
+	string_type const &s, wrapper_type d
 )
 {
 	if (!last_entry) {
@@ -40,14 +38,14 @@ void nentry_t<entry_type>::tree_dumper<char_type, traits_type>::operator()(
 		os << '`';
 
 	last_entry->lock();
-	os << "-- \'" << last_entry->children.name() << "\' <"
+	os << "-- \'" << last_entry->name() << "\' <"
 	   << static_cast<void *>(last_entry.get()) << "> ";
 	{
 		auto &e(last_entry->get_entry());
 		entry_dumper(e, os);
 	}
 	os << '\n';
-	tree_dumper<char_type, traits_type> dumper(
+	tree_dumper dumper(
 		os, entry_dumper, b, not_last
 	);
 	last_entry->children.for_each(std::ref(dumper));
@@ -59,13 +57,13 @@ void nentry_t<entry_type>::tree_dumper<char_type, traits_type>::operator()(
 	last_entry = d;
 }
 
-template <typename entry_type>
+template <typename entry_type, typename char_type, typename traits_type>
 template <typename context_type>
-void nentry_t<entry_type>::child_finder::operator()(
-	std::string const &name, context_type &ctx, bool &pass
+void nentry_t<entry_type, char_type, traits_type>::child_finder::operator()(
+	string_type const &name, context_type &ctx, bool &pass
 ) const
 {
-	nentry<entry_type> q;
+	wrapper_type q;
 
 	if (p) {
 		std::lock_guard<std::mutex> l_g(p->m_lock);
@@ -78,7 +76,7 @@ void nentry_t<entry_type>::child_finder::operator()(
 		if (child)
 			q = *child;
 		else if (create) {
-			q = make_counted<nentry_t<entry_type>>(name, p);
+			q = make_counted<self_type>(name, p);
 			p->children.add(name, q);
 		}
 	} else {
@@ -90,22 +88,21 @@ void nentry_t<entry_type>::child_finder::operator()(
 	p = q;
 }
 
-template <typename entry_type>
-nentry<entry_type> nentry_t<entry_type>::apply_to_path(
-	nentry<entry_type> r, char const *path,
-	nentry_func<entry_type> f, bool create
-)
+template <typename entry_type, typename char_type, typename traits_type>
+auto nentry_t<entry_type, char_type, traits_type>::apply_to_path(
+	wrapper_type r, string_type path, func_type f, bool create
+) -> wrapper_type
 {
 	child_finder finder(r, f, create);
 
-	qi::rule<char const *, std::string()> elem_rule(
+	qi::rule<typename string_type::iterator, string_type()> elem_rule(
 		+(('\\' || qi::char_) - '/')
 	);
-	qi::rule<char const *, void()> path_rule(
+	qi::rule<typename string_type::iterator, void()> path_rule(
 		(-qi::lit('/')) >> (elem_rule[finder] % qi::lit('/'))
 	);
 
-	if (qi::parse(path, path + strlen(path), path_rule)) {
+	if (qi::parse(path.begin(), path.end(), path_rule)) {
 		if (finder.p) {
 			std::lock_guard<std::mutex> l_g(finder.p->m_lock);
 			f(finder.p);
@@ -115,12 +112,12 @@ nentry<entry_type> nentry_t<entry_type>::apply_to_path(
 	return finder.p;
 }
 
-template <typename entry_type>
-void nentry_t<entry_type>::apply_up(
-	nentry<entry_type> r, nentry_func<entry_type> f
+template <typename entry_type, typename char_type, typename traits_type>
+void nentry_t<entry_type, char_type, traits_type>::apply_up(
+	wrapper_type r, func_type f
 )
 {
-	nentry<entry_type> p;
+	wrapper_type p;
 
 	while (r) {
 		r->lock();
@@ -134,10 +131,10 @@ void nentry_t<entry_type>::apply_up(
 	}
 }
 
-template <typename entry_type>
+template <typename entry_type, typename char_type, typename traits_type>
 template <bool postorder>
-void nentry_t<entry_type>::apply_down(
-	nentry<entry_type> r, nentry_func<entry_type> f
+void nentry_t<entry_type, char_type, traits_type>::apply_down(
+	wrapper_type r, func_type f
 )
 {
 	if (!r)
@@ -150,27 +147,27 @@ void nentry_t<entry_type>::apply_down(
 			return;
 
 		r->children.for_each(
-			[f](std::string const &s, nentry<entry_type> d) {
-				nentry_t<entry_type>::apply_down(d, f);
+			[f](string_type const &s, wrapper_type d) {
+				self_type::apply_down(d, f);
 			}
 		);
 	} else {
 		r->children.for_each(
-			[f](std::string const &s, nentry<entry_type> d) {
-				nentry_t<entry_type>::apply_down<true>(d, f);
+			[f](string_type const &s, wrapper_type d) {
+				self_type::apply_down<true>(d, f);
 			}
 		);
 		f(r);
 	}
 }
 
-template <typename entry_type>
-void nentry_t<entry_type>::cull_tree(nentry<entry_type> r)
+template <typename entry_type, typename char_type, typename traits_type>
+void nentry_t<entry_type, char_type, traits_type>::cull_tree(wrapper_type r)
 {
 	apply_down<true>(
-		r, [](nentry<entry_type> r_) -> bool {
-			r_->parent.reset();
-			r_->children.clear();
+		r, [](wrapper_type r) -> bool {
+			r->parent.reset();
+			r->children.clear();
 			return true;
 		}
 	);

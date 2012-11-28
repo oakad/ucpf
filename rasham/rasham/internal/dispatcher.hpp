@@ -37,12 +37,10 @@ struct dispatcher {
 	void submit_message(locus const *loc, message msg);
 	sink_nentry get_locus_nentry(locus const *loc);
 
-	template <typename char_type, typename traits_type>
-	auto dump_tree(std::basic_ostream<char_type, traits_type> &os)
-	-> decltype(os) &;
+	std::ostream &dump_tree(std::ostream &os);
 
-	void bind_sink(char const *dest, sink *s);
-	void unbind_sink(char const *dest, sink *s_ptr);
+	void bind_sink(std::string dest, sink *s);
+	void unbind_sink(std::string dest, sink *s_ptr);
 	void unbind_sink(sink *s_ptr);
 	void unbind_sink();
 
