@@ -10,6 +10,8 @@
 #define _RASHAM_INTERNAL_COUNTED_PTR_BASE_HPP
 
 #include <atomic>
+#include <tuple>
+#include <typeinfo>
 
 namespace rasham
 {

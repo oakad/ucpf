@@ -38,7 +38,7 @@ struct hash<rasham::crope>
 template<>
 struct hash<rasham::wrope>
 {
-	size_t operator()(wrope const &str) const
+	size_t operator()(rasham::wrope const &str) const
 	{
 		size_t size(str.size());
 		if (!size)

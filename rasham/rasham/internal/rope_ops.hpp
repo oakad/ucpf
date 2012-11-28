@@ -29,6 +29,9 @@
 #if !defined(_RASHAM_INTERNAL_ROPE_OPS_HPP)
 #define _RASHAM_INTERNAL_ROPE_OPS_HPP
 
+#include <stdexcept>
+#include <ext/algorithm>
+
 namespace rasham
 {
 
@@ -39,7 +42,9 @@ rope<char_type, traits_type_, alloc_type>::npos = static_cast<size_type>(-1);
 /* These are Fibonacci numbers < 2**32. */
 template<typename char_type, typename traits_type_, typename alloc_type>
 unsigned long const
-rope<char_type, traits_type_, alloc_type>::min_len[max_rope_depth + 1] = {
+rope<char_type, traits_type_, alloc_type>::min_len[
+	rope_param::max_rope_depth + 1
+] = {
 	/* 00 */1, /* 01 */2, /* 02 */3, /* 03 */5, /* 04 */8, /* 05 */13,
 	/* 06 */21, /* 07 */34, /* 08 */55, /* 09 */89, /* 10 */144,
 	/* 11 */233, /* 12 */377, /* 13 */610, /* 14 */987, /* 15 */1597,
@@ -56,7 +61,7 @@ rope<char_type, traits_type_, alloc_type>::min_len[max_rope_depth + 1] = {
 
 template<typename char_type, typename traits_type_, typename alloc_type>
 const typename rope<char_type, traits_type_, alloc_type>::rope_rep_ops
-rope<char_type, traits_type_, alloc_type>::rep_ops[rope_tag::last_tag] = {
+rope<char_type, traits_type_, alloc_type>::rep_ops[int(rope_tag::last_tag)] = {
 	{&rope_rep::apply,    &rope_rep::substring},
 	{&rope_leaf::apply,   &rope_leaf::substring},
 	{&rope_concat::apply, &rope_concat::substring},
@@ -90,7 +95,7 @@ void rope<char_type, traits_type_, alloc_type>::add_leaf_to_forest(
 			insertee = concat_and_set_balanced(forest[i], insertee);
 			forest[i].reset();
 		}
-		if ((i == max_rope_depth)
+		if ((i == rope_param::max_rope_depth)
 		    || (insertee->size < min_len[i+1])) {
 			forest[i] = insertee;
 			return;
@@ -123,7 +128,7 @@ rope<char_type, traits_type_, alloc_type>::balance(
 	::rope_rep_ptr const &r
 )
 {
-	rope_rep_ptr forest[max_rope_depth + 1];
+	rope_rep_ptr forest[rope_param::max_rope_depth + 1];
 	rope_rep_ptr rv;
 	int i;
 
@@ -135,14 +140,14 @@ rope<char_type, traits_type_, alloc_type>::balance(
 
 	add_to_forest(r, forest);
 
-	for (i = 0; i <= max_rope_depth; ++i)
+	for (i = 0; i <= rope_param::max_rope_depth; ++i)
 		if (forest[i]) {
 			rv = concat(forest[i], rv);
 			forest[i].reset();
 		}
 
-	if (rv->depth > max_rope_depth)
-		std::throw_length_error("rope::balance");
+	if (rv->depth > rope_param::max_rope_depth)
+		throw std::length_error("rope::balance");
 
 	return rv;
 }
@@ -171,13 +176,13 @@ rope<char_type, traits_type_, alloc_type>::concat(
 
 	if (l_leaf) {
 		if ((l_leaf->size + r_leaf->size)
-		    <= size_type(max_copy))
+		    <= size_type(rope_param::max_copy))
 			return leaf_concat_char_iter(
 				l_leaf, r_leaf->data,
 				r_leaf->size
 			);
 	} else {
-		rope_concat_ptr l_cat(rep_cast<_rope_concat>(l));
+		rope_concat_ptr l_cat(rep_cast<rope_concat>(l));
 
 		if (l_cat) {
 			rope_leaf_ptr lr_leaf(
@@ -186,7 +191,7 @@ rope<char_type, traits_type_, alloc_type>::concat(
 
 			if (lr_leaf
 			    && ((lr_leaf->size + r_leaf->size)
-				<= size_type(max_copy))) {
+				<= size_type(rope_param::max_copy))) {
 				rope_rep_ptr ll(l_cat->left);
 				rope_rep_ptr rest(leaf_concat_char_iter(
 					lr_leaf, r_leaf->data,
@@ -210,12 +215,12 @@ rope<char_type, traits_type_, alloc_type>::tree_concat(
 	::rope_rep_ptr const &r
 )
 {
-	rope_concat_ptr rv(_rope_concat::make(l, r));
+	rope_concat_ptr rv(rope_concat::make(l, r));
 	size_type depth(rv->depth);
 
 	if ((depth > 20)
 	    && ((rv->size < 1000)
-		|| (depth > size_type(max_rope_depth))))
+		|| (depth > size_type(rope_param::max_rope_depth))))
 		return balance(rv);
 	else
 		return rv;
@@ -232,14 +237,13 @@ rope<char_type, traits_type_, alloc_type>::leaf_concat_char_iter(
 )
 {
 	size_type old_len(r->size);
-	size_type new_len(old_len + n);
 
 	rope_leaf_ptr rv(
-		rope_leaf::make(new_len, *get_allocator<alloc_type>(r))
+		rope_leaf::make(old_len + n, *get_allocator<alloc_type>(r))
 	);
 
 	traits_type::copy(&rv->data[0], r->data, old_len);
-	traits_type::copy(&rv->data[old_len], iter, len);
+	traits_type::copy(&rv->data[old_len], iter, n);
 
 	return rv;
 }
@@ -266,7 +270,7 @@ rope<char_type, traits_type_, alloc_type>::concat_char_iter(
 		if (c) {
 			l = rep_cast<rope_leaf>(c->right);
 
-			if (l && l->size + len <= rope_type::copy_max) {
+			if (l && l->size + n <= rope_type::copy_max) {
 				rope_leaf_ptr right(leaf_concat_char_iter(
 						l, iter, n
 				));
@@ -275,7 +279,7 @@ rope<char_type, traits_type_, alloc_type>::concat_char_iter(
 		}
 	}
 
-	l = rope_leaf::make(iter, len, *get_allocator<alloc_type>(r));
+	l = rope_leaf::make(iter, n, *get_allocator<alloc_type>(r));
 
 	return tree_concat(r, l);
 }
@@ -330,7 +334,7 @@ bool rope<char_type, traits_type_, alloc_type>::rope_concat::apply(
 	typename rope<char_type, traits_type_, alloc_type>::size_type end
 )
 {
-	rope_concat_ptr c(static_pointer_cast<_rope_concat>(r));
+	rope_concat_ptr c(static_pointer_cast<rope_concat>(r));
 	rope_rep_ptr left(c->left);
 	size_type left_len(left->size);
 
@@ -367,16 +371,16 @@ rope<char_type, traits_type_, alloc_type>::rope_leaf::substring(
 		return rope_rep_ptr();
 
 	rope_leaf_ptr l(static_pointer_cast<rope_leaf>(r));
-	size_type rv_len(adj_end - begin);
+	size_type res_len(adj_end - begin);
 
-	if (rv_len > lazy_threshold)
+	if (res_len > rope_param::lazy_threshold)
 		return rope_substr::make(
 			r, begin, adj_end - begin,
 			*get_allocator<alloc_type>(r)
 		);
 	else
-		return _rope_leaf::make(
-			l->data + begin, rv_len,
+		return rope_leaf::make(
+			l->data + begin, res_len,
 			*get_allocator<alloc_type>(l)
 		);
 }
@@ -460,7 +464,7 @@ rope<char_type, traits_type_, alloc_type>::rope_func::substring(
 			res_len, *get_allocator<alloc_type>(r)
 		));
 
-		f->fn(begin, rv_len, rv->data);
+		f->fn(begin, res_len, rv->data);
 		return rv;
 	}
 }
@@ -481,7 +485,7 @@ rope<char_type, traits_type_, alloc_type>::iterator_base::setbuf(
 		iter.buf_cur = iter.buf_begin + (pos - leaf_pos);
 		iter.buf_end = iter.buf_begin + l->size;
 	} else {
-		size_type len(iterator_buf_len);
+		size_type len(rope_param::iterator_buf_len);
 		size_type buf_start_pos(leaf_pos);
 		size_t leaf_end(iter.path_end[iter.path_index]->size
 				+ leaf_pos);
@@ -496,11 +500,12 @@ rope<char_type, traits_type_, alloc_type>::iterator_base::setbuf(
 		if (buf_start_pos + len > leaf_end)
 			len = leaf_end - buf_start_pos;
 
+		auto tmp_buf(iter.tmp_buf);
 		apply(
 			iter.path_end[iter.path_index],
-			[iter.tmp_buf](char_type const *in, size_type in_sz)
+			[tmp_buf](char_type const *in, size_type in_sz)
 			-> bool {
-				std::copy_n(in, in_sz, iter.tmp_buf);
+				std::copy_n(in, in_sz, tmp_buf);
 				return true;
 			},
 			buf_start_pos - leaf_pos,
@@ -629,11 +634,12 @@ rope<char_type, traits_type_, alloc_type>::iterator_base::setcache_for_incr(
 	while (c) {
 		++current_index;
 
-		if (path_cache_len == current_index) {
-			for (int i = 0; i < (path_cache_len - 1); ++i)
+		if (rope_param::path_cache_len == current_index) {
+			for (int i = 0; i < (rope_param::path_cache_len - 1);
+			     ++i)
 				iter.path_end[i] = iter.path_end[i+1];
 
-			--__current_index;
+			--current_index;
 		}
 
 		iter.path_end[current_index] = c->left;
@@ -649,7 +655,7 @@ rope<char_type, traits_type_, alloc_type>::iterator_base::setcache_for_incr(
 }
 
 template<typename char_type, typename traits_type_, typename alloc_type>
-void rope<char_type, traits_type_, alloc_type>::_iterator_base::incr(
+void rope<char_type, traits_type_, alloc_type>::iterator_base::incr(
 	typename rope<char_type, traits_type_, alloc_type>::size_type n
 )
 {
@@ -669,7 +675,7 @@ void rope<char_type, traits_type_, alloc_type>::_iterator_base::incr(
 }
 
 template<typename char_type, typename traits_type_, typename alloc_type>
-void rope<char_type, traits_type_, alloc_type>::_iterator_base::decr(
+void rope<char_type, traits_type_, alloc_type>::iterator_base::decr(
 	typename rope<char_type, traits_type_, alloc_type>::size_type n
 )
 {
@@ -741,13 +747,15 @@ std::basic_ostream<char_type, traits_type_>
 
 		os << kind << " " << r.get() << " (rc = " << r.use_count()
 		   << ", depth = " << static_cast<int>(r->depth) << ", size = "
-		   << __r->size << ") ";
+		   << r->size << ") ";
 
 		char_type s[rope_param::max_printout_len];
 		size_type s_len;
 
 		{
-			rope_rep_ptr prefix(substring(r, 0, max_printout_len));
+			rope_rep_ptr prefix(
+				substring(r, 0, rope_param::max_printout_len)
+			);
 
 			flatten(prefix, s);
 			s_len = prefix->size;
@@ -916,18 +924,21 @@ std::basic_ostream<char_type, traits_type_> &operator<<(
 	rope<char_type, traits_type_, alloc_type> const &r
 )
 {
+	typedef rope<char_type, traits_type_, alloc_type> rope_type;
 	std::ostream_iterator<char_type, char_type, traits_type_> out_iter(os);
-	auto w(os.width());
 	auto rope_len(r.size());
+	decltype(rope_len) w(os.width());
 	auto pad_len((rope_len < w) ? (w - rope_len) : 0);
 	bool left(os.flags() & std::ios::left);
 
 	if (!left && pad_len > 0)
 		std::fill_n(out_iter, pad_len, os.fill());
 
-	decltype(r)::apply(
+	rope_type::apply(
 		std::get<0>(r.treeplus),
-		[&out_iter](char_type const *in, size_type in_sz) -> bool {
+		[&out_iter](char_type const *in,
+			    typename alloc_type::size_type in_sz)
+		-> bool {
 			std::copy_n(in, in_sz, out_iter);
 			return true;
 		},

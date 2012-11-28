@@ -29,15 +29,16 @@
 #if !defined(_RASHAM_INTERNAL_ROPE_BASE_HPP)
 #define _RASHAM_INTERNAL_ROPE_BASE_HPP
 
+#include <iterator>
+#include <functional>
+#include <rasham/counted_ptr.hpp>
+
 namespace rasham
 {
 
-#include <iterator>
-#include <rasham/counted_ptr.h>
-
 template <
 	typename char_type,
-	typename traits_type = std::char_traits<char_type>,
+	typename traits_type_ = std::char_traits<char_type>,
 	typename alloc_type = std::allocator<char_type>
 > struct rope;
 
@@ -62,35 +63,41 @@ public:
 
 protected:
 	/* Useful named constants */
-	enum struct rope_param : int {
-		/* We allocate leaf data in increments of
-		 * 1 << alloc_granularity_shift.
-		 */
-		alloc_granularity_shift = 3,
+	struct rope_param {
+		enum {
+			/* We allocate leaf data in increments of
+			 * 1 << alloc_granularity_shift.
+			 */
+			alloc_granularity_shift = 3,
 
-		/* Iterators will store path_cache_len rope node references. */
-		path_cache_len = 5,
+			/* Iterators will store path_cache_len rope node
+			 * references.
+			 */
+			path_cache_len = 5,
 
-		/* Iterators will cache iterator_buf_len characters from
-		 * non-leaf rope nodes.
-		 */
-		iterator_buf_len = 16,
+			/* Iterators will cache iterator_buf_len characters
+			 * from non-leaf rope nodes.
+			 */
+			iterator_buf_len = 16,
 
-		/* For strings shorter than max_copy, we copy to concatenate. */
-		max_copy = 23,
+			/* For strings shorter than max_copy, we copy to
+			 * concatenate.
+			 */
+			max_copy = 23,
 
-		/* When dumping internal structure, string printouts are cut to
-		 * max_printout_len characters.
-		 */
-		max_printout_len = 40,
+			/* When dumping internal structure, string printouts
+			 * are cut to max_printout_len characters.
+			 */
+			max_printout_len = 40,
 
-		/* Maximal rope tree depth. */
-		max_rope_depth = 45,
+			/* Maximal rope tree depth. */
+			max_rope_depth = 45,
 
-		/* For substrings longer than lazy_threshold, we create
-		 * substring nodes.
-		 */
-		lazy_threshold = 128
+			/* For substrings longer than lazy_threshold, we create
+			 * substring nodes.
+			 */
+			lazy_threshold = 128
+		};
 	};
 
 	/* Tag for simplified dynamic-like rope component casts. */
@@ -136,7 +143,7 @@ protected:
 		);
 	};
 
-	static rope_rep_ops const rep_ops[rope_tag::last_tag];
+	static rope_rep_ops const rep_ops[int(rope_tag::last_tag)];
 
 	template <typename rep_type1, typename rep_type2>
 	static counted_ptr<rep_type1> rep_cast(counted_ptr<rep_type2> const &p)
@@ -175,7 +182,7 @@ protected:
 
 	protected:
 		rope_rep(rope_tag tag_, uint8_t d, bool b, size_type size_)
-		: tag(tag_), depth(d), is_balanced(b ? 1 : 0), size(size_)
+		: size(size_), tag(tag_), depth(d), is_balanced(b ? 1 : 0)
 		{}
 	};
 
@@ -681,7 +688,7 @@ public:
 		friend bool operator==(
 			typename rope<char_type1, traits_type1, alloc_type1>
 			::pointer const &x,
-			typename rope<char_typ1, traits_type1, alloc_type1>
+			typename rope<char_type1, traits_type1, alloc_type1>
 			::pointer const &y
 		)
 		{
@@ -705,8 +712,7 @@ public:
 		size_type pos;
 	};
 
-	struct const_iterator : public _iterator_base {
-
+	struct const_iterator : public iterator_base {
 		typedef std::random_access_iterator_tag iterator_category;
 		typedef rope_type::value_type           value_type;
 		typedef char_type                       reference;
@@ -960,7 +966,7 @@ public:
 		friend class rope;
 
 		const_iterator(rope_rep_ptr const &root_, size_type pos_)
-		: _iterator_base(root_, pos_)
+		: iterator_base(root_, pos_)
 		{}
 	};
 
@@ -1088,9 +1094,9 @@ public:
 		template <typename char_type1, typename traits_type1,
 			  typename alloc_type1>
 		friend bool operator==(
-			typename rope<char_type2, _Traits2, alloc_type2>
+			typename rope<char_type1, traits_type1, alloc_type1>
 			::iterator const &x,
-			typename rope<char_type2, _Traits2, alloc_type2>
+			typename rope<char_type1, traits_type1, alloc_type1>
 			::iterator const &y
 		)
 		{
@@ -1785,7 +1791,7 @@ public:
 	template <typename input_iter_t>
 	iterator insert(iterator const &pos, input_iter_t begin, size_t n)
 	{
-		insert(pos.index(), iter, n);
+		insert(pos.index(), begin, n);
 		return pos;
 	}
 
@@ -2031,14 +2037,14 @@ public:
 		  typename alloc_type1>
 	friend rope<char_type1, traits_type1, alloc_type1> operator+(
 		rope<char_type1, traits_type1, alloc_type1> const &l,
-		char_type2 const *s
+		char_type1 const *s
 	);
 
 	template <typename char_type1, typename traits_type1,
 		  typename alloc_type1>
 	friend rope<char_type1, traits_type1, alloc_type1> operator+(
 		rope<char_type1, traits_type1, alloc_type1> const &l,
-		char_type2 c
+		char_type1 c
 	);
 
 	template <typename char_type1, typename traits_type1,
