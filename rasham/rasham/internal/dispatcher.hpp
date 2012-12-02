@@ -6,7 +6,7 @@
  * shed by the Free Software Foundation.
  */
 
-#if !defined(_rasham_INTERNAL_DISPATCHER_HPP)
+#if !defined(_RASHAM_INTERNAL_DISPATCHER_HPP)
 #define _RASHAM_INTERNAL_DISPATCHER_HPP
 
 #include <rasham/sink.hpp>

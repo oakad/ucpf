@@ -1466,24 +1466,44 @@ public:
 		return fetch(std::get<0>(treeplus), pos);
 	}
 
-	const_iterator begin() const
+	iterator begin() const
+	{
+		return iterator(this, 0);
+	}
+
+	iterator end() const
+	{
+		return iterator(this, size());
+	}
+
+	const_iterator cbegin() const
 	{
 		return const_iterator(std::get<0>(treeplus), 0);
 	}
 
-	const_iterator const_begin() const
-	{
-		return const_iterator(std::get<0>(treeplus), 0);
-	}
-
-	const_iterator end() const
+	const_iterator cend() const
 	{
 		return const_iterator(std::get<0>(treeplus), size());
 	}
 
-	const_iterator const_end() const
+	reverse_iterator rbegin() const
 	{
-		return const_iterator(std::get<0>(treeplus), size());
+		return reverse_iterator(end());
+	}
+
+	reverse_iterator rend() const
+	{
+		return reverse_iterator(begin());
+	}
+
+	const_reverse_iterator crbegin() const
+	{
+		return const_reverse_iterator(cend());
+	}
+
+	const_reverse_iterator crend() const
+	{
+		return const_reverse_iterator(cbegin());
 	}
 
 	size_type size() const
@@ -1511,26 +1531,6 @@ public:
 		 * make guarantees.
 		 */
 		 return min_len[rope_param::max_rope_depth - 1] - 1;
-	}
-
-	const_reverse_iterator rbegin() const
-	{
-		return const_reverse_iterator(end());
-	}
-
-	const_reverse_iterator const_rbegin() const
-	{
-		return const_reverse_iterator(end());
-	}
-
-	const_reverse_iterator rend() const
-	{
-		return const_reverse_iterator(begin());
-	}
-
-	const_reverse_iterator const_rend() const
-	{
-		return const_reverse_iterator(begin());
 	}
 
 	rope &operator+=(rope const &r)
@@ -1574,12 +1574,12 @@ public:
 		return append(begin, end - begin);
 	}
 
-	rope &append(const_iterator begin, const_iterator end)
+	rope &append(const_iterator first, const_iterator last)
 	{
 		std::get<0>(treeplus) = concat(
 			std::get<0>(treeplus),
 			substring(
-				begin.root, begin.current_pos, end.current_pos
+				first.root, first.current_pos, last.current_pos
 			)
 		);
 
@@ -1976,26 +1976,6 @@ public:
 
 	size_type find(char_type const *s, size_type pos = 0) const;
 
-	iterator mutable_begin()
-	{
-		return iterator(this, 0);
-	}
-
-	iterator mutable_end()
-	{
-		return iterator(this, size());
-	}
-
-	reverse_iterator mutable_rbegin()
-	{
-		return reverse_iterator(mutable_end());
-	}
-
-	reverse_iterator mutable_rend()
-	{
-		return reverse_iterator(mutable_begin());
-	}
-
 	reference mutable_reference_at(size_type pos)
 	{
 		return reference(this, pos);
@@ -2004,26 +1984,6 @@ public:
 	reference operator[] (size_type pos)
 	{
 		return reference(this, pos);
-	}
-
-	iterator end()
-	{
-		return mutable_end();
-	}
-
-	iterator begin()
-	{
-		return mutable_begin();
-	}
-
-	reverse_iterator rend()
-	{
-		return mutable_rend();
-	}
-
-	reverse_iterator rbegin()
-	{
-		return mutable_rbegin();
 	}
 
 	template <typename char_type1, typename traits_type1,
