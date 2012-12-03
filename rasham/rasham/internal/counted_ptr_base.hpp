@@ -165,7 +165,8 @@ private:
 template<typename value_type>
 struct ref_count_e : public ref_count<value_type> {
 	template<typename... arg_type>
-	static ref_count<value_type> *create(size_t extra_size_, arg_type&&... args)
+	static ref_count<value_type> *create(size_t extra_size_,
+					     arg_type&&... args)
 	{
 		void *p(::operator new(sizeof(ref_count_e<value_type>)
 				       + extra_size_));

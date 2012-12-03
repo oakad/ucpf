@@ -9,13 +9,11 @@
 #if !defined(_PARDES_ORDERED_ARRAY_HPP)
 #define _PARDES_ORDERED_ARRAY_HPP
 
-#include <cstddef>
+#include <boost/iterator/iterator_facade.hpp>
 #include <memory>
 #include <algorithm>
-#include <iterator>
 #include <initializer_list>
 #include <stdexcept>
-#include <stdio.h>
 
 namespace pardes
 {
@@ -32,12 +30,110 @@ template <
 	typedef std::size_t      size_type;
 	typedef ptrdiff_t        difference_type;
 	typedef value_compare_   value_compare;
-	typedef __gnu_cxx::__normal_iterator<
-		pointer, ordered_array
-	> mutable_iterator;
-	typedef __gnu_cxx::__normal_iterator<
-		const_pointer, ordered_array
-	> const_iterator;
+
+	struct const_iterator;
+
+	struct mutable_iterator : public boost::iterator_facade <
+		mutable_iterator, value_type,
+		boost::random_access_traversal_tag
+	> {
+	private:
+		friend struct ordered_array;
+		friend struct boost::iterator_core_access;
+
+		mutable_iterator() = default;
+
+		explicit mutable_iterator(pointer current_) : current(current_)
+		{}
+
+		mutable_iterator(const_iterator other)
+		: current(const_cast<pointer>(other.current))
+		{}
+
+		void increment()
+		{
+			++current;
+		}
+
+		void decrement()
+		{
+			--current;
+		}
+
+		void advance(difference_type n)
+		{
+			current += n;
+		}
+
+		bool equal(mutable_iterator const &other) const
+		{
+			return current == other.current;
+		}
+
+		reference dereference() const
+		{
+			return *current;
+		}
+
+		difference_type distance_to(mutable_iterator const &other) const
+		{
+			return other.current - current;
+		}
+
+		pointer current;
+	};
+
+	struct const_iterator : public boost::iterator_facade <
+		const_iterator, value_type const,
+		boost::random_access_traversal_tag
+	> {
+		const_iterator() = default;
+
+		explicit const_iterator(const_pointer current_)
+		: current(current_)
+		{}
+
+	private:
+		friend struct ordered_array;
+		friend struct boost::iterator_core_access;
+
+		const_iterator(mutable_iterator const &other)
+		: current(other.current)
+		{}
+
+		void increment()
+		{
+			++current;
+		}
+
+		void decrement()
+		{
+			--current;
+		}
+
+		void advance(difference_type n)
+		{
+			current += n;
+		}
+
+		bool equal(const_iterator const &other) const
+		{
+			return current == other.current;
+		}
+
+		const_reference dereference() const
+		{
+			return *current;
+		}
+
+		difference_type distance_to(const_iterator const &other) const
+		{
+			return other.current - current;
+		}
+
+		const_pointer current;
+	};
+
 	typedef const_iterator iterator;
 	typedef std::reverse_iterator<iterator> reverse_iterator;
 	typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
@@ -293,18 +389,18 @@ template <
 
 	const_iterator erase(const_iterator first, const_iterator last)
 	{
-		auto new_size(valid_size - (last - first));
-		mutable_iterator f(const_cast<pointer>(first.base()));
-		mutable_iterator l(const_cast<pointer>(last.base()));
+		mutable_iterator d(mutable_end() - (last - first));
+		mutable_iterator l(last);
 
-		const_iterator rv(std::move_backward(
-			l, mutable_end(), mutable_iterator(&(*this)[new_size])
-		));
+		const_iterator rv(std::move_backward(l, mutable_end(), d));
 
-		for (auto pos(valid_size - 1); pos >= new_size; --pos)
-			(*this)[pos].~value_type();
+		std::for_each(
+			d, mutable_end(), [this](reference v) {
+				v.~value_type();
+			}
+		);
 
-		valid_size = new_size;
+		valid_size = d - mutable_begin();
 		return rv;
 	}
 
