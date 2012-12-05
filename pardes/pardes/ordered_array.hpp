@@ -9,11 +9,7 @@
 #if !defined(_PARDES_ORDERED_ARRAY_HPP)
 #define _PARDES_ORDERED_ARRAY_HPP
 
-#include <boost/iterator/iterator_facade.hpp>
-#include <memory>
-#include <algorithm>
-#include <initializer_list>
-#include <stdexcept>
+#include <pardes/internal/restricted_array.hpp>
 
 namespace pardes
 {
@@ -22,130 +18,28 @@ template <
 	typename value_type_, std::size_t capacity,
 	typename value_compare_ = std::less<value_type_>
 > struct ordered_array {
-	typedef value_type_      value_type;
-	typedef value_type       &reference;
-	typedef value_type const &const_reference;
-	typedef value_type       *pointer;
-	typedef value_type const *const_pointer;
-	typedef std::size_t      size_type;
-	typedef ptrdiff_t        difference_type;
-	typedef value_compare_   value_compare;
+	typedef restricted_array<value_type_, capacity> base_type;
 
-	struct const_iterator;
-
-	struct mutable_iterator : public boost::iterator_facade <
-		mutable_iterator, value_type,
-		boost::random_access_traversal_tag
-	> {
-	private:
-		friend struct ordered_array;
-		friend struct boost::iterator_core_access;
-
-		mutable_iterator() = default;
-
-		explicit mutable_iterator(pointer current_) : current(current_)
-		{}
-
-		mutable_iterator(const_iterator other)
-		: current(const_cast<pointer>(other.current))
-		{}
-
-		void increment()
-		{
-			++current;
-		}
-
-		void decrement()
-		{
-			--current;
-		}
-
-		void advance(difference_type n)
-		{
-			current += n;
-		}
-
-		bool equal(mutable_iterator const &other) const
-		{
-			return current == other.current;
-		}
-
-		reference dereference() const
-		{
-			return *current;
-		}
-
-		difference_type distance_to(mutable_iterator const &other) const
-		{
-			return other.current - current;
-		}
-
-		pointer current;
-	};
-
-	struct const_iterator : public boost::iterator_facade <
-		const_iterator, value_type const,
-		boost::random_access_traversal_tag
-	> {
-		const_iterator() = default;
-
-		explicit const_iterator(const_pointer current_)
-		: current(current_)
-		{}
-
-	private:
-		friend struct ordered_array;
-		friend struct boost::iterator_core_access;
-
-		const_iterator(mutable_iterator const &other)
-		: current(other.current)
-		{}
-
-		void increment()
-		{
-			++current;
-		}
-
-		void decrement()
-		{
-			--current;
-		}
-
-		void advance(difference_type n)
-		{
-			current += n;
-		}
-
-		bool equal(const_iterator const &other) const
-		{
-			return current == other.current;
-		}
-
-		const_reference dereference() const
-		{
-			return *current;
-		}
-
-		difference_type distance_to(const_iterator const &other) const
-		{
-			return other.current - current;
-		}
-
-		const_pointer current;
-	};
-
-	typedef const_iterator iterator;
-	typedef std::reverse_iterator<iterator> reverse_iterator;
+	typedef typename base_type::value_type        value_type;
+	typedef typename base_type::reference         reference;
+	typedef typename base_type::const_iterator    const_reference;
+	typedef typename base_type::pointer           pointer;
+	typedef typename base_type::const_pointer     const_pointer;
+	typedef typename base_type::size_type         size_type;
+	typedef typename base_type::difference_type   difference_type;
+	typedef value_compare_                        value_compare;
+	typedef typename base_type::const_iterator    iterator;
+	typedef typename base_type::const_iterator    const_iterator;
+	typedef std::reverse_iterator<iterator>       reverse_iterator;
 	typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
 
-	ordered_array() : valid_size(0)
-	{}
+	ordered_array() = default;
 
-	ordered_array(value_compare const &comp_) : comp(comp_), valid_size(0)
+	ordered_array(value_compare const &comp_) : comp(comp_)
 	{}
 
 	template <typename input_iter_t>
-	ordered_array(input_iter_t first, input_iter_t last) : valid_size(0)
+	ordered_array(input_iter_t first, input_iter_t last)
 	{
 		insert(first, last);
 	}
@@ -153,67 +47,39 @@ template <
 	template <typename input_iter_t>
 	ordered_array(input_iter_t first, input_iter_t last,
 		      value_compare const &comp_)
-	: comp(comp_), valid_size(0)
+	: comp(comp_)
 	{
 		insert(first, last);
 	}
 
-	ordered_array(ordered_array const &other)
-	: comp(other.comp), valid_size(other.valid_size)
-	{
-		std::uninitialized_copy(other.cbegin(), other.cend(),
-					mutable_begin());
-	}
+	ordered_array(ordered_array const &other) = default;
 
-	ordered_array(ordered_array &&other)
-	: comp(other.comp), valid_size(other.valid_size)
-	{
-		std::move(
-			other.mutable_begin(), other.mutable_end(),
-			std::raw_storage_iterator<
-				mutable_iterator, value_type
-			>(mutable_begin())
-		);
-	}
+	ordered_array(ordered_array &&other) = default;
 
 	ordered_array(std::initializer_list<value_type> l,
 		      value_compare const &comp_ = value_compare())
-	: comp(comp_), valid_size(0)
+	: comp(comp_)
 	{
 		insert(l);
 	}
 
-	ordered_array &operator=(ordered_array const &other)
-	{
-		clear();
-		comp = other.comp;
-		valid_size = other.valid_size;
-		std::copy(
-			other.cbegin(), other.cend(),
-			std::raw_storage_iterator<
-				mutable_iterator, value_type
-			>(mutable_begin())
-		);
-	}
+	ordered_array &operator=(ordered_array const &other) = default;
 
 	ordered_array &operator=(ordered_array &&other)
 	{
-		clear();
-		swap(other);
+		std::swap(comp, other.comp);
+		data.swap(other.data);
 		return *this;
 	}
 
 	ordered_array &operator=(std::initializer_list<value_type> l)
 	{
-		clear();
+		data.clear();
 		insert(l);
 		return *this;
 	}
 
-	~ordered_array()
-	{
-		clear();
-	}
+	~ordered_array() = default;
 
 	iterator begin() const
 	{
@@ -237,16 +103,12 @@ template <
 
 	const_iterator cbegin() const
 	{
-		return const_iterator(
-			reinterpret_cast<value_type const *>(&data[0])
-		);
+		return data.cbegin();
 	}
 
 	const_iterator cend() const
 	{
-		return const_iterator(
-			reinterpret_cast<value_type const *>(&data[valid_size])
-		);
+		return data.cend();
 	}
 
 	const_reverse_iterator crbegin() const
@@ -266,12 +128,12 @@ template <
 
 	bool empty() const
 	{
-		return !valid_size;
+		return data.empty();
 	}
 
 	size_type size() const
 	{
-		return valid_size;
+		return data.size();
 	}
 
 	size_type max_size() const
@@ -281,78 +143,22 @@ template <
 
 	void swap(ordered_array &other)
 	{
-		auto common(std::min(valid_size, other.valid_size));
-		ordered_array *src(this), *dst(&other);
-
-		if (other.valid_size > valid_size) {
-			src = &other;
-			dst = *this;
-		}
-
-		std::swap_ranges(
-			src->mutable_begin(), src->mutable_begin() + common,
-			dst->mutable_begin()
-		);
-
-		std::move(
-			src->mutable_begin() + common, src->mutable_end(),
-			std::raw_storage_iterator<
-				mutable_iterator, value_type
-			>(dst->mutable_begin() + common)
-		);
-
 		std::swap(comp, other.comp);
-		std::swap(valid_size, other.valid_size);
+		data.swap(other.data);
 	}
 
 	const_iterator insert(value_type const &v)
 	{
-		capacity_check(1);
+		auto pos(std::upper_bound(data.cbegin(), data.cend(), v, comp));
 
-		auto pos(std::upper_bound(
-			 mutable_begin(), mutable_end(), v, comp
-		));
-
-		if (pos == mutable_end()) {
-			std::uninitialized_copy_n(&v, 1, mutable_end());
-			++valid_size;
-		} else {
-			*std::raw_storage_iterator<
-				mutable_iterator, value_type
-			>(mutable_end()) = std::move(*(mutable_end() - 1));
-			std::move_backward(
-				pos, mutable_end() - 1, mutable_end()
-			);
-			++valid_size;
-			*pos = v;
-		}
-		return pos;
+		return const_iterator(data.insert(pos, v));
 	}
 
 	const_iterator insert(value_type &&v)
 	{
-		capacity_check(1);
+		auto pos(std::upper_bound(data.cbegin(), data.cend(), v, comp));
 
-		auto pos(std::upper_bound(
-			 mutable_begin(), mutable_end(), v, comp
-		));
-
-		if (pos == mutable_end()) {
-			*std::raw_storage_iterator<
-				mutable_iterator, value_type
-			>(mutable_end()) = std::move(v);
-			++valid_size;
-		} else {
-			*std::raw_storage_iterator<
-				mutable_iterator, value_type
-			>(mutable_end()) = std::move(*(mutable_end() - 1));
-			std::move_backward(
-				pos, mutable_end() - 1, mutable_end()
-			);
-			++valid_size;
-			*pos = std::move(v);
-		}
-		return pos;
+		return const_iterator(data.insert(pos, std::move(v)));
 	}
 
 	template <typename input_iter_t>
@@ -389,48 +195,32 @@ template <
 
 	const_iterator erase(const_iterator first, const_iterator last)
 	{
-		mutable_iterator d(mutable_end() - (last - first));
-		mutable_iterator l(last);
-
-		const_iterator rv(std::move_backward(l, mutable_end(), d));
-
-		std::for_each(
-			d, mutable_end(), [this](reference v) {
-				v.~value_type();
-			}
-		);
-
-		valid_size = d - mutable_begin();
-		return rv;
+		return const_iterator(data.erase(first, last));
 	}
 
 	void clear()
 	{
-		for(size_type pos(0); pos < valid_size; ++pos)
-			(*this)[pos].~value_type();
-
-		valid_size = 0;
+		data.clear();
 	}
 
 	value_type const &operator[](size_type pos) const
 	{
-		return reinterpret_cast<value_type const &>(data[pos]);
+		return data[pos];
 	}
 
 	value_type const &at(size_type pos) const
 	{
-		range_check(pos);
-		return (*this)[pos];
+		return data.at[pos];
 	}
 
 	value_type const &front() const
 	{
-		return *cbegin();
+		return data.front();
 	}
 
 	value_type const &back() const
 	{
-		return *(cend() - 1);
+		return data.back();
 	}
 
 	size_type count(value_type const &v)
@@ -466,44 +256,8 @@ template <
 	}
 
 private:
-	mutable_iterator mutable_begin()
-	{
-		return mutable_iterator(
-			reinterpret_cast<value_type *>(&data[0])
-		);
-	}
-
-	mutable_iterator mutable_end()
-	{
-		return mutable_iterator(
-			reinterpret_cast<value_type *>(&data[valid_size])
-		);
-	}
-
-	value_type &operator[](size_type pos)
-	{
-		return reinterpret_cast<value_type &>(data[pos]);
-	}
-
-	void range_check(size_type pos) const
-	{
-		if (pos >= valid_size)
-			throw std::out_of_range("ordered_array::range_check");
-	}
-
-	void capacity_check(size_type inc) const
-	{
-		if (valid_size + inc > capacity)
-			throw std::length_error(
-				"ordered_array::capacity_check"
-			);
-	}
-
 	value_compare comp;
-	size_type valid_size;
-	typename std::aligned_storage<
-		sizeof(value_type), std::alignment_of<value_type>::value
-	>::type data[capacity];
+	base_type data;
 };
 
 }
