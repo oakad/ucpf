@@ -5,6 +5,5 @@ alias test_case : : : : <include>..
 			<library>..//unit_test_framework
 			<library>..//test_exec_monitor ;
 
-run basic.cpp : : test_case ;
-run parse.cpp : : test_case ;
+run dispatcher.cpp : : test_case ;
 run rope.cpp : : test_case ;

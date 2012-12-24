@@ -50,6 +50,17 @@ private:
 	bool owned;
 };
 
+struct ostream_sink : public sink {
+	ostream_sink(std::ostream &os_)
+	: os(os_)
+	{}
+
+	virtual ~ostream_sink() {}
+	virtual void submit_message(locus const *loc, message msg);
+
+private:
+	std::ostream &os;
+};
 
 std::ostream &dump_hierarchy(std::ostream &os);
 

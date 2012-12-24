@@ -889,7 +889,7 @@ rope<char_type, traits_type_, alloc_type>::find(
 ) const
 {
 	const_iterator iter(
-		std::search_n(const_begin() + pos, const_end(), 1, c)
+		std::search_n(cbegin() + pos, cend(), 1, c)
 	);
 	auto iter_pos(iter.index());
 
@@ -906,10 +906,9 @@ rope<char_type, traits_type_, alloc_type>::find(
 	typename rope<char_type, traits_type_, alloc_type>::size_type pos
 ) const
 {
-	const_iterator iter(
-		std::search(const_begin() + pos, const_end(), s,
-			    s + traits_type::length(s))
-	);
+	const_iterator iter(std::search(
+		cbegin() + pos, cend(), s, s + traits_type::length(s)
+	));
 	size_type iter_pos(iter.index());
 
 	if (iter_pos == size())

@@ -317,6 +317,19 @@ void fd_sink::submit_message(locus const *loc, message msg)
 	}
 }
 
+void ostream_sink::submit_message(locus const *loc, message msg)
+{
+	char *msg_out(nullptr);
+	int msg_cnt(asprintf(
+		&msg_out, "%s: %s\n", msg->origin->dest, msg.get_extra<char>()
+	));
+
+	if (msg_cnt > 0) {
+		os << msg_out;
+		free(msg_out);
+	}
+}
+
 message make_message(char const *fmt, va_list ap)
 {
 	va_list aq;
