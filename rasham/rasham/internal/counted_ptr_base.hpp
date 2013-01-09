@@ -9,6 +9,7 @@
 #if !defined(_RASHAM_INTERNAL_COUNTED_PTR_BASE_HPP)
 #define _RASHAM_INTERNAL_COUNTED_PTR_BASE_HPP
 
+#include <cstddef>
 #include <atomic>
 #include <tuple>
 #include <typeinfo>
@@ -50,7 +51,7 @@ private:
 	std::atomic_ulong use_count;
 };
 
-template<typename value_type>
+template <typename value_type>
 struct ref_count : public counted_base {
 	virtual ~ref_count()
 	{}
@@ -97,7 +98,7 @@ struct ref_count : public counted_base {
 	}
 };
 
-template<typename value_type>
+template <typename value_type>
 struct ref_count_val {
 	static ref_count<value_type> *get_this(value_type *p)
 	{
@@ -107,7 +108,7 @@ struct ref_count_val {
 		);
 	}
 
-	template<typename... arg_type>
+	template <typename... arg_type>
 	ref_count_val(ref_count<value_type> *count_, arg_type&&... args)
 	: count(count_), val(std::forward<arg_type>(args)...)
 	{}
@@ -127,9 +128,9 @@ private:
 	value_type            val;
 };
 
-template<typename value_type>
+template <typename value_type>
 struct ref_count_p : public ref_count<value_type> {
-	template<typename... arg_type>
+	template <typename... arg_type>
 	static ref_count<value_type> *create(arg_type&&... args)
 	{
 		return ::new ref_count_p(std::forward<arg_type>(args)...);
@@ -154,7 +155,7 @@ struct ref_count_p : public ref_count<value_type> {
 	}
 
 private:
-	template<typename... arg_type>
+	template <typename... arg_type>
 	ref_count_p(arg_type&&... args)
 	: val(this, std::forward<arg_type>(args)...)
 	{}
@@ -162,9 +163,9 @@ private:
 	ref_count_val<value_type> val;
 };
 
-template<typename value_type>
+template <typename value_type>
 struct ref_count_e : public ref_count<value_type> {
-	template<typename... arg_type>
+	template <typename... arg_type>
 	static ref_count<value_type> *create(size_t extra_size_,
 					     arg_type&&... args)
 	{
@@ -225,7 +226,7 @@ struct ref_count_e : public ref_count<value_type> {
 	}
 
 private:
-	template<typename... arg_type>
+	template <typename... arg_type>
 	ref_count_e(size_t extra_size_, arg_type&&... args)
 	: extra_size(extra_size_), val(this, std::forward<arg_type>(args)...)
 	{}
@@ -235,9 +236,9 @@ private:
 	char                      extra_storage[];
 };
 
-template<typename value_type, typename alloc_type>
+template <typename value_type, typename alloc_type>
 struct ref_count_a : public ref_count<value_type> {
-	template<typename... arg_type>
+	template <typename... arg_type>
 	static ref_count<value_type> *create(alloc_type a, arg_type&&... args)
 	{
 		typename alloc_type::template rebind<this_type>::other a2(a);
@@ -288,7 +289,7 @@ struct ref_count_a : public ref_count<value_type> {
 private:
 	typedef ref_count_a<value_type, alloc_type> this_type;
 
-	template<typename... arg_type>
+	template <typename... arg_type>
 	ref_count_a(alloc_type a, arg_type&&... args)
 	: val_plus(
 		ref_count_val<value_type>(
@@ -301,9 +302,9 @@ private:
 	std::tuple<ref_count_val<value_type>, alloc_type> val_plus;
 };
 
-template<typename value_type, typename alloc_type>
+template <typename value_type, typename alloc_type>
 struct ref_count_a_e : public ref_count<value_type> {
-	template<typename... arg_type>
+	template <typename... arg_type>
 	static ref_count<value_type> *create(alloc_type a, size_t extra_size,
 					     arg_type&&... args)
 	{
@@ -380,7 +381,7 @@ struct ref_count_a_e : public ref_count<value_type> {
 private:
 	typedef ref_count_a_e<value_type, alloc_type> this_type;
 
-	template<typename... arg_type>
+	template <typename... arg_type>
 	ref_count_a_e(alloc_type a, size_t extra_size, arg_type&&... args)
 	: alloc_plus(extra_size, std::forward<alloc_type>(a)),
 	  val(this, std::forward<arg_type>(args)...)

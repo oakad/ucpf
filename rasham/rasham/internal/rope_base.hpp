@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2012 Alex Dubov <oakad@yahoo.com>
+ * Copyright (C) 2010, 2012, 2013 Alex Dubov <oakad@yahoo.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
@@ -29,23 +29,63 @@
 #if !defined(_RASHAM_INTERNAL_ROPE_BASE_HPP)
 #define _RASHAM_INTERNAL_ROPE_BASE_HPP
 
-#include <iterator>
 #include <functional>
 #include <rasham/counted_ptr.hpp>
+#include <boost/iterator/iterator_facade.hpp>
 
 namespace rasham
 {
 
+struct rope_default_params {
+	enum {
+		/* We allocate leaf data in increments of
+		 * 1 << alloc_granularity_shift.
+		 */
+		alloc_granularity_shift = 3,
+
+		/* Iterators will store path_cache_len rope node
+		 * references.
+		 */
+		path_cache_len = 5,
+
+		/* Iterators will cache iterator_buf_len characters
+		 * from non-leaf rope nodes.
+		 */
+		iterator_buf_len = 16,
+
+		/* For strings shorter than max_copy, we copy to
+		 * concatenate.
+		 */
+		max_copy = 23,
+
+		/* When dumping internal structure, string printouts
+		 * are cut to max_printout_len characters.
+		 */
+		max_printout_len = 40,
+
+		/* Maximal rope tree depth. */
+		max_rope_depth = 45,
+
+		/* For substrings longer than lazy_threshold, we create
+		 * substring nodes.
+		 */
+		lazy_threshold = 128
+	};
+};
+
 template <
 	typename char_type,
 	typename traits_type_ = std::char_traits<char_type>,
-	typename alloc_type = std::allocator<char_type>
+	typename alloc_type = std::allocator<char_type>,
+	typename param_type = rope_default_params
 > struct rope;
 
-template <typename char_type, typename traits_type_, typename alloc_type>
-struct rope {
+template <
+	typename char_type, typename traits_type_, typename alloc_type,
+	typename param_type
+> struct rope {
 protected:
-	typedef rope<char_type, traits_type_, alloc_type> rope_type;
+	typedef rope<char_type, traits_type_, alloc_type, param_type> rope_type;
 public:
 	typedef traits_type_                          traits_type;
 	typedef typename traits_type_::char_type      value_type;
@@ -62,44 +102,6 @@ public:
 	static size_type const npos;
 
 protected:
-	/* Useful named constants */
-	struct rope_param {
-		enum {
-			/* We allocate leaf data in increments of
-			 * 1 << alloc_granularity_shift.
-			 */
-			alloc_granularity_shift = 3,
-
-			/* Iterators will store path_cache_len rope node
-			 * references.
-			 */
-			path_cache_len = 5,
-
-			/* Iterators will cache iterator_buf_len characters
-			 * from non-leaf rope nodes.
-			 */
-			iterator_buf_len = 16,
-
-			/* For strings shorter than max_copy, we copy to
-			 * concatenate.
-			 */
-			max_copy = 23,
-
-			/* When dumping internal structure, string printouts
-			 * are cut to max_printout_len characters.
-			 */
-			max_printout_len = 40,
-
-			/* Maximal rope tree depth. */
-			max_rope_depth = 45,
-
-			/* For substrings longer than lazy_threshold, we create
-			 * substring nodes.
-			 */
-			lazy_threshold = 128
-		};
-	};
-
 	/* Tag for simplified dynamic-like rope component casts. */
 	enum class rope_tag : uint8_t {
 		null = 0,
@@ -110,7 +112,7 @@ protected:
 		last_tag
 	};
 
-	static unsigned long const min_len[rope_param::max_rope_depth + 1];
+	static unsigned long const min_len[param_type::max_rope_depth + 1];
 
 	struct rope_rep;
 	struct rope_leaf;
@@ -195,8 +197,8 @@ protected:
 		{
 			// Allow slop for in-place expansion.
 
-			return ((n >> rope_param::alloc_granularity_shift) + 1)
-			       << rope_param::alloc_granularity_shift;
+			return ((n >> param_type::alloc_granularity_shift) + 1)
+			       << param_type::alloc_granularity_shift;
 		}
 
 		rope_leaf(size_type n)
@@ -311,7 +313,7 @@ protected:
 	};
 
 	struct rope_substr : public rope_rep {
-		static rope_tag const ref_tag = rope_tag::concat;
+		static rope_tag const ref_tag = rope_tag::substr;
 
 		rope_rep_ptr base;
 		size_type    start;
@@ -351,7 +353,8 @@ protected:
 
 	struct rope_func : public rope_rep {
 		static rope_tag const ref_tag = rope_tag::func;
-		typedef std::function<void (size_type, size_type, char_type *)>
+		/* Same argument order as pread (2) */
+		typedef std::function<void (char_type *, size_type, size_type)>
 		func_type;
 
 		func_type fn;
@@ -381,7 +384,7 @@ protected:
 			));
 
 			static_pointer_cast<rope_func>(r)->fn(
-				begin, len, l->data
+				l->data, len, begin
 			);
 
 			return f(l->data, len);
@@ -408,7 +411,7 @@ protected:
 		 * The path is truncated to keep iterators copying penalty to
 		 * the possible minimum.
 		 */
-		rope_rep_ptr path_end[rope_param::path_cache_len];
+		rope_rep_ptr path_end[param_type::path_cache_len];
 
 		/* Last valid position in path_end.
 		 * path_end[0] ... path_end[path_index - 1] point to
@@ -438,7 +441,7 @@ protected:
 		 * in the multithreaded case. The cached path is generally
 		 * assumed to be valid only if the buffer is valid.
 		 */
-		char_type tmp_buf[rope_param::iterator_buf_len];
+		char_type tmp_buf[param_type::iterator_buf_len];
 
 		static void setbuf(iterator_base &iter);
 
@@ -598,7 +601,6 @@ private:
 */
 public:
 	struct reference {
-
 		reference(rope_type &r, size_type pos_)
 		: root(r), pos(pos_), current_valid(false)
 		{}
@@ -658,7 +660,6 @@ public:
 	};
 
 	struct pointer {
-
 		pointer(reference const &ref)
 		: root(&ref.root), pos(ref.pos)
 		{}
@@ -712,16 +713,11 @@ public:
 		size_type pos;
 	};
 
-	struct const_iterator : public iterator_base {
-		typedef std::random_access_iterator_tag iterator_category;
-		typedef rope_type::value_type           value_type;
-		typedef char_type                       reference;
-		typedef char_type const                 *pointer;
-		typedef rope_type::size_type            size_type;
-		typedef rope_type::difference_type      difference_type;
-
-		const_iterator()
-		{};
+	struct const_iterator : public boost::iterator_facade <
+		const_iterator, reference,
+		boost::random_access_traversal_tag
+	>, iterator_base {
+		const_iterator() = default;
 
 		const_iterator(const_iterator const &iter)
 		: iterator_base(iter)
@@ -735,256 +731,60 @@ public:
 		: iterator_base(std::get<0>(r.treeplus), pos)
 		{}
 
-		const_iterator &operator=(const_iterator const &iter)
-		{
-			if (iter.buf_cur)
-				iterator_base::operator=(iter);
-			else
-			{
-				this->current_pos = iter.current_pos;
-				this->root = iter.root;
-				this->buf_cur = 0;
-			}
+	private:
+		friend struct rope;
+		friend struct boost::iterator_core_access;
 
-			return(*this);
+		const_iterator(rope_rep_ptr const &root_, size_type pos_)
+		: iterator_base(root_, pos_)
+		{}
+
+		bool equal(const_iterator const &other) const
+		{
+			return (this->current_pos == other.current_pos)
+				&& (this->root == other.root);
 		}
 
-		reference operator*()
+		void increment()
+		{
+			this->incr(1);
+		}
+
+		void decrement()
+		{
+			this->decr(1);
+		}
+
+		void advance(difference_type n)
+		{
+			if (n >= 0)
+				this->incr(n);
+			else
+				this->decr(-n);
+		}
+
+		difference_type distance_to(const_iterator const &other) const
+		{
+			auto x(static_cast<difference_type>(other.current_pos));
+			auto y(static_cast<difference_type>(this->current_pos));
+			return x - y;
+		}
+
+		reference dereference() const
 		{
 			if (!this->buf_cur)
 				this->setcache(*this);
 
 			return *this->buf_cur;
 		}
-
-		reference operator*() const
-		{
-			return *const_cast<const_iterator &>(*this);
-		}
-
-		const_iterator &operator++()
-		{
-			char_type const *next(this->buf_cur + 1);
-
-			if (this->buf_cur && next < this->buf_end) {
-				this->buf_cur = next;
-				++(this->current_pos);
-			} else
-				this->incr(1);
-
-			return *this;
-		}
-
-		const_iterator &operator+=(difference_type n)
-		{
-			if (n >= 0)
-				incr(n);
-			else
-				decr(-n);
-
-			return *this;
-		}
-
-		const_iterator &operator--()
-		{
-			this->decr(1);
-			return *this;
-		}
-
-		const_iterator &operator-=(difference_type n)
-		{
-			if (n >= 0)
-				this->decr(n);
-			else
-				this->incr(-n);
-
-			return *this;
-		}
-
-		const_iterator operator++(int)
-		{
-			size_type old_pos(this->current_pos);
-			this->incr(1);
-			return const_iterator(this->root, old_pos);
-		}
-
-		const_iterator operator--(int)
-		{
-			size_type old_pos(this->current_pos);
-			this->decr(1);
-			return const_iterator(this->root, old_pos);
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend typename rope<char_type1, traits_type1, alloc_type1>
-		::const_iterator
-		operator-(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &iter,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator::difference_type n
-		)
-		{
-			return const_iterator(iter.root, iter.current_pos - n);
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend typename rope<char_type1, traits_type1, alloc_type1>
-		::const_iterator::difference_type operator-(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &x,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &y
-		)
-		{
-			return static_cast<difference_type>(x.current_pos)
-			       - static_cast<difference_type>(y.current_pos);
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend typename rope<char_type1, traits_type1, alloc_type1>
-		::const_iterator operator+(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &iter,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator::difference_type n
-		)
-		{
-			return const_iterator(iter.root, iter.current_pos + n);
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend typename rope<char_type1, traits_type1, alloc_type1>
-		::const_iterator operator+(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator::difference_type n,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &iter
-		)
-		{
-			return const_iterator(iter.root, iter.current_pos + n);
-		}
-
-		reference operator[](size_type n)
-		{
-			return rope_type::fetch(
-				this->root, this->current_pos + n
-			);
-		}
-
-		bool operator==(const_iterator const &iter) const
-		{
-			return (this->current_pos == iter.current_pos)
-			       && (this->root == iter.root);
-		}
-
-		bool operator!=(const_iterator const &iter) const
-		{
-			return (this->current_pos != iter.current_pos)
-			       || (this->root != iter.root);
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend bool operator==(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &x,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &y
-		)
-		{
-			return (x.current_pos == y.current_pos)
-			       && (x.root == y.root);
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend bool operator!=(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &x,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &y
-		)
-		{
-			return (x.current_pos != y.current_pos)
-			       || (x.root != y.root);
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend bool operator<(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &x,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &y
-		)
-		{
-			return x.current_pos < y.current_pos;
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend bool operator>(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &x,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &y
-		)
-		{
-			return x.current_pos > y.current_pos;
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend bool operator<=(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &x,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &y
-		)
-		{
-			return x.current_pos <= y.current_pos;
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend bool operator>=(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &x,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::const_iterator const &y
-		)
-		{
-			return x.current_pos >= y.current_pos;
-		}
-
-	protected:
-		friend class rope;
-
-		const_iterator(rope_rep_ptr const &root_, size_type pos_)
-		: iterator_base(root_, pos_)
-		{}
 	};
 
-	struct iterator : public iterator_base {
-
-		typedef std::random_access_iterator_tag iterator_category;
-		typedef rope_type::value_type           value_type;
-		typedef rope_type::reference            reference;
-		typedef rope_type::pointer              pointer;
-		typedef rope_type::size_type            size_type;
-		typedef rope_type::difference_type      difference_type;
-
-		rope_type &container()
-		{
-			return *root_rope;
-		}
-
-		iterator() : root_rope(0)
+	struct iterator : public boost::iterator_facade <
+		iterator, reference,
+		boost::random_access_traversal_tag
+	>, iterator_base {
+		iterator()
+		: root_rope(nullptr)
 		{}
 
 		iterator(iterator const &iter)
@@ -995,243 +795,9 @@ public:
 		: iterator_base(std::get<0>(r.treeplus), pos_), root_rope(&r)
 		{}
 
-		~iterator()
-		{}
-
-		iterator &operator=(iterator const &iter)
-		{
-			if (iter.buf_cur) {
-				root_rope = iter.root_rope;
-				this->iterator_base::operator=(iter);
-			} else {
-				this->current_pos = iter.current_pos;
-				this->root = iter.root;
-				this->root_rope = iter.root_rope;
-				this->buf_cur = 0;
-			}
-			return *this;
-		}
-
-		reference operator*()
-		{
-			check();
-
-			if (!this->buf_cur)
-				return reference(*root_rope, this->current_pos);
-			else
-				return reference(*root_rope, this->current_pos,
-						 *this->buf_cur);
-		}
-
-		reference operator*() const
-		{
-			return *const_cast<iterator &>(*this);
-		}
-
-		iterator &operator++()
-		{
-			this->incr(1);
-			return *this;
-		}
-
-		iterator &operator+=(difference_type n)
-		{
-			if (n >= 0)
-				this->incr(n);
-			else
-				this->decr(-n);
-
-			return *this;
-		}
-
-		iterator &operator--()
-		{
-			this->decr(1);
-			return *this;
-		}
-
-		iterator &operator-=(difference_type n)
-		{
-			if (n >= 0)
-				this->decr(n);
-			else
-				this->incr(-n);
-
-			return *this;
-		}
-
-		iterator operator++(int)
-		{
-			size_type old_pos(this->current_pos);
-			this->incr(1);
-			return iterator(root_rope, old_pos);
-		}
-
-		iterator operator--(int)
-		{
-			size_type old_pos(this->current_pos);
-			this->decr(1);
-			return iterator(root_rope, old_pos);
-		}
-
-		reference operator[](difference_type n)
-		{
-			return reference(root_rope, this->current_pos + n);
-		}
-
-	        bool operator==(iterator const &iter) const
-		{
-			return (this->current_pos == iter.current_pos)
-			       && (this->root_rope == iter.root_rope);
-		}
-
-	        bool operator!=(iterator const &iter) const
-		{
-			return (this->current_pos != iter.current_pos)
-			       || (this->_M_root_rope != iter._M_root_rope);
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend bool operator==(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &x,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &y
-		)
-		{
-			return (x.current_pos == y.current_pos)
-			       && (x.root_rope == y.root_rope);
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-	        friend bool operator!=(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &x,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &y
-		)
-		{
-			return (x.current_pos != y.current_pos)
-			       || (x.root_rope != y.root_rope);
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend bool operator<(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &x,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &y
-		)
-		{
-			return x.current_pos < y.current_pos;
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend bool operator>(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &x,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &y
-		)
-		{
-			return x.current_pos > y.current_pos;
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend bool operator<=(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &x,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &y
-		)
-		{
-			return x.current_pos <= y.current_pos;
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend bool operator>=(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &x,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &y
-		)
-		{
-			return x.current_pos >= y.current_pos;
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend typename rope<char_type1, traits_type1, alloc_type1>
-		::iterator::difference_type operator-(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &x,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &y
-		)
-		{
-			return static_cast<difference_type>(x.current_pos)
-			       - static_cast<difference_type>(y.current_pos);
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend typename rope<char_type1, traits_type1, alloc_type1>
-		::iterator operator-(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &iter,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator::difference_type n
-		)
-		{
-			typedef typename rope<
-				char_type1, traits_type1, alloc_type1
-			>::iterator iterator;
-
-			return iterator(iter.root_rope, iter.current_pos - n);
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend typename rope<char_type1, traits_type1, alloc_type1>
-		::iterator operator+(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &iter,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator::difference_type n
-		)
-		{
-			typedef typename rope<
-				char_type1, traits_type1, alloc_type1
-			>::iterator iterator;
-
-			return iterator(iter.root_rope, iter.current_pos + n);
-		}
-
-		template <typename char_type1, typename traits_type1,
-			  typename alloc_type1>
-		friend typename rope<char_type1, traits_type1, alloc_type1>
-		::iterator operator+(
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator::difference_type n,
-			typename rope<char_type1, traits_type1, alloc_type1>
-			::iterator const &iter
-		)
-		{
-			typedef typename rope<
-				char_type1, traits_type1, alloc_type1
-			>::iterator iterator;
-
-			return iterator(iter.root_rope, iter.current_pos + n);
-		}
-
-	protected:
-		friend class rope;
+	private:
+		friend struct rope;
+		friend struct boost::iterator_core_access;
 
 		iterator(rope_type *r, size_type pos_)
 		: iterator_base(std::get<0>(r->treeplus), pos_), root_rope(r)
@@ -1246,6 +812,48 @@ public:
 				this->root = std::get<0>(root_rope->treeplus);
 				this->buf_cur = 0;
 			}
+		}
+
+		void increment()
+		{
+			this->incr(1);
+		}
+
+		void decrement()
+		{
+			this->decr(1);
+		}
+
+		void advance(difference_type n)
+		{
+			if (n >= 0)
+				this->incr(n);
+			else
+				this->decr(-n);
+		}
+
+		difference_type distance_to(const_iterator const &other) const
+		{
+			auto x(static_cast<difference_type>(other.current_pos));
+			auto y(static_cast<difference_type>(this->current_pos));
+			return x - y;
+		}
+
+		bool equal(const_iterator const &other) const
+		{
+			return (this->current_pos == other.current_pos)
+				&& (this->root_rope == other.root_rope);
+		}
+
+		reference dereference()
+		{
+			check();
+
+			if (!this->buf_cur)
+				return reference(*root_rope, this->current_pos);
+			else
+				return reference(*root_rope, this->current_pos,
+						 *this->buf_cur);
 		}
 
 		rope_type *root_rope;
@@ -1314,8 +922,8 @@ public:
 	: treeplus(rope_rep_ptr(), a)
 	{}
 
-	rope(std::function<void (size_type, size_type, char_type *)> fn,
-	     size_type n, alloc_type a = alloc_type())
+	rope(typename rope_func::func_type fn, size_type n,
+	     alloc_type a = alloc_type())
 	: treeplus(rope_func::make(fn, n, a), a)
 	{}
 
@@ -1530,7 +1138,7 @@ public:
 		 * Longer ropes will probably still work, but it's harder to
 		 * make guarantees.
 		 */
-		 return min_len[rope_param::max_rope_depth - 1] - 1;
+		 return min_len[param_type::max_rope_depth - 1] - 1;
 	}
 
 	rope &operator+=(rope const &r)
@@ -1987,41 +1595,50 @@ public:
 	}
 
 	template <typename char_type1, typename traits_type1,
-		  typename alloc_type1>
-	friend rope<char_type1, traits_type1, alloc_type1> operator+(
-		rope<char_type1, traits_type1, alloc_type1> const &l,
-		rope<char_type1, traits_type1, alloc_type1> const &r
+		  typename alloc_type1, typename param_type1>
+	friend rope<char_type1, traits_type1, alloc_type1, param_type1>
+	operator+(
+		rope<char_type1, traits_type1, alloc_type1, param_type1> const
+		&l,
+		rope<char_type1, traits_type1, alloc_type1, param_type1> const
+		&r
 	);
 
 	template <typename char_type1, typename traits_type1,
-		  typename alloc_type1>
-	friend rope<char_type1, traits_type1, alloc_type1> operator+(
-		rope<char_type1, traits_type1, alloc_type1> const &l,
+		  typename alloc_type1, typename param_type1>
+	friend rope<char_type1, traits_type1, alloc_type1, param_type1>
+	operator+(
+		rope<char_type1, traits_type1, alloc_type1, param_type1> const
+		&l,
 		char_type1 const *s
 	);
 
 	template <typename char_type1, typename traits_type1,
-		  typename alloc_type1>
-	friend rope<char_type1, traits_type1, alloc_type1> operator+(
-		rope<char_type1, traits_type1, alloc_type1> const &l,
+		  typename alloc_type1, typename param_type1>
+	friend rope<char_type1, traits_type1, alloc_type1, param_type1>
+	operator+(
+		rope<char_type1, traits_type1, alloc_type1, param_type1> const
+		&l,
 		char_type1 c
 	);
 
 	template <typename char_type1, typename traits_type1,
-		  typename alloc_type1>
+		  typename alloc_type1, typename param_type1>
 	friend std::basic_ostream<char_type1, traits_type1> &operator<<(
 		std::basic_ostream<char_type1, traits_type1> &os,
-		rope<char_type1, traits_type1, alloc_type1> const &r
+		rope<char_type1, traits_type1, alloc_type1, param_type1> const
+		&r
 	);
 };
 
-template <typename char_type, typename traits_type_, typename alloc_type>
-rope<char_type, traits_type_, alloc_type> operator+(
-	rope<char_type, traits_type_, alloc_type> const &l,
-	rope<char_type, traits_type_, alloc_type> const &r
+template <typename char_type, typename traits_type_, typename alloc_type,
+	  typename param_type>
+rope<char_type, traits_type_, alloc_type, param_type> operator+(
+	rope<char_type, traits_type_, alloc_type, param_type> const &l,
+	rope<char_type, traits_type_, alloc_type, param_type> const &r
 )
 {
-	typedef rope<char_type, traits_type_, alloc_type> rope_type;
+	typedef rope<char_type, traits_type_, alloc_type, param_type> rope_type;
 
 	return rope_type(
 		rope_type::concat(std::get<0>(l.treeplus),
@@ -2030,23 +1647,25 @@ rope<char_type, traits_type_, alloc_type> operator+(
 	);
 }
 
-template <typename char_type, typename traits_type_, typename alloc_type>
-rope<char_type, traits_type_, alloc_type> &operator+=(
-	rope<char_type, traits_type_, alloc_type> &l,
-	rope<char_type, traits_type_, alloc_type> const &r
+template <typename char_type, typename traits_type_, typename alloc_type,
+	  typename param_type>
+rope<char_type, traits_type_, alloc_type, param_type> &operator+=(
+	rope<char_type, traits_type_, alloc_type, param_type> &l,
+	rope<char_type, traits_type_, alloc_type, param_type> const &r
 )
 {
 	l.append(r);
 	return l;
 }
 
-template <typename char_type, typename traits_type_, typename alloc_type>
-rope<char_type, traits_type_, alloc_type> operator+(
-	rope<char_type, traits_type_, alloc_type> const &l,
+template <typename char_type, typename traits_type_, typename alloc_type,
+	  typename param_type>
+rope<char_type, traits_type_, alloc_type, param_type> operator+(
+	rope<char_type, traits_type_, alloc_type, param_type> const &l,
 	char_type const *s
 )
 {
-	typedef rope<char_type, traits_type_, alloc_type> rope_type;
+	typedef rope<char_type, traits_type_, alloc_type, param_type> rope_type;
 	typedef typename rope_type::size_type size_type;
 
 	size_type s_len(rope_type::traits_type::length(s));
@@ -2060,9 +1679,10 @@ rope<char_type, traits_type_, alloc_type> operator+(
 		return rope_type(s, std::get<1>(l.treeplus));
 }
 
-template <typename char_type, typename traits_type_, typename alloc_type>
-rope<char_type, traits_type_, alloc_type> &operator+=(
-	rope<char_type, traits_type_, alloc_type> &l,
+template <typename char_type, typename traits_type_, typename alloc_type,
+	  typename param_type>
+rope<char_type, traits_type_, alloc_type, param_type> &operator+=(
+	rope<char_type, traits_type_, alloc_type, param_type> &l,
 	char_type const *s
 )
 {
@@ -2070,13 +1690,14 @@ rope<char_type, traits_type_, alloc_type> &operator+=(
 	return l;
 }
 
-template <typename char_type, typename traits_type_, typename alloc_type>
-rope<char_type, traits_type_, alloc_type> operator+(
-	rope<char_type, traits_type_, alloc_type> const &l,
+template <typename char_type, typename traits_type_, typename alloc_type,
+	  typename param_type>
+rope<char_type, traits_type_, alloc_type, param_type> operator+(
+	rope<char_type, traits_type_, alloc_type, param_type> const &l,
 	char_type c
 )
 {
-	typedef rope<char_type, traits_type_, alloc_type> rope_type;
+	typedef rope<char_type, traits_type_, alloc_type, param_type> rope_type;
 
 	if (std::get<0>(l.treeplus))
 		return rope_type(
@@ -2087,9 +1708,10 @@ rope<char_type, traits_type_, alloc_type> operator+(
 		return rope_type(1, c, std::get<1>(l.treeplus));
 }
 
-template <typename char_type, typename traits_type_, typename alloc_type>
-rope<char_type, traits_type_, alloc_type> &operator+=(
-	rope<char_type, traits_type_, alloc_type> &l,
+template <typename char_type, typename traits_type_, typename alloc_type,
+	  typename param_type>
+rope<char_type, traits_type_, alloc_type, param_type> &operator+=(
+	rope<char_type, traits_type_, alloc_type, param_type> &l,
 	char_type c
 )
 {
@@ -2097,64 +1719,71 @@ rope<char_type, traits_type_, alloc_type> &operator+=(
 	return l;
 }
 
-template <typename char_type, typename traits_type_, typename alloc_type>
+template <typename char_type, typename traits_type_, typename alloc_type,
+	  typename param_type>
 bool operator<(
-	rope<char_type, traits_type_, alloc_type> const &l,
-	rope<char_type, traits_type_, alloc_type> const &r
+	rope<char_type, traits_type_, alloc_type, param_type> const &l,
+	rope<char_type, traits_type_, alloc_type, param_type> const &r
 )
 {
 	return l.compare(r) < 0;
 }
 
-template <typename char_type, typename traits_type_, typename alloc_type>
+template <typename char_type, typename traits_type_, typename alloc_type,
+	  typename param_type>
 bool operator>(
-	rope<char_type, traits_type_, alloc_type> const &l,
-	rope<char_type, traits_type_, alloc_type> const &r
+	rope<char_type, traits_type_, alloc_type, param_type> const &l,
+	rope<char_type, traits_type_, alloc_type, param_type> const &r
 )
 {
 	return l.compare(r) > 0;
 }
 
-template <typename char_type, typename traits_type_, typename alloc_type>
+template <typename char_type, typename traits_type_, typename alloc_type,
+	  typename param_type>
 bool operator<=(
-	rope<char_type, traits_type_, alloc_type> const &l,
-	rope<char_type, traits_type_, alloc_type> const &r
+	rope<char_type, traits_type_, alloc_type, param_type> const &l,
+	rope<char_type, traits_type_, alloc_type, param_type> const &r
 )
 {
 	return l.compare(r) <= 0;
 }
 
-template <typename char_type, typename traits_type_, typename alloc_type>
+template <typename char_type, typename traits_type_, typename alloc_type,
+	  typename param_type>
 bool operator>=(
-	rope<char_type, traits_type_, alloc_type> const &l,
-	rope<char_type, traits_type_, alloc_type> const &r
+	rope<char_type, traits_type_, alloc_type, param_type> const &l,
+	rope<char_type, traits_type_, alloc_type, param_type> const &r
 )
 {
 	return l.compare(r) >= 0;
 }
 
-template <typename char_type, typename traits_type_, typename alloc_type>
+template <typename char_type, typename traits_type_, typename alloc_type,
+	  typename param_type>
 bool operator==(
-	rope<char_type, traits_type_, alloc_type> const &l,
-	rope<char_type, traits_type_, alloc_type> const &r
+	rope<char_type, traits_type_, alloc_type, param_type> const &l,
+	rope<char_type, traits_type_, alloc_type, param_type> const &r
 )
 {
 	return l.compare(r) == 0;
 }
 
-template <typename char_type, typename traits_type_, typename alloc_type>
+template <typename char_type, typename traits_type_, typename alloc_type,
+	  typename param_type>
 bool operator!=(
-	rope<char_type, traits_type_, alloc_type> const &l,
-	rope<char_type, traits_type_, alloc_type> const &r
+	rope<char_type, traits_type_, alloc_type, param_type> const &l,
+	rope<char_type, traits_type_, alloc_type, param_type> const &r
 )
 {
 	return l.compare(r) != 0;
 }
 
-template <typename char_type, typename traits_type_, typename alloc_type>
+template <typename char_type, typename traits_type_, typename alloc_type,
+	  typename param_type>
 std::basic_ostream<char_type, traits_type_> &operator<<(
 	std::basic_ostream<char_type, traits_type_> &os,
-	rope<char_type, traits_type_, alloc_type> const &r
+	rope<char_type, traits_type_, alloc_type, param_type> const &r
 );
 
 }
