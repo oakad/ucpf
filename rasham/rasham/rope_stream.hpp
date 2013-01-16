@@ -9,30 +9,33 @@
 #if !defined(_RASHAM_ROPE_STREAM_HPP)
 #define _RASHAM_ROPE_STREAM_HPP
 
-#include <rasham/internal/rope_base.hpp>
-#include <rasham/internal/rope_ops.hpp>
+#include <rasham/rope.hpp>
 
 namespace rasham
 {
 
 template <
 	typename char_type, typename traits_type = std::char_traits<char_type>,
-	typename alloc_type = std::allocator<char_type>
+	typename alloc_type = std::allocator<char_type>,
+	typename param_type = rope_default_params
 > struct rope_streambuf;
 
 template <
 	typename char_type, typename traits_type = std::char_traits<char_type>,
-	typename alloc_type = std::allocator<char_type>
+	typename alloc_type = std::allocator<char_type>,
+	typename param_type = rope_default_params
 > struct rope_istream;
 
 template <
 	typename char_type, typename traits_type = std::char_traits<char_type>,
-	typename alloc_type = std::allocator<char_type>
+	typename alloc_type = std::allocator<char_type>,
+	typename param_type = rope_default_params
 > struct rope_ostream;
 
 template <
 	typename char_type, typename traits_type = std::char_traits<char_type>,
-	typename alloc_type = std::allocator<char_type>
+	typename alloc_type = std::allocator<char_type>,
+	typename param_type = rope_default_params
 > struct rope_stream;
 
 typedef rope_istream<char> crope_istream;
@@ -43,8 +46,11 @@ typedef rope_istream<wchar_t> wrope_istream;
 typedef rope_ostream<wchar_t> wrope_ostream;
 typedef rope_stream<wchar_t>  wrope_stream;
 
-template <typename char_type_, typename traits_type_, typename alloc_type>
-struct rope_streambuf : public std::basic_streambuf<char_type_, traits_type_> {
+template <
+	typename char_type_, typename traits_type_, typename alloc_type,
+	typename param_type
+> struct rope_streambuf
+: public std::basic_streambuf<char_type_, traits_type_> {
 	typedef char_type_                                 char_type;
 	typedef traits_type_                               traits_type;
 	typedef alloc_type                                 allocator_type;
@@ -53,7 +59,9 @@ struct rope_streambuf : public std::basic_streambuf<char_type_, traits_type_> {
 	typedef typename traits_type::off_type             off_type;
 
 	typedef std::basic_streambuf<char_type_, traits_type_> streambuf_type;
-	typedef rope<char_type_, traits_type_, alloc_type>     rope_type;
+	typedef rope<
+		char_type_, traits_type_, alloc_type, param_type
+	> rope_type;
 	typedef typename rope_type::size_type                  size_type;
 
 	explicit rope_streambuf(
@@ -104,8 +112,10 @@ protected:
 	size_type get_pos;
 };
 
-template <typename char_type_, typename traits_type_, typename alloc_type>
-struct rope_istream : public std::basic_istream<char_type_, traits_type_> {
+template <
+	typename char_type_, typename traits_type_, typename alloc_type,
+	typename param_type
+> struct rope_istream : public std::basic_istream<char_type_, traits_type_> {
 	typedef char_type_                                 char_type;
 	typedef traits_type_                               traits_type;
 	typedef alloc_type                                 allocator_type;
@@ -113,9 +123,9 @@ struct rope_istream : public std::basic_istream<char_type_, traits_type_> {
 	typedef typename traits_type::pos_type             pos_type;
 	typedef typename traits_type::off_type             off_type;
 
-	typedef rope<char_type, traits_type, alloc_type>   rope_type;
+	typedef rope<char_type, traits_type, alloc_type, param_type> rope_type;
 	typedef rope_streambuf<
-		char_type, traits_type, alloc_type
+		char_type, traits_type, alloc_type, param_type
 	> streambuf_type;
 	typedef std::basic_istream<char_type, traits_type> istream_type;
 
@@ -155,8 +165,10 @@ private:
 	streambuf_type streambuf;
 };
 
-template <typename char_type_, typename traits_type_, typename alloc_type>
-struct rope_ostream : public std::basic_ostream<char_type_, traits_type_> {
+template <
+	typename char_type_, typename traits_type_, typename alloc_type,
+	typename param_type
+> struct rope_ostream : public std::basic_ostream<char_type_, traits_type_> {
 	typedef char_type_                                 char_type;
 	typedef traits_type_                               traits_type;
 	typedef alloc_type                                 allocator_type;
@@ -164,9 +176,9 @@ struct rope_ostream : public std::basic_ostream<char_type_, traits_type_> {
 	typedef typename traits_type::pos_type             pos_type;
 	typedef typename traits_type::off_type             off_type;
 
-	typedef rope<char_type, traits_type, alloc_type>   rope_type;
+	typedef rope<char_type, traits_type, alloc_type, param_type> rope_type;
 	typedef rope_streambuf<
-		char_type, traits_type, alloc_type
+		char_type, traits_type, alloc_type, param_type
 	> streambuf_type;
 	typedef std::basic_ostream<char_type, traits_type> ostream_type;
 
@@ -206,8 +218,10 @@ private:
 	streambuf_type streambuf;
 };
 
-template <typename char_type_, typename traits_type_, typename alloc_type>
-struct rope_stream : public std::basic_iostream<char_type_, traits_type_> {
+template <
+	typename char_type_, typename traits_type_, typename alloc_type,
+	typename param_type
+> struct rope_stream : public std::basic_iostream<char_type_, traits_type_> {
 	typedef char_type_                                  char_type;
 	typedef traits_type_                                traits_type;
 	typedef alloc_type                                  allocator_type;
@@ -215,9 +229,9 @@ struct rope_stream : public std::basic_iostream<char_type_, traits_type_> {
 	typedef typename traits_type::pos_type              pos_type;
 	typedef typename traits_type::off_type              off_type;
 
-	typedef rope<char_type, traits_type, alloc_type>    rope_type;
+	typedef rope<char_type, traits_type, alloc_type, param_type> rope_type;
 	typedef rope_streambuf<
-		char_type, traits_type, alloc_type
+		char_type, traits_type, alloc_type, param_type
 	> streambuf_type;
 	typedef std::basic_iostream<char_type, traits_type> iostream_type;
 

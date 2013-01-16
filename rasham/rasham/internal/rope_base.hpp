@@ -30,6 +30,7 @@
 #define _RASHAM_INTERNAL_ROPE_BASE_HPP
 
 #include <functional>
+#include <algorithm>
 #include <rasham/counted_ptr.hpp>
 #include <boost/iterator/iterator_facade.hpp>
 
@@ -188,10 +189,13 @@ protected:
 		{}
 	};
 
+	static char_type *leaf_data(rope_leaf_ptr const &l)
+	{
+		return l.template get_extra<char_type>();
+	}
+
 	struct rope_leaf : public rope_rep {
 		static const rope_tag ref_tag = rope_tag::leaf;
-
-		char_type data[];
 
 		static size_type rounded_up_size(size_type n)
 		{
@@ -204,21 +208,6 @@ protected:
 		rope_leaf(size_type n)
 		: rope_rep(ref_tag, 0, true, n)
 		{}
-
-		rope_leaf(size_type n, char_type c)
-		: rope_rep(ref_tag, 0, true, n)
-		{
-			traits_type::assign(data, n, c);
-		}
-
-		rope_leaf(char_type const *s, size_type n)
-		: rope_rep(ref_tag, 0, true, n)
-		{
-			if (n == 1)
-				traits_type::assign(data[0], *s);
-			else
-				traits_type::copy(data, s, n);
-		}
 
 		static rope_leaf_ptr make(size_type n, alloc_type a)
 		{
@@ -234,25 +223,34 @@ protected:
 		static rope_leaf_ptr make(size_type n, char_type c,
 					  alloc_type a)
 		{
-			return allocate_counted<rope_leaf>(
+			auto rv(allocate_counted<rope_leaf>(
 				a,
 				typename rope_leaf_ptr::extra_size_t(
 					rounded_up_size(n)
 				),
-				n, c
-			);
+				n
+			));
+			traits_type::assign(leaf_data(rv), n, c);
+			return rv;
 		}
 
 		static rope_leaf_ptr make(char_type const *s, size_type n,
 					  alloc_type a)
 		{
-			return allocate_counted<rope_leaf>(
+			auto rv(allocate_counted<rope_leaf>(
 				a,
 				typename rope_leaf_ptr::extra_size_t(
 					rounded_up_size(n)
 				),
-				s, n
-			);
+				n
+			));
+
+			if (n == 1)
+				traits_type::assign(*leaf_data(rv), *s);
+			else
+				traits_type::copy(leaf_data(rv), s, n);
+
+			return rv;
 		}
 
 		static bool apply(
@@ -262,7 +260,7 @@ protected:
 		)
 		{
 			rope_leaf_ptr l(static_pointer_cast<rope_leaf>(r));
-			return f(l->data + begin, end - begin);
+			return f(leaf_data(l) + begin, end - begin);
 		}
 
 		static rope_rep_ptr substring(
@@ -297,7 +295,9 @@ protected:
 			rope_rep_ptr const &l, rope_rep_ptr const &r
 		)
 		{
-			return make(l, r, *get_allocator<alloc_type>(l));
+			return make(
+				l, r, *l.template get_allocator<alloc_type>()
+			);
 		}
 
 		static bool apply(
@@ -380,14 +380,14 @@ protected:
 		{
 			size_type len(end - begin);
 			rope_leaf_ptr l(rope_leaf::make(
-				len, *get_allocator<alloc_type>(r)
+				len, *r.template get_allocator<alloc_type>()
 			));
 
 			static_pointer_cast<rope_func>(r)->fn(
-				l->data, len, begin
+				leaf_data(l), len, begin
 			);
 
-			return f(l->data, len);
+			return f(leaf_data(l), len);
 		}
 
 
@@ -532,6 +532,7 @@ protected:
 		rope_rep_ptr const &r, size_type begin, size_type end
 	)
 	{
+		printf("pp %p, %ld, %ld\n", r.get(), begin, end);
 		if (!r)
 			return r;
 
@@ -714,7 +715,7 @@ public:
 	};
 
 	struct const_iterator : public boost::iterator_facade <
-		const_iterator, reference,
+		const_iterator, value_type const,
 		boost::random_access_traversal_tag
 	>, iterator_base {
 		const_iterator() = default;
@@ -770,10 +771,12 @@ public:
 			return x - y;
 		}
 
-		reference dereference() const
+		value_type const &dereference() const
 		{
 			if (!this->buf_cur)
-				this->setcache(*this);
+				this->setcache(
+					*const_cast<const_iterator *>(this)
+				);
 
 			return *this->buf_cur;
 		}
@@ -858,6 +861,11 @@ public:
 
 		rope_type *root_rope;
 	};
+
+	allocator_type get_allocator() const
+	{
+		return std::get<1>(treeplus);
+	}
 
 	bool empty() const
 	{
@@ -1013,10 +1021,17 @@ public:
 
 	size_type copy(char_type *s, size_type n, size_type pos = 0) const
 	{
-		auto sz(size());
-		auto len((pos + n > sz) ? sz - pos : n);
+		auto len(std::min<difference_type>(size() - pos, n));
 
 		flatten(std::get<0>(treeplus), pos, len, s);
+		return len;
+	}
+
+	size_type copy(char_type *s, size_type n, const_iterator pos) const
+	{
+		auto len(std::min<difference_type>(n, cend() - pos));
+
+		flatten(std::get<0>(treeplus), pos.current_pos, len, s);
 		return len;
 	}
 

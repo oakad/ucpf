@@ -186,8 +186,7 @@ template <
 		if ((l_leaf->size + r_leaf->size)
 		    <= size_type(param_type::max_copy))
 			return leaf_concat_char_iter(
-				l_leaf, r_leaf->data,
-				r_leaf->size
+				l_leaf, leaf_data(r_leaf), r_leaf->size
 			);
 	} else {
 		rope_concat_ptr l_cat(rep_cast<rope_concat>(l));
@@ -202,7 +201,7 @@ template <
 				<= size_type(param_type::max_copy))) {
 				rope_rep_ptr ll(l_cat->left);
 				rope_rep_ptr rest(leaf_concat_char_iter(
-					lr_leaf, r_leaf->data,
+					lr_leaf, leaf_data(r_leaf),
 					r_leaf->size
 				));
 
@@ -243,12 +242,12 @@ rope<char_type, traits_type_, alloc_type, param_type>::leaf_concat_char_iter(
 {
 	size_type old_len(r->size);
 
-	rope_leaf_ptr rv(
-		rope_leaf::make(old_len + n, *get_allocator<alloc_type>(r))
-	);
+	rope_leaf_ptr rv(rope_leaf::make(
+		old_len + n, *r.template get_allocator<alloc_type>()
+	));
 
-	traits_type::copy(&rv->data[0], r->data, old_len);
-	traits_type::copy(&rv->data[old_len], iter, n);
+	traits_type::copy(leaf_data(rv), leaf_data(r), old_len);
+	traits_type::copy(leaf_data(rv) + old_len, iter, n);
 
 	return rv;
 }
@@ -282,7 +281,7 @@ auto rope<char_type, traits_type_, alloc_type, param_type>::concat_char_iter(
 		}
 	}
 
-	l = rope_leaf::make(iter, n, *get_allocator<alloc_type>(r));
+	l = rope_leaf::make(iter, n, *r.template get_allocator<alloc_type>());
 
 	return tree_concat(r, l);
 }
@@ -298,8 +297,9 @@ auto rope<char_type, traits_type_, alloc_type, param_type>::flatten(
 	size_type end(begin + std::min(n, r->size));
 
 	apply(
-		r, [s](char_type const *in, size_type in_sz) -> bool {
+		r, [&s](char_type const *in, size_type in_sz) -> bool {
 			std::copy_n(in, in_sz, s);
+			s += in_sz;
 			return true;
 		},
 		begin, end
@@ -377,12 +377,12 @@ rope<char_type, traits_type_, alloc_type, param_type>::rope_leaf::substring(
 	if (res_len > param_type::lazy_threshold)
 		return rope_substr::make(
 			r, begin, adj_end - begin,
-			*get_allocator<alloc_type>(r)
+			*r.template get_allocator<alloc_type>()
 		);
 	else
 		return rope_leaf::make(
-			l->data + begin, res_len,
-			*get_allocator<alloc_type>(l)
+			leaf_data(l) + begin, res_len,
+			*l.template get_allocator<alloc_type>()
 		);
 }
 
@@ -429,7 +429,7 @@ rope<char_type, traits_type_, alloc_type, param_type>::rope_substr::substring(
 	if (res_len > param_type::lazy_threshold)
 		return rope_substr::make(
 			old->base, begin + old->start, adj_end - begin,
-			*get_allocator<alloc_type>(old)
+			*old.template get_allocator<alloc_type>()
 		);
 	else
 		return rope_type::substring(
@@ -453,14 +453,16 @@ rope<char_type, traits_type_, alloc_type, param_type>::rope_func::substring(
 	size_type res_len(adj_end - begin);
 
 	if (res_len > param_type::lazy_threshold)
-		return rope_substr::make(r, begin, adj_end - begin,
-					 *get_allocator<alloc_type>(r));
+		return rope_substr::make(
+			r, begin, adj_end - begin,
+			*r.template get_allocator<alloc_type>()
+		);
 	else {
 		rope_leaf_ptr rv(rope_leaf::make(
-			res_len, *get_allocator<alloc_type>(r)
+			res_len, *r.template get_allocator<alloc_type>()
 		));
 
-		f->fn(rv->data, res_len, begin);
+		f->fn(leaf_data(rv), res_len, begin);
 		return rv;
 	}
 }
@@ -479,7 +481,7 @@ rope<char_type, traits_type_, alloc_type, param_type>::iterator_base::setbuf(
 	rope_leaf_ptr l(rep_cast<rope_leaf>(iter.path_end[iter.path_index]));
 
 	if (l) {
-		iter.buf_begin = l->data;
+		iter.buf_begin = leaf_data(l);
 		iter.buf_cur = iter.buf_begin + (pos - leaf_pos);
 		iter.buf_end = iter.buf_begin + l->size;
 	} else {
@@ -802,14 +804,15 @@ template <
 		rope_leaf_ptr r(rep_cast<rope_leaf>(right));
 		if (r)
 			return __gnu_cxx::lexicographical_compare_3way(
-				l->data, l->data + left_len, r->data,
-				r->data + right_len
+				leaf_data(l), leaf_data(l) + left_len,
+				leaf_data(r), leaf_data(r) + right_len
 			);
 		else {
 			const_iterator rstart(right, 0);
 			const_iterator rend(right, right_len);
 			return __gnu_cxx::lexicographical_compare_3way(
-				l->data, l->data + left_len, rstart, rend
+				leaf_data(l), leaf_data(l) + left_len,
+				rstart, rend
 			);
 		}
 	} else {

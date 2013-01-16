@@ -45,9 +45,6 @@ template<typename value_type1, typename value_type2>
 counted_ptr<value_type1>
 dynamic_pointer_cast(counted_ptr<value_type2> const &p);
 
-template<typename alloc_type, typename value_type>
-alloc_type *get_allocator(counted_ptr<value_type> const &p);
-
 template<typename value_type>
 struct counted_ptr {
 	typedef value_type type;
@@ -183,7 +180,19 @@ struct counted_ptr {
 				->get_extra()
 			);
 		else
-			return 0;
+			return nullptr;
+	}
+
+	template<typename value_type1>
+	value_type1 *get_extra() const
+	{
+		if (val)
+			return static_cast<value_type1 *>(
+				ref_count_val<value_type>::get_this(val)
+				->get_extra()
+			);
+		else
+			return nullptr;
 	}
 
 	template<typename value_type1>
@@ -195,7 +204,19 @@ struct counted_ptr {
 				->get_extra(sz)
 			);
 		else
-			return 0;
+			return nullptr;
+	}
+
+	template<typename value_type1>
+	value_type1 *get_extra(size_t &sz) const
+	{
+		if (val)
+			return static_cast<value_type1 *>(
+				ref_count_val<value_type>::get_this(val)
+				->get_extra(sz)
+			);
+		else
+			return nullptr;
 	}
 
 private:
@@ -204,25 +225,41 @@ private:
 public:
 	operator __unspecified_bool_type() const
 	{
-		return val == 0 ? 0 : &counted_ptr::val;
+		if (val)
+			return &counted_ptr::val;
+		else
+			return 0;
 	}
 
 	bool unique() const
 	{
-		return val == 0 ? 0 : ref_count_val<value_type>::get_this(val)
-				      ->unique();
+		if (val)
+			return ref_count_val<value_type>::get_this(val)
+			       ->unique();
+		else
+			return 0;
 	}
 
 	long use_count() const
 	{
-		return val == 0 ? 0
-				: ref_count_val<value_type>::get_this(val)
-				  ->get_use_count();
+		if (val)
+			return ref_count_val<value_type>::get_this(val)
+			       ->get_use_count();
+		else
+			return 0;
 	}
 
 	void swap(counted_ptr<value_type> &other)
 	{
 		std::swap(val, other.val);
+	}
+
+	template<typename alloc_type>
+	alloc_type *get_allocator() const
+	{
+		return static_cast<alloc_type *>(
+			this->get_allocator(typeid(alloc_type))
+		);
 	}
 
 	template<typename value_type1, typename alloc_type,
@@ -262,14 +299,6 @@ public:
 	friend counted_ptr<value_type1> dynamic_pointer_cast(
 		counted_ptr<value_type2> const &p
 	);
-
-	template<typename alloc_type>
-	friend alloc_type *get_allocator(counted_ptr<value_type> const &p)
-	{
-		return static_cast<alloc_type *>(
-			p.get_allocator(typeid(alloc_type))
-		);
-	}
 
 private:
 	template<typename value_type1> friend class counted_ptr;
