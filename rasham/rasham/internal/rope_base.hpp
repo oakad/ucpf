@@ -104,7 +104,7 @@ public:
 
 protected:
 	/* Tag for simplified dynamic-like rope component casts. */
-	enum class rope_tag : uint8_t {
+	enum struct rope_tag : uint8_t {
 		null = 0,
 		leaf,
 		concat,
@@ -532,7 +532,6 @@ protected:
 		rope_rep_ptr const &r, size_type begin, size_type end
 	)
 	{
-		printf("pp %p, %ld, %ld\n", r.get(), begin, end);
 		if (!r)
 			return r;
 
