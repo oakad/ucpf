@@ -7,3 +7,4 @@ alias test_case : : : : <include>..
 
 run restricted_array.cpp : : test_case ;
 run ordered_array.cpp : : test_case ;
+run basic_btree.cpp : : test_case ;

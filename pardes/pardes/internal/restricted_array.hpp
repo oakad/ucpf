@@ -41,8 +41,6 @@ struct restricted_array {
 	public:
 		iterator_base() = default;
 
-		iterator_base(iter_type *p) : base_ptr(p) {}
-
 		template <typename iter_type1>
 		iterator_base(
 			iterator_base<iter_type1> const &other,
@@ -55,6 +53,8 @@ struct restricted_array {
 		{}
 
 	private:
+		iterator_base(iter_type *p) : base_ptr(p) {}
+
 		template <typename iter_type1>
 		bool equal(iterator_base<iter_type1> const &other) const
 		{
@@ -106,6 +106,16 @@ struct restricted_array {
 		return iterator(
 			reinterpret_cast<value_type *>(&data[valid_size])
 		);
+	}
+
+	const_iterator begin() const
+	{
+		return cbegin();
+	}
+
+	const_iterator end() const
+	{
+		return cend();
 	}
 
 	const_iterator cbegin() const
@@ -245,6 +255,28 @@ struct restricted_array {
 		std::swap(valid_size, other.valid_size);
 	}
 
+	iterator append(value_type const &v)
+	{
+		capacity_check(1);
+		auto rv(end());
+		*std::raw_storage_iterator<iterator, value_type>(rv) = v;
+		++valid_size;
+		return rv;
+	}
+
+	template <typename input_iter_t>
+	iterator move_append(input_iter_t first, input_iter_t last)
+	{
+		auto n(last - first);
+		capacity_check(n);
+		auto rv(end());
+		std::move(
+			first, last,
+			std::raw_storage_iterator<iterator, value_type>(rv)
+		);
+		return rv;
+	}
+
 	iterator insert(const_iterator pos, value_type const &v)
 	{
 		capacity_check(1);
@@ -366,6 +398,12 @@ struct restricted_array {
 		return rv;
 	}
 
+	void pop_back()
+	{
+		(*this)[valid_size - 1].~value_type();
+		--valid_size;
+	}
+
 	void clear()
 	{
 		for(size_type pos(0); pos < valid_size; ++pos)
@@ -408,12 +446,12 @@ struct restricted_array {
 
 	reference back()
 	{
-		return (*this)[valid_size > 0 ? valid_size - 1 : 0];
+		return (*this)[valid_size - 1];
 	}
 
-	value_type const &back() const
+	const_reference back() const
 	{
-		return (*this)[valid_size > 0 ? valid_size - 1 : 0];
+		return (*this)[valid_size - 1];
 	}
 
 private:

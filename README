@@ -1,4 +1,5 @@
 Useful Components for the Prosperous Future
+===========================================
 
 * utils
 Useful command line utilities, not quite fitting elsewhere.
@@ -6,3 +7,7 @@ Useful command line utilities, not quite fitting elsewhere.
 * rasham
 Simple and lightweight logging library supporting hierarchical categorization
 of messages. Also contains some basic support classes (for a time being).
+
+* pardes
+An universal container format, suitable for moving heterogeneous data around
+in safe and secure way, as well as processing stored data in-place.

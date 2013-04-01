@@ -5,6 +5,8 @@
 int main(int argc, char **argv)
 {
 	using boost::spirit::qi::parse;
+	using rasham::log_item::scanner;
+	using rasham::log_item::range;
 
 	std::string t1(
 		"jhfkjdhf%sdf lkjf%%sakjf lkjf%kf5kf<_kjfl"
@@ -12,12 +14,12 @@ int main(int argc, char **argv)
 		"jtrltj%dfjglfdk{}djfldsk"
 		"ummak %nugh{aa{{cc}dd}ee{}}ghghg"
 	);
-	rasham::log_item::matcher<std::string::const_iterator> m('%');
-	rasham::log_item::range<std::string::const_iterator> t_range;
+	scanner<std::string::const_iterator> s('%');
+	range<std::string::const_iterator> t_range;
 	auto start_iter(t1.cbegin());
 
 	while (start_iter != t1.cend()) {
-		bool rv(parse(start_iter, t1.cend(), m, t_range));
+		bool rv(parse(start_iter, t1.cend(), s, t_range));
 		start_iter = t_range.extent.end();
 		std::cout << "parse: " << rv << std::endl;
 		if (!rv)
