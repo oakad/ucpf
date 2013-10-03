@@ -18,8 +18,6 @@
 #include <mutex>
 #include <thread>
 
-
-
 namespace ucpf { namespace yesod { namespace rcu {
 namespace {
 
@@ -28,14 +26,14 @@ struct thread_entry {
 	static std::list<thread_entry *> entries;
 
 	std::thread::id t_id;
-	std::list<thread_entry *>::const_iterator self_ref;
+	std::list<thread_entry *>::iterator self_ref;
 
 	thread_entry()
 	: t_id(std::this_thread::get_id())
 	{
 		entry_lock.lock();
 		entries.push_front(this);
-		self_ref = entries.cbegin();
+		self_ref = entries.begin();
 	}
 
 	~thread_entry()
@@ -46,7 +44,7 @@ struct thread_entry {
 };
 
 std::mutex thread_entry::entry_lock;
-std::vector<thread_entry *> thread_entry::entries;
+std::list<thread_entry *> thread_entry::entries;
 
 thread_local thread_entry rcu_reader;
 
