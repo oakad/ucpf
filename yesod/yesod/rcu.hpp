@@ -13,71 +13,100 @@
 #if !defined(UCPF_YESOD_RCU_OCT_03_2013_1805)
 #define UCPF_YESOD_RCU_OCT_03_2013_1805
 
-#include <list>
 #include <mutex>
 #include <thread>
 #include <atomic>
 
+#include <boost/intrusive/list.hpp>
+
 namespace ucpf { namespace yesod { namespace rcu {
-namespace detail {
 
-struct thread_entry {
-	static std::mutex entry_lock;
-	static std::list<thread_entry *> entries;
+struct group;
 
-	std::thread::id t_id;
-	unsigned long count;
-	std::atomic_flag waiting;
-	std::list<thread_entry *>::iterator self_ref;
+struct reader {
+	friend struct group;
 
-	thread_entry()
-
-	~thread_entry()
-	{
-	}
+private:
+	boost::intrusive::list_member_hook<
+		boost::intrusive::link_mode<boost::intrusive::safe_link>
+	> node;
+	std::atomic<long> count;
+	std::atomic_flag working;
 };
 
-extern thread_local thread_entry rcu_reader;
-extern std::atomic<unsigned long> gp_count;
+struct group {
+	void attach(reader &r)
+	{
+		std::lock_guard<std::mutex> g_(r_lock);
+		r_list.push_back(r);
+		resume(r);
+	}
 
-static inline void wake_up()
-{
-}
+	void detach(reader &r)
+	{
+		suspend(r);
 
-}
+		std::lock_guard<std::mutex> g_(r_lock);
+		r_list.erase(r_list.iterator_to(r));
+	}
 
-static inline void read_lock()
-{
-}
+	void suspend(reader &r)
+	{
+		r.count.store(0);
+		if (!r.working.test_and_set()) {
+			if (cond_val.load() != -1L)
+				return;
+			cond_val.store(0);
+			cond_var.notify_all();
+		}
+	}
 
-static inline void read_unlock()
-{
-}
+	void resume(reader &r)
+	{
+		r.count.store(count.load());
+	}
 
-int read_ongoing();
+	void yield(reader &r)
+	{
+		auto count_(count.load());
 
-static inline void yield()
-{
-	unsigned long gp_count(detail::gp_count.load());
+		if (count_ != r.count.exchange(count_)) {
+			if (!r.working.test_and_set()) {
+				if (cond_val.load() != -1L)
+					return;
+				cond_val.store(0);
+				cond_var.notify_all();
+			}
+		}
+	}
 
-	if (gp_count == rcu_reader.count)
-		return;
+	void synchronize(reader &r)
+	{
+		auto was_online(r.count.load());
+		if (was_online)
+			suspend(r);
 
-	std::atomic_thread_fence(std::memory_order_acquire);
+#error xxx
 
-	detail::gp_count.store(gp_count);
 
-	std::atomic_thread_fence(std::memory_order_release);
+		if (was_online)
+			resume(r);
+	}
 
-	detail::wake_up();
+private:
+	std::mutex r_lock;
+	std::atomic<long> count;
+	std::atomic<long> cond_val;
+	std::condition_variable cond_var;
 
-	std::atomic_thread_fence(std::memory_order_release);
-}
-
-void thread_offline();
-void thread_online();
-void synchronize();
-
+	boost::intrusive::list<
+		reader,
+		boost::intrusive::member_hook_option<
+			reader, decltype(reader::node), &reader::node
+		>,
+		boost::intrusive::constant_time_size<false>
+	> r_list;
+};
 
 }}}
 #endif
