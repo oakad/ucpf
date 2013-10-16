@@ -14,10 +14,10 @@
 #define UCPF_YESOD_RCU_OCT_03_2013_1805
 
 #include <mutex>
-#include <thread>
-#include <atomic>
 
 #include <boost/intrusive/list.hpp>
+
+#include <yesod/stack.hpp>
 
 namespace ucpf { namespace yesod { namespace rcu {
 
@@ -29,8 +29,19 @@ struct reader {
 private:
 	boost::intrusive::list_member_hook<
 		boost::intrusive::link_mode<boost::intrusive::safe_link>
-	> node;
+	> group_hook;
+
+	stack_head waiter_head;
+
+	struct waiter_states {
+		static constexpr long WAITING = 0;
+		static constexpr long WAKEUP = 1;
+		static constexpr long RUNNING = 2;
+		static constexpr long TEARDOWN = 4;
+	};
+
 	std::atomic<long> count;
+	std::atomic<long> state;
 	std::atomic_flag working;
 };
 
@@ -86,8 +97,9 @@ struct group {
 		if (was_online)
 			suspend(r);
 
-#error xxx
 
+
+		//....
 
 		if (was_online)
 			resume(r);
@@ -102,10 +114,15 @@ private:
 	boost::intrusive::list<
 		reader,
 		boost::intrusive::member_hook_option<
-			reader, decltype(reader::node), &reader::node
+			reader, decltype(reader::group_hook),
+			&reader::group_hook
 		>,
 		boost::intrusive::constant_time_size<false>
 	> r_list;
+
+	stack<
+		reader, decltype(reader::stack_head), &reader::stack_head
+	> w_stack;
 };
 
 }}}
