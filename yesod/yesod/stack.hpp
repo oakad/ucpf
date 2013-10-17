@@ -1,6 +1,10 @@
 /*
  * Copyright (c) 2013 Alex Dubov <oakad@yahoo.com>
  *
+ * Based on implementation from boost::lockfree library (http://www.boost.org/):
+ * 
+ *      Copyright (c) 2008-2013 Tim Blechmann
+ * 
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
@@ -53,22 +57,45 @@ struct stack {
 	stack() : head(tagged_head_ptr(nullptr, 0))
 	{}
 
+	void splice(stack &other)
+	{
+		auto other_head(other.head.load());
+		stack_head *h(nullptr);
+
+		while (true) {
+			h = other_head.get_ptr();
+			if (!h)
+				return;
+
+			tagged_head_ptr new_head(
+				nullptr, /*old_head.get_next_tag()*/
+				other_head.get_tag() + 1
+			);
+
+			if (other.head.compare_exchange_weak(
+				other_head, new_head
+			))
+				break;
+		}
+
+		auto t(h);
+		while (t->next)
+			t = t->next;
+
+		link_nodes_atomic(h, t);
+	}
+
 	bool empty() const
 	{
 		return head.load().get_ptr() == nullptr;
 	}
 
-	void push(reference v)
+	bool push(reference v)
 	{
-		auto old_head(head.load());
 		stack_head *h(member_value_traits::to_node_ptr(v));
 
-		while (true) {
-			tagged_head_ptr new_head(h, old_head.get_tag());
-			h->next = old_head.get_ptr();
-			if (head.compare_exchange_weak(old_head, new_head))
-				break;
-		}
+		link_nodes_atomic(h, h);
+		return h->next == nullptr;
 	}
 
 	pointer pop()
@@ -89,6 +116,17 @@ struct stack {
 	}
 
 private:
+	void link_nodes_atomic(stack_head *top_node, stack_head *end_node)
+	{
+		auto old_head(head.load());
+		while (true) {
+			tagged_head_ptr new_head(top_node, old_head.get_tag());
+			end_node->next = old_head.get_ptr();
+			if (head.compare_exchange_weak(old_head, new_head))
+				break;
+		}
+	}
+
 	std::atomic<tagged_head_ptr> head;
 };
 

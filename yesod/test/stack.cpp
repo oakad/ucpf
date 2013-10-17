@@ -43,4 +43,37 @@ BOOST_AUTO_TEST_CASE(stack_0)
 	BOOST_CHECK(!(out = s.pop()));
 }
 
+BOOST_AUTO_TEST_CASE(stack_1)
+{
+	stack<test::v_type, decltype(test::v_type::h), &test::v_type::h> s0;
+	test::v_type v0(10), v1(20), v2(30);
+
+	s0.push(v2);
+	s0.push(v1);
+	s0.push(v0);
+
+	stack<test::v_type, decltype(test::v_type::h), &test::v_type::h> s1;
+	test::v_type v3(40), v4(50);
+
+	s1.push(v4);
+	s1.push(v3);
+
+	s1.splice(s0);
+
+	test::v_type *out;
+	BOOST_CHECK(!(out = s0.pop()));
+
+	BOOST_CHECK((out = s1.pop()));
+	BOOST_CHECK_EQUAL(out->value, 10);
+	BOOST_CHECK((out = s1.pop()));
+	BOOST_CHECK_EQUAL(out->value, 20);
+	BOOST_CHECK((out = s1.pop()));
+	BOOST_CHECK_EQUAL(out->value, 30);
+	BOOST_CHECK((out = s1.pop()));
+	BOOST_CHECK_EQUAL(out->value, 40);
+	BOOST_CHECK((out = s1.pop()));
+	BOOST_CHECK_EQUAL(out->value, 50);
+	BOOST_CHECK(!(out = s1.pop()));
+}
+
 }}

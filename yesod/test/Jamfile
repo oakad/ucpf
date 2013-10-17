@@ -7,5 +7,6 @@ alias test_case : : : : <include>..
                         <toolset>clang:<cxxflags>-ferror-limit=4
                         <toolset>gcc:<cxxflags>-fmax-errors=4 ;
 
+run rcu.cpp : : test_case ;
 run stack.cpp : : test_case ;
 run tls.cpp : : test_case ;
