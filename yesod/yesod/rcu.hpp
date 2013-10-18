@@ -21,47 +21,45 @@
 
 #include <yesod/stack.hpp>
 
-namespace ucpf { namespace yesod { namespace rcu {
+namespace ucpf { namespace yesod {
 
-struct group;
+struct rcu_qsbr {
+	struct actor {
+		friend struct rcu_qsbr;
 
-struct reader {
-	friend struct group;
+		actor() : count(0)
+		{}
 
-	reader() : count(0)
-	{}
+	private:
+		boost::intrusive::list_member_hook<
+			boost::intrusive::link_mode<boost::intrusive::safe_link>
+		> group_hook;
 
-private:
-	boost::intrusive::list_member_hook<
-		boost::intrusive::link_mode<boost::intrusive::safe_link>
-	> group_hook;
+		stack_head waiter_head;
 
-	stack_head waiter_head;
+		struct waiter_states {
+			static constexpr long WAITING  = 0;
+			static constexpr long WAKEUP   = 1;
+			static constexpr long RUNNING  = 2;
+			static constexpr long TEARDOWN = 4;
+		};
 
-	struct waiter_states {
-		static constexpr long WAITING  = 0;
-		static constexpr long WAKEUP   = 1;
-		static constexpr long RUNNING  = 2;
-		static constexpr long TEARDOWN = 4;
+		std::atomic<int_fast64_t> count;
+		std::atomic<long> state;
+		std::atomic_flag working;
 	};
 
-	std::atomic<int_fast64_t> count;
-	std::atomic<long> state;
-	std::atomic_flag working;
-};
-
-struct group {
-	group() : count(1)
+	rcu_qsbr() : count(1)
 	{}
 
-	void attach(reader &r)
+	void attach(actor &r)
 	{
 		std::unique_lock<std::mutex> l_g(lock);
 		r_list.push_back(r);
 		resume(r);
 	}
 
-	void detach(reader &r)
+	void detach(actor &r)
 	{
 		suspend(r);
 
@@ -69,7 +67,7 @@ struct group {
 		r_list.erase(r_list.iterator_to(r));
 	}
 
-	void suspend(reader &r)
+	void suspend(actor &r)
 	{
 		r.count.store(0);
 		if (!r.working.test_and_set()) {
@@ -80,12 +78,12 @@ struct group {
 		}
 	}
 
-	void resume(reader &r)
+	void resume(actor &r)
 	{
 		r.count.store(count.load());
 	}
 
-	void yield(reader &r)
+	void yield(actor &r)
 	{
 		auto count_(count.load());
 
@@ -99,18 +97,18 @@ struct group {
 		}
 	}
 
-	void synchronize(reader &r)
+	void synchronize(actor &r)
 	{
 		auto was_online(r.count.load());
 		if (was_online)
 			suspend(r);
 
-		r.state = reader::waiter_states::WAITING;
+		r.state = actor::waiter_states::WAITING;
 
 		if (!w_stack.push(r))
 			busy_wait(r);
 		else {
-			r.state = reader::waiter_states::RUNNING;
+			r.state = actor::waiter_states::RUNNING;
 			std::unique_lock<std::mutex> l_g(lock);
 			decltype(w_stack) lw_stack;
 			lw_stack.splice(w_stack);
@@ -121,20 +119,20 @@ struct group {
 			l_g.unlock();
 
 			for (
-				reader *wr(lw_stack.pop()); wr;
+				actor *wr(lw_stack.pop()); wr;
 				wr = lw_stack.pop()
 			) {
 				if (!(
 					wr->state.load()
-					& reader::waiter_states::RUNNING
+					& actor::waiter_states::RUNNING
 				)) {
 					wr->state
-					= reader::waiter_states::WAKEUP;
+					= actor::waiter_states::WAKEUP;
 
 					cond_var.notify_all();
 
 					wr->state
-					|= reader::waiter_states::TEARDOWN;
+					|= actor::waiter_states::TEARDOWN;
 				}
 			}
 		}
@@ -144,28 +142,28 @@ struct group {
 	}
 
 private:
-	void busy_wait(reader &r)
+	void busy_wait(actor &r)
 	{
 		for (long retries(0); retries < wait_attempts; ++retries) {
-			if (r.state.load() != reader::waiter_states::WAITING)
+			if (r.state.load() != actor::waiter_states::WAITING)
 				break;
 			std::atomic_thread_fence(std::memory_order_seq_cst);
 		}
 
-		if (r.state.load() == reader::waiter_states::WAITING) {
+		if (r.state.load() == actor::waiter_states::WAITING) {
 			std::unique_lock<std::mutex> l_g(lock);
-			while (r.state.load() == reader::waiter_states::WAITING)
+			while (r.state.load() == actor::waiter_states::WAITING)
 				cond_var.wait(l_g);
 		}
 
-		r.state |= reader::waiter_states::RUNNING;
+		r.state |= actor::waiter_states::RUNNING;
 		for (long retries(0); retries < wait_attempts; ++retries) {
-			if (r.state.load() & reader::waiter_states::TEARDOWN)
+			if (r.state.load() & actor::waiter_states::TEARDOWN)
 				break;
 			std::atomic_thread_fence(std::memory_order_seq_cst);
 		}
 
-		while (!r.state.load() & reader::waiter_states::TEARDOWN)
+		while (!r.state.load() & actor::waiter_states::TEARDOWN)
 			std::this_thread::sleep_for(
 				std::chrono::milliseconds(10)
 			);
@@ -223,16 +221,16 @@ private:
 	std::condition_variable cond_var;
 
 	boost::intrusive::list<
-		reader, boost::intrusive::member_hook<
-			reader, decltype(reader::group_hook),
-			&reader::group_hook
+		actor, boost::intrusive::member_hook<
+			actor, decltype(actor::group_hook),
+			&actor::group_hook
 		>, boost::intrusive::constant_time_size<false>
 	> r_list;
 
 	stack<
-		reader, decltype(reader::waiter_head), &reader::waiter_head
+		actor, decltype(actor::waiter_head), &actor::waiter_head
 	> w_stack;
 };
 
-}}}
+}}
 #endif
