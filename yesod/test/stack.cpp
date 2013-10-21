@@ -16,7 +16,7 @@ namespace test {
 
 struct v_type {
 	long value;
-	stack_head h;
+	slist_node h;
 
 	v_type(long v) : value(v)
 	{}

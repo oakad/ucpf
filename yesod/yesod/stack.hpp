@@ -19,26 +19,11 @@
 #include <boost/intrusive/detail/utilities.hpp>
 #include <boost/intrusive/member_value_traits.hpp>
 
+#include <yesod/slist_node.hpp>
+
 namespace ucpf { namespace yesod {
 
-struct stack_head {
-	template <
-		typename ValueType, typename HeadType,
-		HeadType ValueType::* HeadPtr
-	> friend struct stack;
-
-	typedef stack_head       node;
-	typedef stack_head       *node_ptr;
-	typedef stack_head const *const_node_ptr;
-
-	stack_head() : next(nullptr)
-	{}
-
-private:
-	stack_head *next;
-};
-
-template <typename ValueType, typename HeadType, HeadType ValueType::* HeadPtr>
+template <typename ValueType, typename NodeType, NodeType ValueType::* NodePtr>
 struct stack {
 	typedef ValueType       value_type;
 	typedef ValueType       &reference;
@@ -46,12 +31,16 @@ struct stack {
 	typedef ValueType       *pointer;
         typedef ValueType const *const_pointer;
 
+	typedef typename NodeType::node           node;
+	typedef typename NodeType::node_ptr       node_ptr;
+	typedef typename NodeType::const_node_ptr const_node_ptr;
+
 	typedef boost::intrusive::member_value_traits<
-		value_type, HeadType, HeadPtr
+		value_type, NodeType, NodePtr
 	> member_value_traits;
 
 	typedef typename boost::lockfree::detail::tagged_ptr<
-		stack_head
+		node
 	> tagged_head_ptr;
 
 	stack() : head(tagged_head_ptr(nullptr, 0))
@@ -60,7 +49,7 @@ struct stack {
 	void splice(stack &other)
 	{
 		auto other_head(other.head.load());
-		stack_head *h(nullptr);
+		node_ptr h(nullptr);
 
 		while (true) {
 			h = other_head.get_ptr();
@@ -92,7 +81,7 @@ struct stack {
 
 	bool push(reference v)
 	{
-		stack_head *h(member_value_traits::to_node_ptr(v));
+		auto h(member_value_traits::to_node_ptr(v));
 
 		link_nodes_atomic(h, h);
 		return h->next == nullptr;
@@ -116,7 +105,7 @@ struct stack {
 	}
 
 private:
-	void link_nodes_atomic(stack_head *top_node, stack_head *end_node)
+	void link_nodes_atomic(node_ptr top_node, node_ptr end_node)
 	{
 		auto old_head(head.load());
 		while (true) {
