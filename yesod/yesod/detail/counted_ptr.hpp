@@ -1,21 +1,20 @@
 /*
- * Copyright (C) 2010, 2012 Alex Dubov <oakad@yahoo.com>
+ * Copyright (c) 2010 - 2012 Alex Dubov <oakad@yahoo.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
 
-#if !defined(_RASHAM_INTERNAL_COUNTED_PTR_BASE_HPP)
-#define _RASHAM_INTERNAL_COUNTED_PTR_BASE_HPP
+#if !defined(UCPF_YESOD_DETAIL_COUNTED_PTR_OCT_31_2013_1800)
+#define UCPF_YESOD_DETAIL_COUNTED_PTR_OCT_31_2013_1800
 
 #include <cstddef>
 #include <atomic>
 #include <tuple>
 #include <typeinfo>
 
-namespace rasham
-{
+namespace ucpf { namespace rasham { namespace detail {
 
 struct counted_base {
 	counted_base(counted_base const &) = delete;
@@ -51,7 +50,7 @@ private:
 	std::atomic_ulong use_count;
 };
 
-template <typename value_type>
+template <typename ValueType>
 struct ref_count : public counted_base {
 	virtual ~ref_count()
 	{}
@@ -61,9 +60,9 @@ struct ref_count : public counted_base {
 		return 0;
 	}
 
-	virtual value_type *get_ptr() = 0;
+	virtual ValueType *get_ptr() = 0;
 
-	virtual value_type const *get_ptr() const = 0;
+	virtual ValueType const *get_ptr() const = 0;
 
 	unsigned long get_use_count() const
 	{
@@ -98,40 +97,40 @@ struct ref_count : public counted_base {
 	}
 };
 
-template <typename value_type>
+template <typename ValueType>
 struct ref_count_val {
-	static ref_count<value_type> *get_this(value_type *p)
+	static ref_count<ValueType> *get_this(ValueType *p)
 	{
-		return *reinterpret_cast<ref_count<value_type> **>(
+		return *reinterpret_cast<ref_count<ValueType> **>(
 			reinterpret_cast<char *>(p)
-			- sizeof(ref_count<value_type> *)
+			- sizeof(ref_count<ValueType> *)
 		);
 	}
 
 	template <typename... arg_type>
-	ref_count_val(ref_count<value_type> *count_, arg_type&&... args)
+	ref_count_val(ref_count<ValueType> *count_, arg_type&&... args)
 	: count(count_), val(std::forward<arg_type>(args)...)
 	{}
 
-	value_type *get_ptr()
+	ValueType *get_ptr()
 	{
 		return &val;
 	}
 
-	value_type const *get_ptr() const
+	ValueType const *get_ptr() const
 	{
 		return &val;
 	}
 
 private:
-	ref_count<value_type> *count;
-	value_type            val;
+	ref_count<ValueType> *count;
+	ValueType            val;
 };
 
-template <typename value_type>
-struct ref_count_p : public ref_count<value_type> {
+template <typename ValueType>
+struct ref_count_p : public ref_count<ValueType> {
 	template <typename... arg_type>
-	static ref_count<value_type> *create(arg_type&&... args)
+	static ref_count<ValueType> *create(arg_type&&... args)
 	{
 		return ::new ref_count_p(std::forward<arg_type>(args)...);
 	}
@@ -144,12 +143,12 @@ struct ref_count_p : public ref_count<value_type> {
 		::delete this;
 	}
 
-	virtual value_type *get_ptr()
+	virtual ValueType *get_ptr()
 	{
 		return val.get_ptr();
 	}
 
-	virtual value_type const *get_ptr() const
+	virtual ValueType const *get_ptr() const
 	{
 		return val.get_ptr();
 	}
@@ -160,17 +159,19 @@ private:
 	: val(this, std::forward<arg_type>(args)...)
 	{}
 
-	ref_count_val<value_type> val;
+	ref_count_val<ValueType> val;
 };
 
-template <typename value_type>
-struct ref_count_e : public ref_count<value_type> {
+template <typename ValueType>
+struct ref_count_e : public ref_count<ValueType> {
 	template <typename... arg_type>
-	static ref_count<value_type> *create(size_t extra_size_,
-					     arg_type&&... args)
+	static ref_count<ValueType> *create(
+		size_t extra_size_, arg_type&&... args
+	)
 	{
-		void *p(::operator new(sizeof(ref_count_e<value_type>)
-				       + extra_size_));
+		void *p(::operator new(
+			sizeof(ref_count_e<ValueType>) + extra_size_
+		));
 
 		try {
 			return ::new (p) ref_count_e(
@@ -188,17 +189,17 @@ struct ref_count_e : public ref_count<value_type> {
 	virtual void destroy()
 	{
 		void *p(this);
-		this->~ref_count_e<value_type>();
+		this->~ref_count_e<ValueType>();
 
 		::operator delete(p);
 	}
 
-	virtual value_type *get_ptr()
+	virtual ValueType *get_ptr()
 	{
 		return val.get_ptr();
 	}
 
-	virtual value_type const *get_ptr() const
+	virtual ValueType const *get_ptr() const
 	{
 		return val.get_ptr();
 	}
@@ -232,22 +233,22 @@ private:
 	{}
 
 	size_t                    extra_size;
-	ref_count_val<value_type> val;
+	ref_count_val<ValueType> val;
 	char                      extra_storage[];
 };
 
-template <typename value_type, typename alloc_type>
-struct ref_count_a : public ref_count<value_type> {
+template <typename ValueType, typename AllocType>
+struct ref_count_a : public ref_count<ValueType> {
 	template <typename... arg_type>
-	static ref_count<value_type> *create(alloc_type a, arg_type&&... args)
+	static ref_count<ValueType> *create(AllocType a, arg_type&&... args)
 	{
-		typename alloc_type::template rebind<this_type>::other a2(a);
+		typename AllocType::template rebind<this_type>::other a2(a);
 
 		ref_count_a *p(a2.allocate(1));
 
 		try {
 			return ::new (p) ref_count_a(
-				std::forward<alloc_type>(a),
+				std::forward<AllocType>(a),
 				std::forward<arg_type>(args)...
 			);
 		} catch(...) {
@@ -261,8 +262,9 @@ struct ref_count_a : public ref_count<value_type> {
 
 	virtual void destroy()
 	{
-		typename alloc_type::template rebind<this_type>::other
-		a(std::get<1>(val_plus));
+		typename AllocType::template rebind<
+			this_type
+		>::other a(std::get<1>(val_plus));
 
 		a.destroy(this);
 		a.deallocate(this, 1);
@@ -270,53 +272,55 @@ struct ref_count_a : public ref_count<value_type> {
 
 	virtual void *get_allocator(std::type_info const &ti)
 	{
-		if (ti == typeid(alloc_type))
+		if (ti == typeid(AllocType))
 			return &std::get<1>(val_plus);
 		else
 			return 0;
 	}
 
-	virtual value_type *get_ptr()
+	virtual ValueType *get_ptr()
 	{
 		return std::get<0>(val_plus).get_ptr();
 	}
 
-	virtual value_type const *get_ptr() const
+	virtual ValueType const *get_ptr() const
 	{
 		return std::get<0>(val_plus).get_ptr();
 	}
 
 private:
-	typedef ref_count_a<value_type, alloc_type> this_type;
+	typedef ref_count_a<ValueType, AllocType> this_type;
 
 	template <typename... arg_type>
-	ref_count_a(alloc_type a, arg_type&&... args)
+	ref_count_a(AllocType a, arg_type&&... args)
 	: val_plus(
-		ref_count_val<value_type>(
+		ref_count_val<ValueType>(
 			this, std::forward<arg_type>(args)...
 		),
-		std::forward<alloc_type>(a)
+		std::forward<AllocType>(a)
 	)
 	{}
 
-	std::tuple<ref_count_val<value_type>, alloc_type> val_plus;
+	std::tuple<ref_count_val<ValueType>, AllocType> val_plus;
 };
 
-template <typename value_type, typename alloc_type>
-struct ref_count_a_e : public ref_count<value_type> {
+template <typename ValueType, typename AllocType>
+struct ref_count_a_e : public ref_count<ValueType> {
 	template <typename... arg_type>
-	static ref_count<value_type> *create(alloc_type a, size_t extra_size,
-					     arg_type&&... args)
+	static ref_count<ValueType> *create(
+		AllocType a, size_t extra_size, arg_type&&... args
+	)
 	{
 		size_t sz(sizeof(this_type) + extra_size);
-		typename alloc_type::template rebind<char>::other
-		raw(a);
+		typename AllocType::template rebind<
+			char
+		>::other raw(a);
 
 		void *p(raw.allocate(sz));
 
 		try {
 			return ::new (p) ref_count_a_e(
-				std::forward<alloc_type>(a), extra_size,
+				std::forward<AllocType>(a), extra_size,
 				std::forward<arg_type>(args)...
 			);
 		} catch (...) {
@@ -331,8 +335,9 @@ struct ref_count_a_e : public ref_count<value_type> {
 	virtual void destroy()
 	{
 		size_t sz(sizeof(this_type) + std::get<0>(alloc_plus));
-		typename alloc_type::template rebind<char>::other
-		raw(std::get<1>(alloc_plus));
+		typename AllocType::template rebind<
+			char
+		>::other raw(std::get<1>(alloc_plus));
 
 		this->~ref_count_a_e();
 		raw.deallocate(reinterpret_cast<char *>(this), sz);
@@ -340,18 +345,18 @@ struct ref_count_a_e : public ref_count<value_type> {
 
 	virtual void *get_allocator(std::type_info const &ti)
 	{
-		if (ti == typeid(alloc_type))
+		if (ti == typeid(AllocType))
 			 return &std::get<1>(alloc_plus);
 		else
 			return 0;
 	}
 
-	virtual value_type *get_ptr()
+	virtual ValueType *get_ptr()
 	{
 		return val.get_ptr();
 	}
 
-	virtual value_type const *get_ptr() const
+	virtual ValueType const *get_ptr() const
 	{
 		return val.get_ptr();
 	}
@@ -379,18 +384,18 @@ struct ref_count_a_e : public ref_count<value_type> {
 	}
 
 private:
-	typedef ref_count_a_e<value_type, alloc_type> this_type;
+	typedef ref_count_a_e<ValueType, AllocType> this_type;
 
 	template <typename... arg_type>
-	ref_count_a_e(alloc_type a, size_t extra_size, arg_type&&... args)
-	: alloc_plus(extra_size, std::forward<alloc_type>(a)),
+	ref_count_a_e(AllocType a, size_t extra_size, arg_type&&... args)
+	: alloc_plus(extra_size, std::forward<AllocType>(a)),
 	  val(this, std::forward<arg_type>(args)...)
 	{}
 
-	std::tuple<size_t, alloc_type> alloc_plus;
-	ref_count_val<value_type>      val;
-	char                           extra_storage[];
+	std::tuple<size_t, AllocType> alloc_plus;
+	ref_count_val<ValueType>      val;
+	char                          extra_storage[];
 };
 
-}
+}}}
 #endif
