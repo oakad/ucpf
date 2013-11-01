@@ -10,7 +10,7 @@
 
 #include <yesod/detail/counted_ptr.hpp>
 
-namespace ucpf { namespace rasham {
+namespace ucpf { namespace yesod {
 
 template<typename ValueType>
 struct counted_ptr;
@@ -305,7 +305,7 @@ public:
 	);
 
 private:
-	template<typename ValueType1> friend class counted_ptr;
+	template<typename ValueType1> friend struct counted_ptr;
 
 	explicit counted_ptr(
 		detail::ref_count<ValueType> *r, bool increment = false

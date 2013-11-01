@@ -32,7 +32,7 @@
 #include <stdexcept>
 #include <ext/algorithm>
 
-namespace ucpf { namespace yesod { namespace detail {
+namespace ucpf { namespace yesod {
 
 template <
 	typename CharType, typename TraitsType, typename AllocType,
@@ -964,5 +964,5 @@ template <
 	return os;
 }
 
-}}}
+}}
 #endif

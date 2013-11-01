@@ -14,7 +14,7 @@
 #include <tuple>
 #include <typeinfo>
 
-namespace ucpf { namespace rasham { namespace detail {
+namespace ucpf { namespace yesod { namespace detail {
 
 struct counted_base {
 	counted_base(counted_base const &) = delete;

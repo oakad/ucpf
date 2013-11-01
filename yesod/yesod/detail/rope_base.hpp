@@ -34,7 +34,7 @@
 #include <yesod/counted_ptr.hpp>
 #include <boost/iterator/iterator_facade.hpp>
 
-namespace ucpf { namespace yesod { namespace detail {
+namespace ucpf { namespace yesod {
 
 template <
 	typename CharType, typename TraitsType, typename AllocType,
@@ -639,25 +639,31 @@ public:
 			return reference(root, pos);
 		}
 
-		template <typename CharType1, typename traits_type1,
-			  typename AllocType1>
-		friend bool operator==(
-			typename rope<CharType1, traits_type1, AllocType1>
-			::pointer const &x,
-			typename rope<CharType1, traits_type1, AllocType1>
-			::pointer const &y
+		template <
+			typename CharType1, typename TraitsType1,
+			typename AllocType1, typename Policy1
+		> friend bool operator==(
+			typename rope<
+				CharType1, TraitsType1, AllocType1, Policy1
+			>::pointer const &x,
+			typename rope<
+				CharType1, TraitsType1, AllocType1, Policy1
+			>::pointer const &y
 		)
 		{
 			return (x.pos == y.pos) && (x.root == y.root);
 		}
 
-		template <typename CharType1, typename traits_type1,
-			  typename AllocType1>
-		friend bool operator!=(
-			typename rope<CharType1, traits_type1, AllocType1>
-			::pointer const &x,
-			typename rope<CharType1, traits_type1, AllocType1>
-			::pointer const &y
+		template <
+			typename CharType1, typename TraitsType1,
+			typename AllocType1, typename Policy1
+		> friend bool operator!=(
+			typename rope<
+				CharType1, TraitsType1, AllocType1, Policy1
+			>::pointer const &x,
+			typename rope<
+				CharType1, TraitsType1, AllocType1, Policy1
+			>::pointer const &y
 		)
 		{
 			return (x.pos != y.pos) || (x.root != y.root);
@@ -688,7 +694,7 @@ public:
 
 	private:
 		friend struct rope;
-		friend struct boost::iterator_core_access;
+		friend class boost::iterator_core_access;
 
 		const_iterator(rope_rep_ptr const &root_, size_type pos_)
 		: iterator_base(root_, pos_)
@@ -754,7 +760,7 @@ public:
 
 	private:
 		friend struct rope;
-		friend struct boost::iterator_core_access;
+		friend class boost::iterator_core_access;
 
 		iterator(rope_type *r, size_type pos_)
 		: iterator_base(std::get<0>(r->treeplus), pos_), root_rope(r)
@@ -989,9 +995,8 @@ public:
 		return len;
 	}
 
-	class rope_dumper {
-
-		friend class rope;
+	struct rope_dumper {
+		friend struct rope;
 		rope_rep_ptr r;
 
 		rope_dumper(rope_rep_ptr const &r_)
@@ -1563,39 +1568,39 @@ public:
 		return reference(this, pos);
 	}
 
-	template <typename CharType1, typename traits_type1,
+	template <typename CharType1, typename TraitsType1,
 		  typename AllocType1, typename Policy1>
-	friend rope<CharType1, traits_type1, AllocType1, Policy1>
+	friend rope<CharType1, TraitsType1, AllocType1, Policy1>
 	operator+(
-		rope<CharType1, traits_type1, AllocType1, Policy1> const
+		rope<CharType1, TraitsType1, AllocType1, Policy1> const
 		&l,
-		rope<CharType1, traits_type1, AllocType1, Policy1> const
+		rope<CharType1, TraitsType1, AllocType1, Policy1> const
 		&r
 	);
 
-	template <typename CharType1, typename traits_type1,
+	template <typename CharType1, typename TraitsType1,
 		  typename AllocType1, typename Policy1>
-	friend rope<CharType1, traits_type1, AllocType1, Policy1>
+	friend rope<CharType1, TraitsType1, AllocType1, Policy1>
 	operator+(
-		rope<CharType1, traits_type1, AllocType1, Policy1> const
+		rope<CharType1, TraitsType1, AllocType1, Policy1> const
 		&l,
 		CharType1 const *s
 	);
 
-	template <typename CharType1, typename traits_type1,
+	template <typename CharType1, typename TraitsType1,
 		  typename AllocType1, typename Policy1>
-	friend rope<CharType1, traits_type1, AllocType1, Policy1>
+	friend rope<CharType1, TraitsType1, AllocType1, Policy1>
 	operator+(
-		rope<CharType1, traits_type1, AllocType1, Policy1> const
+		rope<CharType1, TraitsType1, AllocType1, Policy1> const
 		&l,
 		CharType1 c
 	);
 
-	template <typename CharType1, typename traits_type1,
+	template <typename CharType1, typename TraitsType1,
 		  typename AllocType1, typename Policy1>
-	friend std::basic_ostream<CharType1, traits_type1> &operator<<(
-		std::basic_ostream<CharType1, traits_type1> &os,
-		rope<CharType1, traits_type1, AllocType1, Policy1> const
+	friend std::basic_ostream<CharType1, TraitsType1> &operator<<(
+		std::basic_ostream<CharType1, TraitsType1> &os,
+		rope<CharType1, TraitsType1, AllocType1, Policy1> const
 		&r
 	);
 };
@@ -1755,5 +1760,5 @@ std::basic_ostream<CharType, TraitsType> &operator<<(
 	rope<CharType, TraitsType, AllocType, Policy> const &r
 );
 
-}}}
+}}
 #endif

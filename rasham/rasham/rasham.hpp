@@ -9,45 +9,38 @@
 #define UCPF_RASHAM_RASHAM_OCT_29_2013_1750
 
 #include <cstdio>
-#include <dlfcn.h>
 #include <utility>
 
+namespace ucpf { namespace rasham {
+namespace detail {
 
-void *module_base()
-{
-	static void __attribute__((used)) *base(0);
-	printf("base acc %p\n", base);
-	if (!base) {
-		Dl_info info;
-		dladdr(&base, &info);
-		base = info.dli_fbase;
-	}
-	return base;
+struct arg_pack;
+
+bool suppress_location(void *loc, std::thread::id thr);
+
 }
 
-
-namespace ucpf { namespace rasham {
-
 struct rshm {
+	rshm(rshm const &) = delete;
+	rshm const &operator=(rshm const &) = delete;
+
 	template <typename... Args>
 	__attribute__ ((noinline)) rshm(Args... a)
+	: suppress(false)
 	{
-		auto a1(__builtin_return_address(0));
-		auto a2(__builtin_extract_return_addr(a1));
-		printf("rshm constructed %p - %p\n", a1, a2);
-		Dl_info info;
-		printf("rshm addr %d\n", dladdr(a1, &info));
-		printf("  fname %s\n", info.dli_fname);
-		printf("  fbase %p\n", info.dli_fbase);
-		printf("  sname %s\n", info.dli_sname);
-		printf("  saddr %p\n", info.dli_saddr);
-		printf(" also base %p, diff %p\n", module_base(),
-		(void *)((unsigned long)a2 - (unsigned long)module_base()));
+		auto loc(__builtin_extract_return_addr(
+			__builtin_return_address(0)
+		));
+		auto thr(std::this_thread::get_id());
+		suppress = detail::suppress_location(loc, thr);
 	}
 
 	template <long N, typename... Args>
 	rshm &fmt(Args... a)
 	{
+		if (suppress)
+			return this;
+
 		printf("fmt arg %ld\n", N);
 		return *this;
 	}
@@ -55,14 +48,24 @@ struct rshm {
 	template <typename... Args>
 	rshm &dst(Args... a)
 	{
+		if (suppress)
+			return this;
+
 		printf("dst\n");
 		return *this;
 	}
 
 	~rshm()
 	{
+		if (suppress)
+			return;
+
 		printf("rshm destroyed\n");
 	}
+
+private:
+	bool suppress;
+	arg_pack *args;
 };
 
 }}

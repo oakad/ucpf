@@ -163,9 +163,9 @@ namespace std
 {
 
 template<>
-struct hash<rasham::crope>
+struct hash<ucpf::yesod::crope>
 {
-	size_t operator()(rasham::crope const &str) const
+	size_t operator()(ucpf::yesod::crope const &str) const
 	{
 		size_t size(str.size());
 		if (!size)
@@ -175,9 +175,9 @@ struct hash<rasham::crope>
 };
 
 template<>
-struct hash<rasham::wrope>
+struct hash<ucpf::yesod::wrope>
 {
-	size_t operator()(rasham::wrope const &str) const
+	size_t operator()(ucpf::yesod::wrope const &str) const
 	{
 		size_t size(str.size());
 		if (!size)

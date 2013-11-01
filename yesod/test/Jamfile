@@ -8,6 +8,7 @@ alias test_case : : : : <include>..
                         <toolset>gcc:<cxxflags>-fmax-errors=4 ;
 
 run rcu.cpp : : test_case ;
+run rope.cpp : : test_case ;
 run stack.cpp : : test_case ;
 run stack_decs.cpp : : test_case ;
 run tls.cpp : : test_case ;
