@@ -1,0 +1,82 @@
+Controls
+========
+Skip
+Tuple start
+Tuple stop
+
+3 code points
+
+Basic values
+============
+
+Ints (5b) - 32 code points
+Uints (5b) - 32 code points
+
+Lists
+=====
+
+Sizes: 1B(8), 2B(256), 3B(64k), 4B(16M)
+(1, 2, 4, 8, 16) x (int, uint, float)
+
+165 code points
+
+Totals
+======
+3 + 32 + 32 + 165 = 232 (24)
+
+Code table
+==========
+
+00 -> reserved
+..
+0F -> reserved
+++++++++++++++++
+10 - int_5 (0)
+.. - int_5 (1 : 15 : -16 : -2)
+2F - int_5 (-1)
+++++++++++++++++
+30 - uint_5 (0)
+.. - uint_5 (1 : 30)
+4F - uint_5 (31)
+++++++++++++++++
+50 -> tuple start
+++++++++++++++++
+51 - int_128 x 16M list (+3B length, 16B elements)
+..
+5F - float_8 x 16M list (+3B length, 1B elements)
+++++++++++++++++
+60 -> skip byte
+++++++++++++++++
+61 - int_128 x 64k list (+2B length, 16B elements)
+..
+6F - float_8 x 64k list (+2B length, 1B elements)
+++++++++++++++++
+70 -> tuple end
+++++++++++++++++
+71 - int_128 x 256 list (+1B length, 16B elements)
+..
+7F - float_8 x 256 list (+1B length, 1B elements)
+++++++++++++++++
+80 88 90 - int_128|uint_128|float_128 x 1 list (16B elements)
+.. .. ..
+87 8F 97 - int_128|uint_128|float_128 x 8 list (16B elements)
+++++++++++++++++
+98 A0 A8 - int_64|uint_64|float_64 x 1 list (8B elements)
+.. .. ..
+9F A7 AF - int_64|uint_64|float_64 x 8 list (8B elements)
+++++++++++++++++
+B0 B8 C0 - int_32|uint_32|float_32 x 1 list (4B elements)
+.. .. ..
+B7 BF C7 - int_32|uint_32|float_32 x 8 list (4B elements)
+++++++++++++++++
+C8 D0 D8 - int_16|uint_16|float_16 x 1 list (2B elements)
+.. .. ..
+CF D7 DF - int_16|uint_16|float_16 x 8 list (2B elements)
+++++++++++++++++
+E0 E8 F0 - int_8|uint_8|float_8 x 1 list (1B elements)
+.. .. ..
+E7 EF F7 - int_8|uint_8|float_8 x 8 list (1B elements)
+++++++++++++++++
+F8 -> reserved
+..
+FF -> reserved
