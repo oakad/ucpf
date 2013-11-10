@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <array>
+#include <yesod/is_sequence.hpp>
 
 namespace ucpf { namespace mina { namespace detail {
 
@@ -19,29 +20,82 @@ constexpr uint8_t const small_uint_code_offset = 0x30;
 
 struct scalar_rank {
 	enum {
+		ie   = -1,
 		i8   = 0,
 		i16  = 1,
 		i32  = 2,
 		i64  = 3,
 		i128 = 4
 	};
+
+	template <typename T>
+	constexpr static int from_type()
+	{
+		typedef std::integral_constant<
+			int, 31 - __builtin_clz(sizeof(T))
+		> log_type;
+		typedef std::integral_constant<
+			int,
+			((1UL << log_type::value) < sizeof(T))
+			? log_type::value + 1 : log_type::value
+		> rv_type;
+
+		return rv_type::value <= i128 ? rv_type::value : ie;
+	}
 };
 
 struct list_size_rank {
 	enum {
+		le  = -1,
 		l3  = 0,
 		l8  = 1,
 		l16 = 2,
 		l24 = 3
 	};
+
+	static int from_size(size_t count)
+	{
+		if (count <= (1 << 24)) {
+			if (count <= (1 << 16)) {
+				if (count <= (1 << 8))
+					return (count <= (1 << 3)) ? l3 : l8;
+				else
+					return l16;
+			} else
+				return l24;
+		} else
+			return le;
+	}
 };
 
 struct numeric_type_rank {
 	enum {
+		n_error = -1,
 		n_signed = 0,
 		n_unsigned = 1,
 		n_float = 2
 	};
+
+	template <typename T>
+	constexpr static int from_type()
+	{
+		typedef typename std::integral_constant<
+			int,
+			std::is_integral<T>::value ? 0 : (
+				std::is_floating_point<T>::value
+				? n_float : n_error
+			)
+		>::type int_type;
+		typedef typename std::integral_constant<
+			int,
+			std::is_signed<T>::value ? n_signed : (
+				std::is_unsigned<T>::value
+				? n_unsigned : n_error
+			)
+		>::type sig_type;
+
+		return int_type::value == 0 ? sig_type::value : int_type::value;
+	}
 };
 
 constexpr std::array<
@@ -248,6 +302,36 @@ void pack(OutputIterator &&sink, unsigned __int128 v)
 				   [scalar_rank::i128];
 		pack_integral<16>(sink, v);
 	}
+}
+
+template <typename OutputIterator, typename Sequence>
+typename std::enable_if<
+	yesod::is_sequence<Sequence>::value
+	& std::is_integral<typename Sequence::value_type>::value, void
+>::type pack(OutputIterator &&sink, Sequence const &v)
+{
+	auto sz(v.size());
+	constexpr auto n_rank(numeric_type_rank::from_type<
+		typename Sequence::value_type
+	>());
+	auto l_rank(list_size_rank::from_size(sz));
+	constexpr auto s_rank(
+		scalar_rank::from_type<typename Sequence::value_type>()
+	);
+
+	if (l_rank == list_size_rank::l3)
+		*sink++ = list_code[n_rank][l_rank][s_rank]
+			  | uint8_t(sz - 1);
+	else {
+		*sink++ = list_code[n_rank][l_rank][s_rank];
+		for (auto cnt(l_rank); cnt; --cnt) {
+			*sink++ = sz & 0xff;
+			sz >>= 8;
+		}
+	}
+
+	for (auto xv: v)
+		pack_integral<1 << s_rank>(sink, xv);
 }
 
 }}}
