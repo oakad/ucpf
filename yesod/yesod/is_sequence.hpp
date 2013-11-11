@@ -49,6 +49,8 @@ struct has_const_iterator {
 	static bool const value = type::value;
 };
 
+/* Consider using SFINAE friendly std::result_of when available. */
+
 template <typename T, bool HasIter = false>
 struct has_cbegin {
 	typedef std::false_type type;
