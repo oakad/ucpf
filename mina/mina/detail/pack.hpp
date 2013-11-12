@@ -197,6 +197,98 @@ void pack_integral(OutputIterator &&sink, T v, unsigned int N)
 		*sink++ = static_cast<uint8_t>(v & 0xff);
 }
 
+template <typename W, W w, bool... Vn>
+struct compose_bool;
+
+template <typename W, W w, bool V0>
+struct compose_bool<W, w, V0> {
+	constexpr static size_t ord = 1;
+	constexpr static W value = V0 ? w | W(1) : w & ~W(1);
+	typedef std::integral_constant<
+		W, value
+	> type;
+};
+
+template <typename W, W w, bool V0, bool... Vn>
+struct compose_bool<W, w, V0, Vn...> {
+	constexpr static size_t ord = 1 + compose_bool<W, w, Vn...>::ord;
+	constexpr static W value = V0 ? (
+		compose_bool<W, w, Vn...>::value
+		| (W(1) << compose_bool<W, w, Vn...>::ord)
+	) : (
+		compose_bool<W, w, Vn...>::value
+		& ~(W(1) << compose_bool<W, w, Vn...>::ord)
+	);
+
+	typedef std::integral_constant<W, value> type;
+};
+
+struct kind_flags {
+	enum {
+		integral= 1,
+		float_ = 2,
+		signed_ = 4,
+		sequence = 8
+	};
+};
+
+template <typename T, int Kind>
+struct classify_scalar {
+	constexpr static int value = compose_bool<
+		int, Kind, std::is_signed<T>::value,
+		std::is_floating_point<T>::value,
+		std::is_integral<T>::value
+	>::value;
+	typedef typename std::integral_constant<int, value> type;
+};
+
+template <typename T, int Kind, bool Sequence = true>
+struct classify_sequence {
+	constexpr static int value = classify_scalar<
+		typename T::value_type, Kind | kind_flags::sequence
+	>::value;
+	typedef typename std::integral_constant<int, value> type;
+};
+
+template <typename T, int Kind>
+struct classify_sequence<T, Kind, false> {
+	constexpr static int value = Kind;
+	typedef typename std::integral_constant<int, value> type;
+};
+
+template <typename OutputIterator, typename T>
+struct s_pack {
+	template <int Kind, typename OutputIterator_, typename T_>
+	struct helper;
+/*
+	template <typename OutputIterator_, typename T_>
+	struct helper<
+		kind_flags::scalar | kind_flags::integral, OutputIterator_, T_
+	> {
+	};
+
+	template <typename OutputIterator_, typename T_>
+	struct helper<
+		kind_flags::scalar | kind_flags::integral | kind_flags::signed_,
+		OutputIterator_, T_
+	> {
+	};
+*/
+	void operator ()(OutputIterator &&sink, T v) const
+	{
+	}
+};
+
+template <typename OutputIterator, typename T>
+void pack(OutputIterator &&sink, T v)
+{
+	auto f1(classify_sequence<T, 0, yesod::is_sequence<T>::value>::value);
+	auto f2(classify_scalar<T, 0>::value);
+
+	printf("xx %x %x\n", f1, f2);
+}
+
+/*
 template <typename OutputIterator, typename T>
 std::enable_if<
 	std::is_integral<T>::value, void
@@ -246,6 +338,6 @@ typename std::enable_if<
 	for (auto xv: v)
 		pack_integral<1 << s_rank>(sink, xv);
 }
-
+*/
 }}}
 #endif
