@@ -5,8 +5,8 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_MINA_DETAIL_PACK_NOV_O7_2013_1700)
-#define UCPF_MINA_DETAIL_PACK_NOV_O7_2013_1700
+#if !defined(UCPF_MINA_DETAIL_PACK_NOV_07_2013_1700)
+#define UCPF_MINA_DETAIL_PACK_NOV_07_2013_1700
 
 #include <cstdint>
 #include <array>
@@ -36,12 +36,13 @@ struct scalar_rank {
 	template <typename T>
 	constexpr static int from_type()
 	{
+		typedef typename std::remove_reference<T>::type Tr;
 		typedef std::integral_constant<
-			int, 32 - __builtin_clz(sizeof(T))
+			int, 32 - __builtin_clz(sizeof(Tr))
 		> log_type;
 		typedef std::integral_constant<
 			int,
-			((1UL << (log_type::value - 1)) < sizeof(T))
+			((1UL << (log_type::value - 1)) < sizeof(Tr))
 			? log_type::value + 1 : log_type::value
 		> rv_type;
 
@@ -52,16 +53,16 @@ struct scalar_rank {
 	template <typename T>
 	static int from_value(T v)
 	{
-		auto s_rank(from_type<T>());
-		if (!std::is_integral<T>::value)
+		typedef typename std::remove_reference<T>::type Tr;
+		auto s_rank(from_type<Tr>());
+		if (!std::is_integral<Tr>::value)
 			return s_rank;
 
 		while (s_rank > 0) {
-			auto max_val(T(1) << order[s_rank - 1]);
-
-			if (std::is_signed<T>::value) {
+			auto max_val(Tr(1) << order[s_rank - 1]);
+			if (std::is_signed<Tr>::value) {
 				max_val >>= 1;
-				auto min_val = T(-1) - max_val;
+				auto min_val = Tr(-1) - max_val;
 
 				if ((v > min_val) && (v < max_val))
 					s_rank--;
@@ -74,26 +75,11 @@ struct scalar_rank {
 					return s_rank;
 			}
 		}
-	}
-
-	template <typename T>
-	static std::pair<T, T> signed_bound(int s_rank)
-	{
-		auto shift(order[s_rank]);
-		return std::make_pair<T, T>(
-			T(-1) - (T(1) << s_rank), T(1) << s_rank
-		);
-	}
-
-	template <typename T>
-	static std::pair<T, T> unsigned_bound(int s_rank)
-	{
-		auto shift(order[s_rank]);
-		return std::make_pair<T, T>(
-			T(-1) - (T(1) << shift), T(1) << shift
-		);
+		return s_rank;
 	}
 };
+
+constexpr std::array<int, 6> scalar_rank::order;
 
 struct list_size_rank {
 	enum {
@@ -121,29 +107,10 @@ struct list_size_rank {
 
 struct numeric_type_rank {
 	enum {
-		n_error = -1,
 		n_signed = 0,
 		n_unsigned = 1,
 		n_float = 2
 	};
-
-	template <typename T>
-	constexpr static int from_type()
-	{
-		typedef typename std::integral_constant<
-			int,
-			std::is_integral<T>::value ? 0 : (
-				std::is_floating_point<T>::value
-				? n_float : n_error
-			)
-		>::type int_type;
-		typedef typename std::integral_constant<
-			int,
-			std::is_signed<T>::value ? n_signed : n_unsigned
-		>::type sig_type;
-
-		return int_type::value == 0 ? sig_type::value : int_type::value;
-	}
 };
 
 constexpr std::array<
@@ -175,7 +142,7 @@ constexpr uint8_t tuple_end_code = 0x60;
 
 template <unsigned int N, typename OutputIterator, typename T>
 typename std::enable_if<N == 1, void>::type pack_integral(
-	OutputIterator &&sink, T v
+	OutputIterator &&sink, T &&v
 )
 {
 	*sink++ = static_cast<uint8_t>(v);
@@ -183,7 +150,7 @@ typename std::enable_if<N == 1, void>::type pack_integral(
 
 template <unsigned int N, typename OutputIterator, typename T>
 typename std::enable_if<(N > 1), void>::type pack_integral(
-	OutputIterator &&sink, T v
+	OutputIterator &&sink, T &&v
 )
 {
 	*sink++ = static_cast<uint8_t>(v & 0xff);
@@ -191,9 +158,9 @@ typename std::enable_if<(N > 1), void>::type pack_integral(
 }
 
 template <typename OutputIterator, typename T>
-void pack_integral(OutputIterator &&sink, T v, unsigned int N)
+void pack_integral(OutputIterator &&sink, T &&v, unsigned int cnt)
 {
-	for(; N > 0; --N)
+	for(; cnt > 0; --cnt)
 		*sink++ = static_cast<uint8_t>(v & 0xff);
 }
 
@@ -225,119 +192,104 @@ struct compose_bool<W, w, V0, Vn...> {
 
 struct kind_flags {
 	enum {
-		integral= 1,
-		float_ = 2,
-		signed_ = 4,
-		sequence = 8
+		integral = 1,
+		float_   = 2,
+		sequence = 4
 	};
 };
 
-template <typename T, int Kind>
-struct classify_scalar {
+template <typename T, int Kind, bool IsSequence = false>
+struct classify {
 	constexpr static int value = compose_bool<
-		int, Kind, std::is_signed<T>::value,
-		std::is_floating_point<T>::value,
+		int, Kind, std::is_floating_point<T>::value,
 		std::is_integral<T>::value
 	>::value;
 	typedef typename std::integral_constant<int, value> type;
 };
 
-template <typename T, int Kind, bool Sequence = true>
-struct classify_sequence {
-	constexpr static int value = classify_scalar<
-		typename T::value_type, Kind | kind_flags::sequence
+template <typename T, int Kind>
+struct classify<T, Kind, true> {
+	constexpr static int value = classify<
+		typename T::value_type, Kind | kind_flags::sequence, false
 	>::value;
 	typedef typename std::integral_constant<int, value> type;
 };
 
-template <typename T, int Kind>
-struct classify_sequence<T, Kind, false> {
-	constexpr static int value = Kind;
-	typedef typename std::integral_constant<int, value> type;
-};
+template <typename OutputIterator, typename T, int Kind>
+struct pack_helper;
 
 template <typename OutputIterator, typename T>
-struct s_pack {
-	template <int Kind, typename OutputIterator_, typename T_>
-	struct helper;
-/*
-	template <typename OutputIterator_, typename T_>
-	struct helper<
-		kind_flags::scalar | kind_flags::integral, OutputIterator_, T_
-	> {
-	};
-
-	template <typename OutputIterator_, typename T_>
-	struct helper<
-		kind_flags::scalar | kind_flags::integral | kind_flags::signed_,
-		OutputIterator_, T_
-	> {
-	};
-*/
-	void operator ()(OutputIterator &&sink, T v) const
+struct pack_helper<OutputIterator, T, kind_flags::integral> {
+	pack_helper(OutputIterator &&sink, T &&v)
 	{
+		typedef typename std::remove_reference<T>::type Tr;
+		constexpr auto n_rank(
+			std::is_signed<Tr>::value
+			? numeric_type_rank::n_signed
+			: numeric_type_rank::n_unsigned
+		);
+		auto s_rank(scalar_rank::from_value(v));
+		printf("yy %d\n", s_rank);
+		if (s_rank == scalar_rank::ie)
+			return;
+
+		if (s_rank > scalar_rank::i4) {
+			*sink++ = list_code[n_rank]
+					   [list_size_rank::l3]
+					   [s_rank - 1];
+			pack_integral(
+				std::forward<OutputIterator>(sink),
+				std::forward<T>(v),
+				scalar_rank::order[s_rank] / 8
+			);
+		} else if (s_rank == scalar_rank::i4)
+			*sink++ = (v & small_int_mask) + (
+				n_rank == numeric_type_rank::n_signed
+				? small_int_code_offset
+				: small_uint_code_offset
+			);
 	}
 };
 
 template <typename OutputIterator, typename T>
-void pack(OutputIterator &&sink, T v)
-{
-	auto f1(classify_sequence<T, 0, yesod::is_sequence<T>::value>::value);
-	auto f2(classify_scalar<T, 0>::value);
-
-	printf("xx %x %x\n", f1, f2);
-}
-
-/*
-template <typename OutputIterator, typename T>
-std::enable_if<
-	std::is_integral<T>::value, void
-> pack(OutputIterator &&sink, T v)
-{
-	auto s_rank(scalar_rank::from_value(v));
-
-	if (s_rank > scalar_rank::i4) {
-		*sink++ = list_code[numeric_type_rank::from_type<T>()]
-				   [list_size_rank::l3]
-				   [s_rank];
-		pack_integral(sink, v, scalar_rank::order[s_rank] / 8);
-	} else if (s_rank == scalar_rank::i4)
-		*sink++ = (v & small_int_mask) + (
-			std::is_signed<T>::value
-			? small_int_code_offset
-			: small_uint_code_offset
+struct pack_helper<
+	OutputIterator, T, kind_flags::integral | kind_flags::sequence
+> {
+	pack_helper(OutputIterator &&sink, T &&v)
+	{
+		typedef typename std::remove_reference<T>::type Tr;
+		auto sz(v.size());
+		constexpr auto n_rank(
+			std::is_signed<Tr>::value
+			? numeric_type_rank::n_signed
+			: numeric_type_rank::n_unsigned
 		);
-}
+		auto l_rank(list_size_rank::from_size(sz));
+		constexpr auto s_rank(
+			scalar_rank::from_type<typename Tr::value_type>()
+		);
 
-template <typename OutputIterator, typename Sequence>
-typename std::enable_if<
-	yesod::is_sequence<Sequence>::value
-	&& std::is_integral<typename Sequence::value_type>::value, void
->::type pack(OutputIterator &&sink, Sequence const &v)
-{
-	auto sz(v.size());
-	constexpr auto n_rank(numeric_type_rank::from_type<
-		typename Sequence::value_type
-	>());
-	auto l_rank(list_size_rank::from_size(sz));
-	constexpr auto s_rank(
-		scalar_rank::from_type<typename Sequence::value_type>()
-	);
+		if (s_rank == scalar_rank::ie)
+			return;
 
-	if (l_rank == list_size_rank::l3)
-		*sink++ = list_code[n_rank][l_rank][s_rank]
-			  | uint8_t(sz - 1);
-	else {
-		*sink++ = list_code[n_rank][l_rank][s_rank];
-		for (auto cnt(l_rank); cnt; --cnt) {
-			*sink++ = sz & 0xff;
-			sz >>= 8;
-		}
+		if (l_rank > list_size_rank::l3) {
+			*sink++ = list_code[n_rank][l_rank][s_rank - 1];
+			pack_integral(
+				std::forward<OutputIterator>(sink),
+				sz - 1, l_rank
+			);
+		} else if (l_rank == list_size_rank::l3)
+			*sink++ = list_code[n_rank][l_rank][s_rank - 1]
+				  | uint8_t(sz - 1);
+		else
+			return;
+
+		for (auto xv: v)
+			pack_integral<scalar_rank::order[s_rank] / 8>(
+				std::forward<OutputIterator>(sink), xv
+			);
 	}
+};
 
-	for (auto xv: v)
-		pack_integral<1 << s_rank>(sink, xv);
-}
-*/
 }}}
 #endif

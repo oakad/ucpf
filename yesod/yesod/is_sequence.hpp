@@ -85,7 +85,7 @@ struct is_sequence {
 	typedef typename std::integral_constant<
 		bool,
 		detail::has_value_type<T>::value
-		& detail::has_cbegin<
+		&& detail::has_cbegin<
 			T, detail::has_const_iterator<T>::value
 		>::value
 	>::type type;
