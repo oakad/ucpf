@@ -1,4 +1,4 @@
-using clang ;
+using gcc ;
 
 lib unit_test_framework : : <name>boost_unit_test_framework ;
 lib test_exec_monitor : : <name>boost_test_exec_monitor ;

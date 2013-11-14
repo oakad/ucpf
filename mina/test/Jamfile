@@ -1,0 +1,10 @@
+import testing ;
+
+alias test_case : : : : <include>..
+                        <include>../../yesod
+                        <library>../..//unit_test_framework
+                        <library>../..//test_exec_monitor
+                        <toolset>clang:<cxxflags>-ferror-limit=4
+                        <toolset>gcc:<cxxflags>-fmax-errors=4 ;
+
+run pack.cpp : : test_case ;

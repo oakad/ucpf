@@ -11,8 +11,16 @@
 #include <cstdint>
 #include <array>
 #include <yesod/is_sequence.hpp>
+#include <yesod/compose_bool.hpp>
 
-namespace ucpf { namespace mina { namespace detail {
+namespace ucpf { namespace mina {
+
+template <typename OutputIterator, typename T>
+struct custom {
+	static void pack(OutputIterator &&sink, T &&v);
+};
+
+namespace detail {
 
 constexpr uint8_t const small_int_mask         = 0x1f;
 constexpr uint8_t const small_int_code_offset  = 0x10;
@@ -30,7 +38,7 @@ struct scalar_rank {
 	};
 
 	constexpr static std::array<int, 6> order = {{
-		4, 8, 16, 32, 64, 128
+		5, 8, 16, 32, 64, 128
 	}};
 
 	template <typename T>
@@ -138,7 +146,7 @@ constexpr std::array<
 
 constexpr uint8_t tuple_start_code = 0x50;
 constexpr uint8_t byte_skip_code = 0x60;
-constexpr uint8_t tuple_end_code = 0x60;
+constexpr uint8_t tuple_end_code = 0x70;
 
 template <unsigned int N, typename OutputIterator, typename T>
 typename std::enable_if<N == 1, void>::type pack_integral(
@@ -160,35 +168,11 @@ typename std::enable_if<(N > 1), void>::type pack_integral(
 template <typename OutputIterator, typename T>
 void pack_integral(OutputIterator &&sink, T &&v, unsigned int cnt)
 {
-	for(; cnt > 0; --cnt)
-		*sink++ = static_cast<uint8_t>(v & 0xff);
+	for(auto c(cnt); c > 0; --c)
+		*sink++ = static_cast<uint8_t>(
+			(v >> ((cnt - c) * 8)) & 0xff
+		);
 }
-
-template <typename W, W w, bool... Vn>
-struct compose_bool;
-
-template <typename W, W w, bool V0>
-struct compose_bool<W, w, V0> {
-	constexpr static size_t ord = 1;
-	constexpr static W value = V0 ? w | W(1) : w & ~W(1);
-	typedef std::integral_constant<
-		W, value
-	> type;
-};
-
-template <typename W, W w, bool V0, bool... Vn>
-struct compose_bool<W, w, V0, Vn...> {
-	constexpr static size_t ord = 1 + compose_bool<W, w, Vn...>::ord;
-	constexpr static W value = V0 ? (
-		compose_bool<W, w, Vn...>::value
-		| (W(1) << compose_bool<W, w, Vn...>::ord)
-	) : (
-		compose_bool<W, w, Vn...>::value
-		& ~(W(1) << compose_bool<W, w, Vn...>::ord)
-	);
-
-	typedef std::integral_constant<W, value> type;
-};
 
 struct kind_flags {
 	enum {
@@ -200,7 +184,7 @@ struct kind_flags {
 
 template <typename T, int Kind, bool IsSequence = false>
 struct classify {
-	constexpr static int value = compose_bool<
+	constexpr static int value = ucpf::yesod::compose_bool<
 		int, Kind, std::is_floating_point<T>::value,
 		std::is_integral<T>::value
 	>::value;
@@ -219,6 +203,41 @@ template <typename OutputIterator, typename T, int Kind>
 struct pack_helper;
 
 template <typename OutputIterator, typename T>
+struct pack_helper<OutputIterator, T, 0> {
+	pack_helper(OutputIterator &&sink, T &&v)
+	{
+		custom<OutputIterator, T>::pack(
+			std::forward<OutputIterator>(sink),
+			std::forward<T>(v)
+		);
+	}
+};
+
+template <typename OutputIterator, typename T>
+struct pack_helper<OutputIterator, T, kind_flags::sequence> {
+	pack_helper(OutputIterator &&sink, T &&v)
+	{
+		if (v.empty())
+			return;
+
+		*sink++ = detail::tuple_start_code;
+
+		constexpr auto next_kind(detail::classify<
+			typename T::value_type, 0,
+			yesod::is_sequence<typename T::value_type>::value
+		>::value);
+
+		for (auto xv: v)
+			pack_helper<OutputIterator, T, next_kind>(
+				std::forward<OutputIterator>(sink),
+				std::forward<T>(v)
+			);
+
+		*sink++ = detail::tuple_end_code;
+	}
+};
+
+template <typename OutputIterator, typename T>
 struct pack_helper<OutputIterator, T, kind_flags::integral> {
 	pack_helper(OutputIterator &&sink, T &&v)
 	{
@@ -229,7 +248,6 @@ struct pack_helper<OutputIterator, T, kind_flags::integral> {
 			: numeric_type_rank::n_unsigned
 		);
 		auto s_rank(scalar_rank::from_value(v));
-		printf("yy %d\n", s_rank);
 		if (s_rank == scalar_rank::ie)
 			return;
 
@@ -259,6 +277,10 @@ struct pack_helper<
 	{
 		typedef typename std::remove_reference<T>::type Tr;
 		auto sz(v.size());
+
+		if (!sz)
+			return;
+
 		constexpr auto n_rank(
 			std::is_signed<Tr>::value
 			? numeric_type_rank::n_signed
@@ -291,5 +313,24 @@ struct pack_helper<
 	}
 };
 
-}}}
+template <typename OutputIterator, typename T>
+void pack(OutputIterator &&sink, T &&v)
+{
+	typedef typename std::remove_reference<T>::type Tr;
+	pack_helper<
+		OutputIterator, T, detail::classify<
+			Tr, 0, yesod::is_sequence<Tr>::value
+		>::value
+	>(std::forward<OutputIterator>(sink), std::forward<T>(v));
+}
+
+template <typename OutputIterator, typename T, typename ...Tn>
+void pack(OutputIterator &&sink, T &&v, Tn &&...vn)
+{
+	pack(std::forward<OutputIterator>(sink), std::forward<T>(v));
+	pack(std::forward<OutputIterator>(sink), std::forward<Tn>(vn)...);
+}
+
+}
+}}
 #endif
