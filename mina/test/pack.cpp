@@ -41,6 +41,7 @@ BOOST_AUTO_TEST_CASE(pack_0)
 
 	pack(sink, 0xfedbca98);
 	pack(sink, 8, -1, 0x1000, 0x10000, -15);
+	pack(sink, 4637.534f, 2394.235);
 	BOOST_CHECK(out.match_pattern());
 }
 

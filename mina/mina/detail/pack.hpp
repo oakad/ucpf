@@ -12,6 +12,7 @@
 #include <array>
 #include <yesod/is_sequence.hpp>
 #include <yesod/compose_bool.hpp>
+#include <yesod/float.hpp>
 
 namespace ucpf { namespace mina {
 
@@ -177,7 +178,7 @@ void pack_integral(OutputIterator &&sink, T &&v, unsigned int cnt)
 struct kind_flags {
 	enum {
 		integral = 1,
-		float_   = 2,
+		float_t  = 2,
 		sequence = 4
 	};
 };
@@ -185,7 +186,7 @@ struct kind_flags {
 template <typename T, int Kind, bool IsSequence = false>
 struct classify {
 	constexpr static int value = ucpf::yesod::compose_bool<
-		int, Kind, std::is_floating_point<T>::value,
+		int, Kind, yesod::is_floating_point<T>::value,
 		std::is_integral<T>::value
 	>::value;
 	typedef typename std::integral_constant<int, value> type;
@@ -270,25 +271,42 @@ struct pack_helper<OutputIterator, T, kind_flags::integral> {
 };
 
 template <typename OutputIterator, typename T>
+struct pack_helper<OutputIterator, T, kind_flags::float_t> {
+	pack_helper(OutputIterator &&sink, T &&v)
+	{
+		typedef typename yesod::fp_adapter_type<T>::type Tw;
+		constexpr auto s_rank(
+			scalar_rank::from_type<typename Tw::storage_type>()
+		);
+		*sink++ = list_code[numeric_type_rank::n_float]
+				   [list_size_rank::l3]
+				   [s_rank - 1];
+		pack_integral<scalar_rank::order[s_rank] / 8>(
+			std::forward<OutputIterator>(sink),
+			Tw(v).get_storable()
+		);
+	}
+};
+
+template <typename OutputIterator, typename T>
 struct pack_helper<
 	OutputIterator, T, kind_flags::integral | kind_flags::sequence
 > {
 	pack_helper(OutputIterator &&sink, T &&v)
 	{
-		typedef typename std::remove_reference<T>::type Tr;
 		auto sz(v.size());
 
 		if (!sz)
 			return;
 
 		constexpr auto n_rank(
-			std::is_signed<Tr>::value
+			std::is_signed<typename T::value_type>::value
 			? numeric_type_rank::n_signed
 			: numeric_type_rank::n_unsigned
 		);
 		auto l_rank(list_size_rank::from_size(sz));
 		constexpr auto s_rank(
-			scalar_rank::from_type<typename Tr::value_type>()
+			scalar_rank::from_type<typename T::value_type>()
 		);
 
 		if (s_rank == scalar_rank::ie)
@@ -309,6 +327,49 @@ struct pack_helper<
 		for (auto xv: v)
 			pack_integral<scalar_rank::order[s_rank] / 8>(
 				std::forward<OutputIterator>(sink), xv
+			);
+	}
+};
+
+template <typename OutputIterator, typename T>
+struct pack_helper<
+	OutputIterator, T, kind_flags::float_t | kind_flags::sequence
+> {
+	pack_helper(OutputIterator &&sink, T &&v)
+	{
+		typedef typename yesod::fp_adapter_type<
+			typename T::value_type
+		>::type Tw;
+		auto sz(v.size());
+
+		if (!sz)
+			return;
+
+		auto l_rank(list_size_rank::from_size(sz));
+		constexpr auto s_rank(
+			scalar_rank::from_type<typename Tw::storage_type>()
+		);
+
+		if (l_rank > list_size_rank::l3) {
+			*sink++ = list_code[numeric_type_rank::n_float]
+					   [l_rank]
+					   [s_rank - 1];
+			pack_integral(
+				std::forward<OutputIterator>(sink),
+				sz - 1, l_rank
+			);
+		} else if (l_rank == list_size_rank::l3)
+			*sink++ = list_code[numeric_type_rank::n_float]
+					   [l_rank]
+					   [s_rank - 1]
+				  | uint8_t(sz - 1);
+		else
+			return;
+
+		for (auto xv: v)
+			pack_integral<scalar_rank::order[s_rank] / 8>(
+				std::forward<OutputIterator>(sink),
+				Tw(xv).get_storable()
 			);
 	}
 };
