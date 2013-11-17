@@ -10,9 +10,9 @@
 
 #include <cstdint>
 #include <array>
+#include <yesod/float.hpp>
 #include <yesod/is_sequence.hpp>
 #include <yesod/compose_bool.hpp>
-#include <yesod/float.hpp>
 
 namespace ucpf { namespace mina {
 
@@ -47,18 +47,12 @@ struct scalar_rank {
 	{
 		typedef typename std::remove_reference<T>::type Tr;
 		typedef std::integral_constant<
-			int, 32 - __builtin_clz(sizeof(Tr))
-		> log_type;
-		typedef std::integral_constant<
-			int,
-			((1UL << (log_type::value - 1)) < sizeof(Tr))
-			? log_type::value + 1 : log_type::value
+			int, yesod::static_log2<uint32_t, sizeof(Tr)>::value
 		> rv_type;
 
 		return rv_type::value <= i128 ? rv_type::value : ie;
 	}
 
-	
 	template <typename T>
 	static int from_value(T v)
 	{

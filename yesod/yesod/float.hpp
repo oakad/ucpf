@@ -13,41 +13,77 @@
 #include <boost/mpl/x11/at.hpp>
 #include <boost/mpl/x11/map.hpp>
 #include <boost/mpl/x11/has_key.hpp>
+#include <yesod/static_log2.hpp>
 
 namespace ucpf { namespace yesod {
 namespace detail {
 
 struct float_tag {};
 
-typedef typename boost::mpl::x11::map<
-	boost::mpl::x11::pair<boost::mpl::x11::uint_<8>, uint8_t>,
-	boost::mpl::x11::pair<boost::mpl::x11::uint_<16>, uint16_t>,
-	boost::mpl::x11::pair<boost::mpl::x11::uint_<32>, uint32_t>,
-	boost::mpl::x11::pair<boost::mpl::x11::uint_<64>, uint64_t>,
-	boost::mpl::x11::pair<boost::mpl::x11::uint_<128>, unsigned __int128>
->::type fp_storage_types;
+template <
+	typename StorageType, typename MachineType = StorageType,
+	unsigned int MantissaBits = std::numeric_limits<MachineType>::digits,
+	unsigned int ExponentBits = static_log2<
+		uint32_t,
+		std::numeric_limits<MachineType>::max_exponent
+		- std::numeric_limits<MachineType>::min_exponent
+	>::value
+> struct storable_float_traits {
+	typedef StorageType storage_type;
+	typedef MachineType machine_type;
+	constexpr static bool is_native = std::is_floating_point<
+		machine_type
+	>::value;
+	constexpr static unsigned int mantissa_bits = MantissaBits;
+	constexpr static unsigned int exponent_bits = ExponentBits;
+};
 
 typedef typename boost::mpl::x11::map<
-	boost::mpl::x11::pair<boost::mpl::x11::uint_<8>, uint8_t>,
-	boost::mpl::x11::pair<boost::mpl::x11::uint_<16>, uint16_t>,
-	boost::mpl::x11::pair<boost::mpl::x11::uint_<32>, float>,
-	boost::mpl::x11::pair<boost::mpl::x11::uint_<64>, double>,
-	boost::mpl::x11::pair<boost::mpl::x11::uint_<128>, __float128>
->::type fp_machine_types;
+	boost::mpl::x11::pair<
+		boost::mpl::x11::uint_<8>,
+		storable_float_traits<uint8_t, uint8_t, 3, 4>
+	>,
+	boost::mpl::x11::pair<
+		boost::mpl::x11::uint_<16>,
+		storable_float_traits<uint16_t, uint16_t, 10, 5>
+	>,
+	boost::mpl::x11::pair<
+		boost::mpl::x11::uint_<32>,
+		storable_float_traits<uint32_t, float>
+	>,
+	boost::mpl::x11::pair<
+		boost::mpl::x11::uint_<64>,
+		storable_float_traits<uint64_t, double>
+	>,
+	boost::mpl::x11::pair<
+		boost::mpl::x11::uint_<128>,
+		storable_float_traits<unsigned __int128, __float128>
+	>
+>::type fp_storage_types;
+
+template <
+	typename T, typename U, bool IsMachineFloatT = true,
+	bool IsMachineFloatU = true
+>
+struct fp_util {
+	static T convert(U u)
+	{
+		return static_cast<T>(u);
+	}
+};
 
 }
 
 template <unsigned int N>
 struct float_t {
 	typedef detail::float_tag tag;
+
 	typedef typename boost::mpl::x11::at<
 		detail::fp_storage_types,
 		boost::mpl::x11::uint_<N>
-	>::type storage_type;
-	typedef typename boost::mpl::x11::at<
-		detail::fp_machine_types,
-		boost::mpl::x11::uint_<N>
-	>::type machine_type;
+	>::type traits_type;
+	typedef typename traits_type::storage_type storage_type;
+	typedef typename traits_type::machine_type machine_type;
 
 	float_t()
 	: value(0) {}
@@ -58,10 +94,12 @@ struct float_t {
 	float_t(float_t &&other)
 	: value(std::move(other.value)) {}
 
-	/* Temporary measure */
 	template <typename U>
 	float_t(U other)
-	: value(static_cast<machine_type>(other)) {};
+	: value(detail::fp_util<
+		machine_type, U, traits_type::is_native,
+		std::is_floating_point<U>::value
+	>::convert(other)) {};
 
 	storage_type get_storable() const
 	{
