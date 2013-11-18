@@ -11,6 +11,7 @@
 #include <boost/test/output_test_stream.hpp>
 
 #include <mina/pack.hpp>
+#include <string>
 
 namespace ucpf { namespace mina {
 namespace test {
@@ -50,9 +51,13 @@ BOOST_AUTO_TEST_CASE(pack_1)
 	using boost::test_tools::output_test_stream;
 	output_test_stream out("ref/pack.01.out", false, true);
 	std::ostream_iterator<uint8_t> sink(out);
+	std::vector<float> b = {1.1, 2.2, 3.3, 4.4};
+	std::string c("abcdefghijklmn");
+	auto d = "nhfejlj";
 
-	pack(sink, test::a());
+	pack(sink, test::a(), b, c, d, "shgfsd");
 	BOOST_CHECK(out.match_pattern());
+	BOOST_CHECK(false);
 }
 
 }}

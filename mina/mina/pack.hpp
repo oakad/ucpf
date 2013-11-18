@@ -9,6 +9,7 @@
 #define UCPF_MINA_PACK_NOV_13_2013_1445
 
 #include <mina/detail/pack.hpp>
+#include <boost/range/iterator_range.hpp>
 
 namespace ucpf { namespace mina {
 
@@ -28,6 +29,28 @@ void pack(OutputIterator &&sink, Tn &&...vn)
 			std::forward<Tn>(vn)...
 		);
 }
+
+template <typename OutputIterator>
+struct custom<OutputIterator, char const *&> {
+	static void pack(OutputIterator &&sink, char const *&v)
+	{
+		boost::iterator_range<char const *> r(
+			v, v + std::strlen(v)
+		);
+		mina::pack(std::forward<OutputIterator>(sink), r);
+	}
+};
+
+template <typename OutputIterator, size_t N>
+struct custom<OutputIterator, char const (&)[N]> {
+	static void pack(OutputIterator &&sink, char const (&v)[N])
+	{
+		boost::iterator_range<char const *> r(
+			v, v + N - 1
+		);
+		mina::pack(std::forward<OutputIterator>(sink), r);
+	}
+};
 
 }}
 #endif
