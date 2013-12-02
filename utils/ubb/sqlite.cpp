@@ -14,24 +14,57 @@ namespace {
 
 #include "ubb_base.hpp"
 
-struct base_file {
+struct memfs {
+	static int open(
+		sqlite3_vfs *vfs, char const *name, sqlite3_file *file,
+		int flags, int *out_flags
+	);
+
+} memfs_base;
+
+struct memfs_file {
 	sqlite3_file base;
 };
 
-int base_open(
+struct sqlite3_io_methods memfs_io = {
+	.iVersion = 1,
+	.xClose = &memfs::close,
+	.xRead = &memfs::read,
+	.xWrite = &memfs::write,
+	.xTruncate = &memfs::truncate,
+	.xSync = &memfs::sync,
+	.xFileSize = &memfs::filesize,
+	.xLock = &memfs::lock,
+	.xUnlock = &memfs::unlock,
+	.xCheckReservedLock = &memfs::check_reserved_lock,
+	.xFileControl = &memfs::fctl,
+	.xSectorSize = &memfs::sector_size,
+	.xDeviceCharacteristics = &memfs::device_characteristics
+};
+
+int memfs::open(
 	sqlite3_vfs *vfs, char const *name, sqlite3_file *file,
 	int flags, int *out_flags
 )
 {
-	return SQLITE_CANTOPEN;
+	if (flags & (
+		SQLITE_OPEN_DELETEONCLOSE
+		| SQLITE_OPEN_CREATE
+		| SQLITE_OPEN_READWRITE
+	))
+		return SQLITE_READONLY;
+
+	auto *p(reinterpret_cast<memfs_file *>(vfs));
+	p->base.pMethods = &memfs_io;
+	return SQLITE_OK;
 }
 
-int base_delete(sqlite3_vfs *vfs, char const *path, int sync)
+int memfs_delete(sqlite3_vfs *vfs, char const *path, int sync)
 {
 	return SQLITE_OK;
 }
 
-int base_access(sqlite3_vfs *vfs, char const *path, int flags, int *res_out)
+int memfs_access(sqlite3_vfs *vfs, char const *path, int flags, int *res_out)
 {
 	switch(flags) {
 	case SQLITE_ACCESS_EXISTS:
@@ -47,64 +80,85 @@ int base_access(sqlite3_vfs *vfs, char const *path, int flags, int *res_out)
 	return SQLITE_OK;
 }
 
-int base_full_pathname(
+int memfs_full_pathname(
 	sqlite3_vfs *vfs, char const *path_in,
 	int path_out_sz, char *path_out
 )
 {
-	path_out[0] = '\0';
+	std::strncpy(path_out, path_in, path_out_sz);
 	return SQLITE_OK;
 }
 
-void *base_dlopen(sqlite3_vfs *vfs, char const *path){
+void *memfs_dlopen(sqlite3_vfs *vfs, char const *path){
 	return nullptr;
 }
 
-void base_dlerror(sqlite3_vfs *vfs, int count, char *err_msg)
+void memfs_dlerror(sqlite3_vfs *vfs, int count, char *err_msg)
 {
 	err_msg[0] = '\0';
 }
 
-void (*base_dlsym(sqlite3_vfs *vfs, void *handle, const char *z))(void)
+void (*memfs_dlsym(sqlite3_vfs *vfs, void *handle, const char *z))(void)
 {
 	return nullptr;
 }
 
-void base_dlclose(sqlite3_vfs *vfs, void *handle)
+void memfs_dlclose(sqlite3_vfs *vfs, void *handle)
 {}
 
-int base_randomness(sqlite3_vfs *vfs, int count, char *data){
+int memfs_randomness(sqlite3_vfs *vfs, int count, char *data)
+{
+	static std::random_device src;
+	std::mt19937 gen(src());
+	std::uniform_int_distribution<unsigned char> dis;
+	for (int c(0); c < count; ++c)
+		data[c] = dis(gen);
+
 	return SQLITE_OK;
 }
 
-int base_sleep(sqlite3_vfs *vfs, int usec)
+int memfs_sleep(sqlite3_vfs *vfs, int usec)
 {
-	return usec;
+	std::this_thread::sleep_for(std::chrono::microseconds(usec));
 }
 
-int base_current_time(sqlite3_vfs *vfs, double *julian_day)
+/* Same approach as SQLite's unixCurrentTime */
+int memfs_current_time(sqlite3_vfs *vfs, double *tv)
 {
+	constexpr int64_t unix_epoch(24405875LL * 8640000LL);
+
+	struct timespec tp;
+	if (clock_gettime(CLOCK_REALTIME, &tp))
+		return SQLITE_ERROR;
+
+	int64_t itv(
+		unix_epoch + 1000 * int64_t(tp.tv_sec) + (tp.tv_nsec / 1000000)
+	);
+
+	tv = itv;;
+	tv /= 86400000.0;
+
 	return SQLITE_OK;
 }
 
-struct sqlite3_vfs base_vfs = {
+struct sqlite3_vfs memfs_vfs = {
 	.iVersion = 1,
-	.szOsFile = sizeof(base_file),
-	.mxPathname = 0,
+	.szOsFile = sizeof(memfs_file),
+	.mxPathname = 8,
 	.pNext = nullptr,
 	.zName = "ubb_base",
 	.pAppData = nullptr,
-	.xOpen = base_open,
-	.xDelete = base_delete,
-	.xAccess = base_access,
-	.xFullPathname = base_full_pathname,
-	.xDlOpen = base_dlopen,
-	.xDlError = base_dlerror,
-	.xDlSym = base_dlsym,
-	.xDlClose = base_dlclose,
-	.xRandomness = base_randomness,
-	.xSleep = base_sleep,
-	.xCurrentTime = base_current_time
+	.xOpen = &memfs::open,
+	.xDelete = memfs_delete,
+	.xAccess = memfs_access,
+	.xFullPathname = memfs_full_pathname,
+	.xDlOpen = memfs_dlopen,
+	.xDlError = memfs_dlerror,
+	.xDlSym = memfs_dlsym,
+	.xDlClose = memfs_dlclose,
+	.xRandomness = memfs_randomness,
+	.xSleep = memfs_sleep,
+	.xCurrentTime = memfs_current_time
 };
 
 }
@@ -113,12 +167,11 @@ namespace ubb {
 
 void test()
 {
-	sqlite3_vfs_register(&base_vfs, 0);
+	sqlite3_vfs_register(&memfs_vfs, 0);
 	sqlite3 *db;
 	sqlite3_open_v2("", &db, SQLITE_OPEN_READONLY, "ubb_base");
 	sqlite3_close(db);
-	sqlite3_vfs_unregister(&base_vfs);
-	printf("%s\n", ubb_base_data::data);
+	sqlite3_vfs_unregister(&memfs_vfs);
 }
 
 }

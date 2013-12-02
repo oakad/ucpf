@@ -25,9 +25,9 @@ sub check_line_end {
 }
 
 ($s_name) = @ARGV;
-printf("struct %s {\n\tstatic char const data alignas(16) [];\n", $s_name);
+printf("struct %s {\n\tstatic char const data alignas(8) [];\n", $s_name);
 printf("\tstatic size_t const size;\n};\n\n");
-printf("char const %s::data alignas(16) [] =\n", $s_name);
+printf("char const %s::data alignas(8) [] =\n", $s_name);
 
 printf("\t\"");
 while (1) {
