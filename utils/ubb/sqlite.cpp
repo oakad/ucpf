@@ -10,9 +10,14 @@
 #include <cstdio>
 #include <sqlite3.h>
 
+namespace ubb {
+
+
+}
+
 namespace {
 
-#include "ubb_base.hpp"
+
 
 struct memfs {
 	static int open(
