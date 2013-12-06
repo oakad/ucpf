@@ -9,6 +9,8 @@
 #if !defined(UBB_SQLITE_NOV_29_2013_2300)
 #define UBB_SQLITE_NOV_29_2013_2300
 
+#include <sqlite3.h>
+
 namespace ubb {
 
 void test();

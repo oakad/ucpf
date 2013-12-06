@@ -74,7 +74,7 @@ struct tst {
 		T &&val
 	)
 	{
-		return node::add(root, first, last, std::forward(val), this);
+		return node::add(root, first, last, std::forward<T>(val), this);
 	}
 
 	template <typename Iterator>
@@ -121,7 +121,7 @@ private:
 
 	T *new_data(T &&val)
 	{
-		return new T(std::forward(val));
+		return new T(std::forward<T>(val));
 	}
 
 	void delete_node(node *p)

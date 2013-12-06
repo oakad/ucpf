@@ -18,6 +18,8 @@
 #if !defined(BOOST_SPIRIT_X3_TST_MARCH_09_2007_0905AM)
 #define BOOST_SPIRIT_X3_TST_MARCH_09_2007_0905AM
 
+#include <string>
+
 namespace ubb { namespace ext { namespace detail {
 
 // This file contains low level TST routines, not for
@@ -115,7 +117,9 @@ struct tst_node {
 			if (c == p->id) {
 				if (++first == last) {
 					if (p->data == nullptr)
-						p->data = alloc->new_data(val);
+						p->data = alloc->new_data(
+							std::forward<T>(val)
+						);
 
 					return p->data;
 				}

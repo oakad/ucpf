@@ -22,7 +22,9 @@
 
 #include <ext/is_sequence.hpp>
 #include <ext/tst.hpp>
+
 #include <initializer_list>
+#include <memory>
 
 namespace ubb { namespace ext {
 namespace traits {
@@ -99,6 +101,9 @@ inline typename std::enable_if<
 
 }
 
+struct unused_type {
+};
+
 template <
 	typename Char = char, typename T = unused_type,
 	typename Lookup = tst<Char, T>, typename Filter = tst_pass_through
@@ -109,21 +114,21 @@ template <
 	typedef value_type attribute_type;
 
 	string_map()
-	: add(*this), remove(*this), lookup(new Lookup())
+	: lookup(new Lookup())
 	{}
 
 	string_map(string_map const &other)
-	: add(*this), remove(*this), lookup(other.lookup)
+	: lookup(other.lookup)
 	{}
 
 	template <typename Filter_>
 	string_map(string_map<Char, T, Lookup, Filter_> const &other)
-	: add(*this), remove(*this), lookup(other.lookup)
+	: lookup(other.lookup)
 	{}
 
 	template <typename StringMap>
 	string_map(StringMap const &other)
-	: add(*this), remove(*this), lookup(new Lookup())
+	: lookup(new Lookup())
 	{
 		for (auto const &k: other)
 			add(k);
@@ -131,7 +136,7 @@ template <
 
 	template <typename StringMap, typename Data>
 	string_map(StringMap const &other, Data const &data)
-	: add(*this), remove(*this), lookup(new Lookup())
+	: lookup(new Lookup())
 	{
 		auto d(std::begin(data));
 		for (auto const &k: other)
@@ -139,14 +144,14 @@ template <
 	}
 
 	string_map(std::initializer_list<std::pair<Char const *, T>> other)
-	: add(*this), remove(*this), lookup(new Lookup())
+	: lookup(new Lookup())
 	{
 		for (auto const &v: other)
 			add(v->first, v->second);
 	}
 
 	string_map(std::initializer_list<Char const*> other)
-	: add(*this), remove(*this), lookup(new Lookup())
+	: lookup(new Lookup())
 	{
 		for (auto v: other)
 			add(v);
@@ -161,7 +166,7 @@ template <
 	template <typename Filter_>
 	string_map &operator=(string_map<Char, T, Lookup, Filter_> const &other)
 	{
-		lookup = rhs.lookup;
+		lookup = other.lookup;
 		return *this;
 	}
 
@@ -177,12 +182,22 @@ template <
 	}
 
 	template <typename Str>
-	value_type& at(Str const &str)
+	value_type &at(Str const &str)
 	{
 		return *lookup->add(
 			traits::get_string_begin<Char>(str),
 			traits::get_string_end<Char>(str), T()
 		);
+	}
+
+	template <typename Str>
+	string_map &remove(Str const &str)
+	{
+		lookup->remove(
+			traits::get_string_begin<Char>(str),
+			traits::get_string_end<Char>(str)
+		);
+		return *this;
 	}
 
 	template <typename Iterator>
