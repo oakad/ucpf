@@ -8,8 +8,11 @@
 #if !defined(UCPF_YESOD_SHARED_MUTEX_DEC_09_2013_1200)
 #define UCPF_YESOD_SHARED_MUTEX_DEC_09_2013_1200
 
+#include <yesod/arch/timed_mutex.hpp>
+#include <yesod/arch/event_variable.hpp>
+
 #include <atomic>
-#include <condition_variable>
+#include <mutex>
 
 namespace ucpf { namespace yesod {
 
@@ -20,28 +23,26 @@ struct shared_mutex {
 
 	void lock()
 	{
-		std::unique_lock<std::mutex> l_g(state_lock);
-		std::unique_lock<std::mutex> w_g(wait_lock);
+		std::unique_lock<timed_mutex> l_g(state_lock);
 
 		while (write_lock.test_and_set())
-			cv.wait(w_g);
+			ev.wait();
 	}
 
 	void lock_shared()
 	{
-		std::unique_lock<std::mutex> l_g(state_lock);
+		std::unique_lock<timed_mutex> l_g(state_lock);
 
 		if (!reader_count.fetch_add(1)) {
-			std::unique_lock<std::mutex> w_g(wait_lock);
 			while (write_lock.test_and_set())
-				cv.wait(w_g);
+				ev.wait();
 		}
 	}
 
 	void unlock()
 	{
 		write_lock.clear();
-		cv.notify_one();
+		ev.notify_one();
 	}
 
 	void unlock_shared()
@@ -52,7 +53,7 @@ struct shared_mutex {
 
 	bool try_lock()
 	{
-		std::unique_lock<std::mutex> l_g(state_lock, std::try_to_lock);
+		std::unique_lock<timed_mutex> l_g(state_lock, std::try_to_lock);
 		if (!l_g.owns_lock())
 			return false;
 
@@ -61,7 +62,7 @@ struct shared_mutex {
 
 	bool try_lock_shared()
 	{
-		std::unique_lock<std::mutex> l_g(state_lock, std::try_to_lock);
+		std::unique_lock<timed_mutex> l_g(state_lock, std::try_to_lock);
 		if (!l_g.owns_lock())
 			return false;
 
@@ -79,9 +80,8 @@ struct shared_mutex {
 	}
 
 private:
-	std::mutex state_lock;
-	std::mutex wait_lock;
-	std::condition_variable cv;
+	event_variable ev;
+	timed_mutex state_lock;
 	std::atomic_flag write_lock;
 	std::atomic_ulong reader_count;
 };
