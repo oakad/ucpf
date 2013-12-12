@@ -1,4 +1,14 @@
+/*
+ * Copyright (c) 2013 Alex Dubov <oakad@yahoo.com>
+ *
+ * This program is free software; you can redistribute  it and/or modify it
+ * under  the  terms of  the GNU General Public License version 3 as publi-
+ * shed by the Free Software Foundation.
+ */
+
 /*=============================================================================
+    Based on extensions to boost::mpl library:
+
     Copyright (c) 2009 Larry Evans
 
     Permission to copy, use, modify, sell and distribute this software is
@@ -6,16 +16,6 @@
     is provided "as is" without express or implied warranty, and with no claim
     as to its suitability for any purpose.
 ==============================================================================*/
-
-/*
- * Adaptations as part of present software bundle:
- *
- * Copyright (c) 2013 Alex Dubov <oakad@yahoo.com>
- *
- * This program is free software; you can redistribute  it and/or modify it
- * under  the  terms of  the GNU General Public License version 3 as publi-
- * shed by the Free Software Foundation.
- */
 
 #if !defined(UCPF_YESOD_MPL_ITER_FOLD_DEC_11_2013_1820)
 #define UCPF_YESOD_MPL_ITER_FOLD_DEC_11_2013_1820

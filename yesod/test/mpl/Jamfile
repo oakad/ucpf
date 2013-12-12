@@ -1,0 +1,15 @@
+import testing ;
+
+alias test_case : : : : <include>../..
+#                        <include>../../../boost/
+#                        <library>../src//yesod
+                        <library>../../..//unit_test_framework
+                        <library>../../..//test_exec_monitor
+                        <toolset>clang:<cxxflags>-ferror-limit=4
+                        <toolset>gcc:<cxxflags>-fmax-errors=4
+                        <cxxflags>-ftemplate-backtrace-limit=0 ;
+
+run bind.cpp : : test_case ;
+run lambda.cpp : : test_case ;
+run logical.cpp : : test_case ;
+run map.cpp : : test_case ;

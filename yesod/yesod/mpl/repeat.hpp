@@ -9,7 +9,7 @@
 /*=============================================================================
     Based on extensions to boost::mpl library:
 
-    Copyright (c) 2007 Larry Evans
+    Copyright (c) 2007-2010 Larry Evans
 
     Permission to copy, use, modify, sell and distribute this software is
     granted provided this copyright notice appears in all copies. This software
@@ -17,22 +17,20 @@
     as to its suitability for any purpose.
 ==============================================================================*/
 
-#if !defined(UCPF_YESOD_MPL_APPLY_DEC_11_2013_1610)
-#define UCPF_YESOD_MPL_APPLY_DEC_11_2013_1610
+#if !defined(UCPF_YESOD_MPL_REPEAT_DEC_12_2013_1620)
+#define UCPF_YESOD_MPL_REPEAT_DEC_12_2013_1620
 
-#include <yesod/mpl/lambda.hpp>
-#include <yesod/mpl/apply_wrap.hpp>
+#include <yesod/mpl/package_range_c.hpp>
 
 namespace ucpf { namespace yesod { namespace mpl {
 
-template <typename...>
-struct apply;
-
-template <typename F>
-struct apply<F> : apply_wrap<typename lambda<F>::type> {};
-
-template <typename F, typename... Tn>
-struct apply<F, Tn...> : apply_wrap<typename lambda<F>::type, Tn...> {};
+template <typename T, long C = 0>
+struct repeat {
+	typedef typename at_c_indices<
+		at_c_always<T>::template at_c,
+		typename package_range_c<long, 0, C>::type
+	>::type type;
+};
 
 }}}
 

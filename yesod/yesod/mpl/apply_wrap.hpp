@@ -7,15 +7,6 @@
  */
 
 /*=============================================================================
-    Based on implementation of boost::mpl library:
-
-    Copyright (c) 2000-2008 Aleksey Gurtovoy
-
-    Distributed under the Boost Software License, Version 1.0. (See accompanying
-    file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-==============================================================================*/
-
-/*=============================================================================
     Based on extensions to boost::mpl library:
 
     Copyright (c) 2006-2009 Larry Evans
