@@ -44,7 +44,7 @@ struct replace_unnamed_arg {
 };
 
 template <typename Arg>
-struct replace_unnamed_arg<arg<-1>, Arg> {
+struct replace_unnamed_arg<arg<-1l>, Arg> {
 	typedef typename Arg::next next;
 	typedef Arg type;
 };
@@ -74,14 +74,14 @@ struct resolve_bind_argn;
 template <typename T, typename... Un>
 struct resolve_bind_argn<T, package<Un...>> : resolve_bind_arg<T, Un...> {};
 
-struct na {
+struct unused_type {
 };
 
 template <typename T, typename... Un>
 struct resolve_bind_argv : resolve_bind_argn<
 	T, typename join_pack<
 		package<Un...>, typename repeat<
-			na, bind_arity_limit - sizeof...(Un)
+			unused_type, bind_arity_limit - sizeof...(Un)
 		>::type
 	>::type
 > {};

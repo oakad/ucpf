@@ -35,14 +35,13 @@ struct apply_wrap0<F, true_type> : F::apply {};
 
 }
 
-template <typename...>
-struct apply_wrap;
+template <typename F, typename... Tn>
+struct apply_wrap {
+	typedef typename F::template apply<Tn...>::type type;
+};
 
 template <typename F>
 struct apply_wrap<F> : detail::apply_wrap0<F> {};
-
-template <typename F, typename... Tn>
-struct apply_wrap<F, Tn...> : F::template apply<Tn...> {};
 
 }}}
 

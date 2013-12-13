@@ -205,7 +205,7 @@ struct decrement<> {
 };
 
 template <typename Tag>
-struct lambda<decrement<>, Tag, int_<-1>> {
+struct lambda<decrement<>, Tag, long_<-1>> {
 	typedef false_type is_le;
 	typedef decrement<> result_;
 	typedef decrement<> type;
@@ -226,7 +226,7 @@ struct divides<> {
 };
 
 template <typename Tag>
-struct lambda<divides<>, Tag, int_<-1>> {
+struct lambda<divides<>, Tag, long_<-1>> {
 	typedef false_type is_le;
 	typedef divides<> result_;
 	typedef divides<> type;
@@ -252,7 +252,7 @@ struct increment<> {
 };
 
 template <typename Tag>
-struct lambda<increment<>, Tag, int_<-1>> {
+struct lambda<increment<>, Tag, long_<-1>> {
 	typedef false_type is_le;
 	typedef increment<> result_;
 	typedef increment<> type;
@@ -273,7 +273,7 @@ struct minus<> {
 };
 
 template <typename Tag>
-struct lambda<minus<>, Tag, int_<-1>> {
+struct lambda<minus<>, Tag, long_<-1>> {
 	typedef false_type is_le;
 	typedef minus<> result_;
 	typedef minus<> type;
@@ -299,7 +299,7 @@ struct modulus<> {
 };
 
 template <typename Tag>
-struct lambda<modulus<>, Tag, int_<-1>> {
+struct lambda<modulus<>, Tag, long_<-1>> {
 	typedef false_type is_le;
 	typedef modulus<> result_;
 	typedef modulus<> type;
@@ -321,7 +321,7 @@ struct negate<> {
 };
 
 template <typename Tag>
-struct lambda<negate<>, Tag, int_<-1>> {
+struct lambda<negate<>, Tag, long_<-1>> {
 	typedef false_type is_le;
 	typedef negate<> result_;
 	typedef negate<> type;
@@ -342,7 +342,7 @@ struct plus<> {
 };
 
 template <typename Tag>
-struct lambda<plus<>, Tag, int_<-1>> {
+struct lambda<plus<>, Tag, long_<-1>> {
 	typedef false_type is_le;
 	typedef plus<> result_;
 	typedef plus<> type;
@@ -368,7 +368,7 @@ struct times<> {
 };
 
 template <typename Tag>
-struct lambda<times<>, Tag, int_<-1>> {
+struct lambda<times<>, Tag, long_<-1>> {
 	typedef false_type is_le;
 	typedef times<> result_;
 	typedef times<> type;

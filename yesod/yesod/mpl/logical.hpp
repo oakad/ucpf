@@ -49,12 +49,6 @@ struct or_ : fold_null_unit<
 	true_type, false_type, detail::bool_cast, Tn...
 > {};
 
-template <>
-struct or_<> {
-	template <typename T0, typename T1, typename... Tn>
-	struct apply : or_<T0, T1> {};
-};
-
 template <typename Tag>
 struct lambda<or_<>, Tag, long_<-1>> {
 	typedef false_type is_le;
@@ -67,13 +61,6 @@ template <typename... Tn>
 struct and_ : fold_null_unit<
 	false_type, true_type, detail::bool_cast, Tn...
 > {};
-
-
-template <>
-struct and_<> {
-	template <typename T0, typename T1, typename... Tn>
-	struct apply : and_<T0, T1> {};
-};
 
 template <typename Tag>
 struct lambda<and_<>, Tag, long_<-1>> {

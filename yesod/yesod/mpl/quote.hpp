@@ -47,7 +47,7 @@ struct quote_impl<T, false> {
 
 }
 
-template <template <typename... Pn> class F, typename Tag = void_>
+template <template <typename...> class F, typename Tag = void_>
 struct quote {
 	template <typename... Un>
 	struct apply : detail::quote_impl<

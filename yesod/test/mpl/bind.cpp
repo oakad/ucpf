@@ -14,8 +14,6 @@
 #include <yesod/mpl/quote.hpp>
 #include <yesod/mpl/arithmetic.hpp>
 
-#include "../test_demangle.hpp"
-
 namespace ucpf { namespace yesod { namespace mpl {
 namespace test {
 

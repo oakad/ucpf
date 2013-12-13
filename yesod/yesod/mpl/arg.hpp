@@ -51,7 +51,7 @@ struct arg {
 };
 
 template <>
-struct arg<-1> {
+struct arg<-1l> {
 	constexpr static long value = -1;
 
 	template <typename...>

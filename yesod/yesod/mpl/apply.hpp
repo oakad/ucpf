@@ -20,7 +20,7 @@
 #if !defined(UCPF_YESOD_MPL_APPLY_DEC_11_2013_1610)
 #define UCPF_YESOD_MPL_APPLY_DEC_11_2013_1610
 
-#include <yesod/mpl/lambda.hpp>
+#include <yesod/mpl/lambda_fwd.hpp>
 #include <yesod/mpl/apply_wrap.hpp>
 
 namespace ucpf { namespace yesod { namespace mpl {

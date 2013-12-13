@@ -56,7 +56,7 @@ struct not_equal_to_tag {
 
 template <typename Tag0, typename Tag1>
 struct equal_to_impl
-: if_c<
+: std::conditional<
 	(Tag0::value > Tag1::value),
 	cast2nd_impl<equal_to_impl<Tag0, Tag0>, Tag0, Tag1>,
 	cast1st_impl<equal_to_impl<Tag1, Tag1>, Tag0, Tag1>
@@ -70,7 +70,7 @@ struct equal_to_impl<integral_c_tag, integral_c_tag> {
 
 template <typename Tag0, typename Tag1>
 struct greater_impl
-: if_c<
+: std::conditional<
 	(Tag0::value > Tag1::value),
 	cast2nd_impl<greater_impl<Tag0, Tag0>, Tag0, Tag1>,
 	cast1st_impl<greater_impl<Tag1, Tag1>, Tag0, Tag1>
@@ -84,7 +84,7 @@ struct greater_impl<integral_c_tag, integral_c_tag> {
 
 template <typename Tag0, typename Tag1>
 struct greater_equal_impl
-: if_c<
+: std::conditional<
 	(Tag0::value > Tag1::value),
 	cast2nd_impl<greater_equal_impl<Tag0, Tag0>, Tag0, Tag1>,
 	cast1st_impl<greater_equal_impl<Tag1, Tag1>, Tag0, Tag1>
@@ -98,7 +98,7 @@ struct greater_equal_impl<integral_c_tag, integral_c_tag> {
 
 template <typename Tag0, typename Tag1>
 struct less_impl
-: if_c<
+: std::conditional<
 	(Tag0::value > Tag1::value),
 	cast2nd_impl<less_impl<Tag0, Tag0>, Tag0, Tag1>,
 	cast1st_impl<less_impl<Tag1, Tag1>, Tag0, Tag1>
@@ -112,7 +112,7 @@ struct less_impl<integral_c_tag, integral_c_tag> {
 
 template <typename Tag0, typename Tag1>
 struct less_equal_impl
-: if_c<
+: std::conditional<
 	(Tag0::value > Tag1::value),
 	cast2nd_impl<less_equal_impl<Tag0, Tag0>, Tag0, Tag1>,
 	cast1st_impl<less_equal_impl<Tag1, Tag1>, Tag0, Tag1>
@@ -126,7 +126,7 @@ struct less_equal_impl<integral_c_tag, integral_c_tag> {
 
 template <typename Tag0, typename Tag1>
 struct not_equal_to_impl
-: if_c<
+: std::conditional<
 	(Tag0::value > Tag1::value),
 	cast2nd_impl<not_equal_to_impl<Tag0, Tag0>, Tag0, Tag1>,
 	cast1st_impl<not_equal_to_impl<Tag1, Tag1>, Tag0, Tag1>
