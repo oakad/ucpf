@@ -13,7 +13,6 @@ namespace ubb {
 
 size_t memfd::rw_data_node::read(char *buf, size_t count, off_t offset) const
 {
-	std::lock_guard<std::mutex> l_g(lock);
 	auto e_off(std::min(size_t(offset), size));
 	auto e_sz(std::min(count, size - e_off));
 	auto e_rem(e_sz);
@@ -41,7 +40,6 @@ size_t memfd::rw_data_node::read(char *buf, size_t count, off_t offset) const
 
 size_t memfd::rw_data_node::write(char const *buf, size_t count, off_t offset)
 {
-	std::lock_guard<std::mutex> l_g(lock);
 	auto e_rem(count);
 	auto buf_off(0);
 	auto b_start(size_t(offset) >> block_order);
@@ -77,7 +75,6 @@ size_t memfd::rw_data_node::write(char const *buf, size_t count, off_t offset)
 
 void memfd::rw_data_node::truncate(off_t length)
 {
-	std::lock_guard<std::mutex> l_g(lock);
 	if (size_t(length) < size) {
 		auto b_start(length >> block_order);
 		auto iter(data.find(b_start));

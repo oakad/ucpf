@@ -111,10 +111,13 @@ class memfd {
 	} base;
 
 	memfd_base::node_type node;
+	bool writer;
 
 public:
 	template <typename T, bool ReadOnly>
-	static memfd create(std::string const &name, T const &data_)
+	static memfd create(
+		std::string const &name, T const &data_
+	)
 	{
 		memfd rv;
 		memfd_base::node_type n_data;

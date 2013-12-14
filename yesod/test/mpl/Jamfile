@@ -14,5 +14,5 @@ run apply.cpp : : test_case ;
 run apply_wrap.cpp : : test_case ;
 run bind.cpp : : test_case ;
 run lambda.cpp : : test_case ;
-run logical.cpp : : test_case ;
-run map.cpp : : test_case ;
+#run logical.cpp : : test_case ;
+#run map.cpp : : test_case ;

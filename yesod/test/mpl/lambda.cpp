@@ -9,8 +9,10 @@
 #define BOOST_TEST_MODULE yesod_mpl
 #include <boost/test/included/unit_test.hpp>
 
+#include <yesod/mpl/apply.hpp>
 #include <yesod/mpl/lambda.hpp>
 #include <yesod/mpl/sizeof.hpp>
+#include <yesod/mpl/logical.hpp>
 #include <yesod/mpl/comparison.hpp>
 
 #include "data_types.hpp"

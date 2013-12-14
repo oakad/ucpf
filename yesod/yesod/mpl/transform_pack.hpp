@@ -9,7 +9,7 @@
 /*=============================================================================
     Based on extensions to boost::mpl library:
 
-    Copyright (c) 2006-2009 Larry Evans
+    Copyright (c) 2006-2010 Larry Evans
 
     Permission to copy, use, modify, sell and distribute this software is
     granted provided this copyright notice appears in all copies. This software
@@ -21,7 +21,7 @@
 #define UCPF_YESOD_MPL_TRANSFORM_PACK_DEC_12_2013_1840
 
 #include <yesod/mpl/apply.hpp>
-#include <yesod/mpl/package.hpp>
+#include <yesod/mpl/pack_inserter.hpp>
 
 namespace ucpf { namespace yesod { namespace mpl {
 

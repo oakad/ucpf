@@ -7,9 +7,19 @@
  */
 
 /*=============================================================================
+    Based on implementation of boost::mpl library:
+
+    Copyright (c) 2001-2004 Aleksey Gurtovoy
+    Copyright (c) 2001      Peter Dimov
+
+    Distributed under the Boost Software License, Version 1.0. (See accompanying
+    file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+==============================================================================*/
+
+/*=============================================================================
     Based on extensions to boost::mpl library:
 
-    Copyright (c) 2009 Larry Evans
+    Copyright (c) 2006-2010 Larry Evans
 
     Permission to copy, use, modify, sell and distribute this software is
     granted provided this copyright notice appears in all copies. This software
@@ -17,25 +27,24 @@
     as to its suitability for any purpose.
 ==============================================================================*/
 
-#if !defined(UCPF_YESOD_MPL_BIND_DEC_12_2013_1330)
-#define UCPF_YESOD_MPL_BIND_DEC_12_2013_1330
+#if !defined(UCPF_YESOD_MPL_BIND_DEC_14_2013_2300)
+#define UCPF_YESOD_MPL_BIND_DEC_14_2013_2300
 
+#include <yesod/mpl/if.hpp>
 #include <yesod/mpl/arg.hpp>
 #include <yesod/mpl/quote.hpp>
-#include <yesod/mpl/repeat.hpp>
+#include <yesod/mpl/package.hpp>
 #include <yesod/mpl/push_pop.hpp>
-#include <yesod/mpl/apply_wrap.hpp>
 #include <yesod/mpl/front_back.hpp>
+#include <yesod/mpl/apply_wrap.hpp>
 #include <yesod/mpl/fold_assoc_pack.hpp>
 
 namespace ucpf { namespace yesod { namespace mpl {
 
-template <typename F, typename... Tn> 
+template <typename...>
 struct bind;
 
 namespace detail {
-
-constexpr size_t bind_arity_limit = 10;
 
 template <typename T, typename Arg>
 struct replace_unnamed_arg {
@@ -68,35 +77,6 @@ struct resolve_bind_arg<arg<N>, Un...> {
 	typedef typename apply_wrap<arg<N>, Un...>::type type;
 };
 
-template <typename T, typename U>
-struct resolve_bind_argn;
-
-template <typename T, typename... Un>
-struct resolve_bind_argn<T, package<Un...>> : resolve_bind_arg<T, Un...> {};
-
-struct unused_type {
-};
-
-template <typename T, typename... Un>
-struct resolve_bind_argv : resolve_bind_argn<
-	T, typename join_pack<
-		package<Un...>, typename repeat<
-			unused_type, bind_arity_limit - sizeof...(Un)
-		>::type
-	>::type
-> {};
-
-template <long N, typename... Un>
-struct resolve_bind_argv<arg<N>, Un...> {
-	typedef typename apply_wrap<arg<N>, Un...>::type type;
-};
-
-template <typename F, typename... Tn, typename... Un> 
-struct resolve_bind_argv<bind<F, Tn...>, Un...> {
-	typedef bind<F, Tn...> f_;
-	typedef typename apply_wrap <f_, Un...>::type type;
-};
-
 template <typename... Un>
 struct resolve_bind {
 	template <typename NTs, typename A>
@@ -107,7 +87,7 @@ struct resolve_bind {
 		typedef replace_unnamed_arg<A, N> r;
 		typedef typename r::type a;
 		typedef typename r::next n;
-		typedef typename resolve_bind_argv<a, Un...>::type t;
+		typedef typename resolve_bind_arg<a, Un...>::type t;
 		typedef package<n, Tn..., t> type;
 	};
 };
@@ -115,7 +95,7 @@ struct resolve_bind {
 }
 
 template <typename F, typename... Tn> 
-struct bind {
+struct bind<F, Tn...> {
 	template <typename... Un>
 	struct apply {
 		typedef detail::resolve_bind<Un...> resolve_bind_us;
@@ -131,9 +111,7 @@ struct bind {
 
 		template <typename... Vn>
 		struct apply_wrap_f : apply_wrap<
-			f_, typename detail::quote_impl<
-				Vn, detail::has_type<Vn>::value
-			>::type...
+			f_, Vn...
 		>{};
 
 		typedef typename apply_pack<ts, apply_wrap_f>::type type;
