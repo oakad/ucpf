@@ -15,38 +15,47 @@
     file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ==============================================================================*/
 
-#if !defined(UCPF_YESOD_MPL_ADVANCE_DEC_11_2013_1610)
-#define UCPF_YESOD_MPL_ADVANCE_DEC_11_2013_1610
+#if !defined(UCPF_YESOD_MPL_O1_SIZE_DEC_16_2013_1450)
+#define UCPF_YESOD_MPL_O1_SIZE_DEC_16_2013_1450
 
-#include <yesod/mpl/tag.hpp>
 #include <yesod/mpl/lambda_fwd.hpp>
-#include <yesod/mpl/sequence_fwd.hpp>
-#include <yesod/mpl/detail/advance.hpp>
+#include <yesod/mpl/detail/has_size.hpp>
 
 namespace ucpf { namespace yesod { namespace mpl {
+namespace detail {
+
+template <typename Tag>
+struct O1_size_impl {
+	template <typename Sequence>
+	struct O1_size_seq_impl : Sequence::size {};
+
+	template <typename Sequence>
+	struct apply : if_<
+		has_size<Sequence>,
+		O1_size_seq_impl<Sequence>,
+		long_<-1>
+	>::type {};
+};
+
+}
 
 template <>
-struct advance<> {
-	template <typename T0, typename T1, typename... Tn>
-	struct apply : advance<T0, T1> {};
+struct O1_size<> {
+	template <typename T0, typename... Tn>
+	struct apply : O1_size<T0> {};
 };
 
 template <typename Tag>
-struct lambda<advance<>, Tag, long_<-1>> {
-        typedef false_type is_le;
-        typedef advance<> result_;
-        typedef advance<> type;
+struct lambda<O1_size<>, Tag, long_<-1>> {
+	typedef false_type is_le;
+	typedef O1_size<> result_;
+	typedef O1_size<> type;
 };
 
-template <typename Iterator, typename N>
-struct advance<Iterator, N> : detail::advance_impl<
-	typename tag<Iterator>::type
->::template apply<Iterator, N> {};
-
-template <typename Iterator, long N>
-struct advance_c : detail::advance_impl<
-	typename tag<Iterator>::type
->::template apply<Iterator, long_<N>> {};
+template <typename Sequence>
+struct O1_size<Sequence> : detail::O1_size_impl<
+	typename sequence_tag<Sequence>::type
+>::template apply<Sequence> {};
 
 }}}
 

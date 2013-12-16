@@ -10,9 +10,15 @@ alias test_case : : : : <include>../..
                         <cxxflags>-ftemplate-backtrace-limit=0 ;
 
 run advance.cpp : : test_case ;
+run always.cpp : : test_case ;
 run apply.cpp : : test_case ;
 run apply_wrap.cpp : : test_case ;
+run arithmetic.cpp : : test_case ;
+run as_sequence.cpp : : test_case ;
 run bind.cpp : : test_case ;
 run lambda.cpp : : test_case ;
-#run logical.cpp : : test_case ;
-#run map.cpp : : test_case ;
+run logical.cpp : : test_case ;
+run map.cpp : : test_case ;
+run set.cpp : : test_case ;
+run unpack_args.cpp : : test_case ;
+run vector.cpp : : test_case ;

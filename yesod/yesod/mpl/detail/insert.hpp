@@ -15,26 +15,24 @@
     file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ==============================================================================*/
 
-#if !defined(UCPF_YESOD_MPL_ERASE_DEC_11_2013_1520)
-#define UCPF_YESOD_MPL_ERASE_DEC_11_2013_1520
+#if !defined(UCPF_YESOD_MPL_DETAIL_INSERT_DEC_16_2013_1400)
+#define UCPF_YESOD_MPL_DETAIL_INSERT_DEC_16_2013_1400
 
-#include <yesod/mpl/fold.hpp>
+#include <yesod/mpl/copy.hpp>
+#include <yesod/mpl/joint_view.hpp>
 
-namespace ucpf { namespace yesod { namespace mpl {
-namespace detail {
+namespace ucpf { namespace yesod { namespace mpl { namespace detail {
 
 template <typename Tag>
-struct erase_impl {
-	template <
-		typename Sequence, typename First,
-		typename Last = typename next<First>::type
-	> struct apply {
+struct insert_impl {
+	template <typename Sequence, typename Pos, typename T = Pos>
+	struct apply {
 		typedef iterator_range<
-			typename begin<Sequence>::type, First
+			typename begin<Sequence>::type, Pos
 		> first_half_;
 
 		typedef iterator_range<
-			Last, typename end<Sequence>::type
+			Pos, typename end<Sequence>::type
 		> second_half_;
 
 		typedef typename reverse_fold<
@@ -44,37 +42,34 @@ struct erase_impl {
 		>::type half_sequence_;
 
 		typedef typename reverse_fold<
-			first_half_, half_sequence_,
+			first_half_,
+			typename push_front<half_sequence_, T>::type,
 			push_front<arg<-1>, arg<-1>>
 		>::type type;
 	};
 };
 
-}
-
 template <>
-struct erase<> {
-	template <typename T0, typename T1, typename T2, typename... Tn>
-	struct apply : erase<T0, T1, T2> {};
-};
+struct insert_impl<non_sequence_tag> {};
 
 template <typename Tag>
-struct lambda<erase<>, Tag, long_<-1>> {
-	typedef false_type is_le;
-	typedef erase<> result_;
-	typedef erase<> type;
+struct insert_range_impl {
+	template <typename Sequence, typename Pos, typename Range>
+	struct apply : reverse_copy<
+		joint_view<
+			iterator_range<typename begin<Sequence>::type, Pos>,
+			joint_view<
+				Range, iterator_range<
+					Pos, typename end<Sequence>::type
+				>
+			>
+		>, front_inserter<typename clear<Sequence>::type>
+	> {};
 };
 
-template <typename Sequence, typename First>
-struct erase<Sequence, First> : detail::erase_impl<
-	typename sequence_tag<Sequence>::type
->::template apply<Sequence, First> {};
+template <>
+struct insert_range_impl<non_sequence_tag> {};
 
-template <typename Sequence, typename First, typename Last>
-struct erase<Sequence, First, Last> : detail::erase_impl<
-	typename sequence_tag<Sequence>::type
->::template apply<Sequence, First, Last> {};
-
-}}}
+}}}}
 
 #endif

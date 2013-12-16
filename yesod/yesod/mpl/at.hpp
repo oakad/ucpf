@@ -15,38 +15,29 @@
     file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ==============================================================================*/
 
-#if !defined(UCPF_YESOD_MPL_ADVANCE_DEC_11_2013_1610)
-#define UCPF_YESOD_MPL_ADVANCE_DEC_11_2013_1610
+#if !defined(UCPF_YESOD_MPL_AT_DEC_16_2013_1300)
+#define UCPF_YESOD_MPL_AT_DEC_16_2013_1300
 
-#include <yesod/mpl/tag.hpp>
-#include <yesod/mpl/lambda_fwd.hpp>
+#include <yesod/mpl/detail/at.hpp>
 #include <yesod/mpl/sequence_fwd.hpp>
-#include <yesod/mpl/detail/advance.hpp>
 
 namespace ucpf { namespace yesod { namespace mpl {
 
 template <>
-struct advance<> {
+struct at<> {
 	template <typename T0, typename T1, typename... Tn>
-	struct apply : advance<T0, T1> {};
+	struct apply : at<T0, T1> {};
 };
 
-template <typename Tag>
-struct lambda<advance<>, Tag, long_<-1>> {
-        typedef false_type is_le;
-        typedef advance<> result_;
-        typedef advance<> type;
-};
+template <typename Sequence, typename N>
+struct at<Sequence, N> : detail::at_impl<
+	typename sequence_tag<Sequence>::type
+>::template apply<Sequence, N> {};
 
-template <typename Iterator, typename N>
-struct advance<Iterator, N> : detail::advance_impl<
-	typename tag<Iterator>::type
->::template apply<Iterator, N> {};
-
-template <typename Iterator, long N>
-struct advance_c : detail::advance_impl<
-	typename tag<Iterator>::type
->::template apply<Iterator, long_<N>> {};
+template<typename Sequence, long N>
+struct at_c : detail::at_impl<
+	typename sequence_tag<Sequence>::type
+>::template apply<Sequence, long_<N>> {};
 
 }}}
 

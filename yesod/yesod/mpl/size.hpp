@@ -73,7 +73,7 @@ struct lambda<empty<>, Tag, long_<-1>> {
 };
 
 template <typename Sequence>
-struct empty : detail::empty_impl<
+struct empty<Sequence> : detail::empty_impl<
 	typename sequence_tag<Sequence>::type
 >::template apply<Sequence>::type {};
 

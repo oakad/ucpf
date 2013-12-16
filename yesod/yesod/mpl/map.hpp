@@ -33,6 +33,7 @@
 #include <yesod/mpl/if.hpp>
 #include <yesod/mpl/pair.hpp>
 #include <yesod/mpl/base.hpp>
+#include <yesod/mpl/logical.hpp>
 #include <yesod/mpl/identity.hpp>
 #include <yesod/mpl/next_prior.hpp>
 #include <yesod/mpl/fold_assoc_pack.hpp>
@@ -41,6 +42,7 @@
 #include <yesod/mpl/detail/size.hpp>
 #include <yesod/mpl/detail/clear.hpp>
 #include <yesod/mpl/detail/order.hpp>
+#include <yesod/mpl/detail/insert.hpp>
 #include <yesod/mpl/detail/has_key.hpp>
 #include <yesod/mpl/detail/erase_key.hpp>
 
@@ -72,6 +74,11 @@ struct map_item : Base {
 	using Base::order_by_key_;
 };
 
+template <typename P, typename Base>
+struct map_item_fold {
+	typedef map_item<typename P::first, typename P::second, Base> type;
+};
+
 template <typename Key, typename Base>
 struct map_mask : Base {
 	typedef void_ key_;
@@ -91,10 +98,27 @@ struct map_mask : Base {
 	using Base::item_by_order_;
 };
 
-template <typename P, typename Base>
-struct map_item_fold {
-	typedef map_item<typename P::first, typename P::second, Base> type;
+template <typename Map, long order>
+struct item_by_order_impl {
+	typedef decltype(Map::item_by_order_(
+		ptr_to_ref(static_cast<Map *>(nullptr)),
+		static_cast<long_<order> *>(nullptr)
+	)) type;
 };
+
+template <typename Map, long order>
+struct item_by_order
+: wrapped_type<typename item_by_order_impl<Map, order>::type> {};
+
+template <typename Map, long order, long max_order>
+struct next_order : if_<
+	is_void_<typename item_by_order<Map, order>::type>,
+	next_order<Map, (order + 1), max_order>,
+	long_<order>
+>::type {};
+
+template <typename Map, long max_order>
+struct next_order<Map, max_order, max_order> : long_<max_order> {};
 
 template <typename Map, typename Key>
 struct map_at {
@@ -106,7 +130,30 @@ struct map_at {
 	)) type;
 };
 
+template <typename Map, long order, long max_order>
+struct map_iter {
+	typedef forward_iterator_tag category;
+	typedef typename item_by_order<Map, order>::type type;
+};
+
+template <typename Map, long max_order>
+struct map_iter<Map, max_order, max_order> {
+	typedef forward_iterator_tag category;
+};
+
 }
+
+template <typename Map, long order, long max_order>
+struct next<detail::map_iter<Map, order, max_order>> {
+	typedef detail::map_iter<
+		Map,
+		detail::next_order<Map, order + 1, max_order>::value,
+		max_order
+	> type;
+};
+
+template <typename Map, long max_order>
+struct next<detail::map_iter<Map, max_order, max_order>> {};
 
 template <typename...>
 struct map;
@@ -135,7 +182,9 @@ struct map<> {
 template <typename... Pn>
 struct map : fold_assoc_pack<
 	typename detail::op_assoc::right, detail::map_item_fold, map<>, Pn...
->::type {};
+>::type {
+	typedef map type;
+};
 
 namespace detail {
 
@@ -148,6 +197,22 @@ struct at_impl<map_tag> {
 };
 
 template <>
+struct begin_impl<map_tag> {
+	template <typename Map>
+	struct apply {
+		typedef typename increment<
+			typename Map::order
+		>::type max_order_;
+
+		typedef map_iter<
+			Map,
+			next_order<Map, 1, max_order_::value>::value,
+			max_order_::value
+		> type;
+	};
+};
+
+template <>
 struct clear_impl<map_tag> {
 	template <typename Map> struct apply {
 		typedef map<> type;
@@ -155,9 +220,33 @@ struct clear_impl<map_tag> {
 };
 
 template <>
+struct contains_impl<map_tag> {
+	template <typename Map, typename Pair>
+	struct apply : std::is_same<
+		typename at_impl<map_tag>::apply<
+			Map, typename Pair::first
+		>::type, typename Pair::second
+	> {};
+};
+
+template <>
 struct empty_impl<map_tag> {
 	template <typename Map>
 	struct apply : not_<typename Map::size> {};
+};
+
+template <>
+struct end_impl<map_tag> {
+	template <typename Map>
+	struct apply {
+		typedef typename increment<
+			typename Map::order
+		>::type max_order_;
+
+		typedef map_iter <
+			Map, max_order_::value, max_order_::value
+		> type;
+	};
 };
 
 template <>
@@ -181,6 +270,38 @@ struct erase_key_impl<map_tag> {
 };
 
 template <>
+struct erase_impl<map_tag> {
+	template<typename Map, typename Pos, typename unused_>
+	struct apply : erase_key_impl<map_tag>::apply<
+		Map, typename Pos::type::first
+	> {};
+};
+
+template <>
+struct insert_impl<map_tag> {
+	template <typename Map, typename Pair>
+	struct apply_impl : if_<
+		contains_impl<map_tag>::apply<Map, Pair>,
+		Map, map_item<typename Pair::first, typename Pair::second, Map>
+	> {};
+
+	template <typename...>
+	struct apply;
+
+	template <typename Map, typename Pos>
+	struct apply<Map, Pos> : apply_impl<Map, Pos> {};
+
+	template <typename Map, typename Pos, typename T>
+	struct apply<Map, Pos, T> : apply_impl<Map, T> {};
+};
+
+template <>
+struct key_type_impl<map_tag> {
+	template <typename Map, typename T>
+	struct apply : first<T> {};
+};
+
+template <>
 struct O1_size_impl<map_tag> {
 	template <typename Map>
 	struct apply : Map::size {};
@@ -192,8 +313,13 @@ struct size_impl<map_tag> {
 	struct apply : Map::size {};
 };
 
-}
+template <>
+struct value_type_impl<map_tag> {
+	template <typename Map, typename T>
+	struct apply : second<T> {};
+};
 
+}
 }}}
 
 #endif

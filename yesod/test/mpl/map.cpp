@@ -10,22 +10,15 @@
 #define BOOST_TEST_MODULE yesod_mpl
 #include <boost/test/included/unit_test.hpp>
 
+#include <yesod/mpl/at.hpp>
 #include <yesod/mpl/map.hpp>
 #include <yesod/mpl/size.hpp>
 #include <yesod/mpl/clear.hpp>
+#include <yesod/mpl/order.hpp>
+#include <yesod/mpl/insert.hpp>
+#include <yesod/mpl/has_key.hpp>
+#include <yesod/mpl/contains.hpp>
 #include <yesod/mpl/erase_key.hpp>
-
-#if 0
-#include <boost/mpl/x11/begin_end.hpp>
-#include <boost/mpl/x11/clear.hpp>
-#include <boost/mpl/x11/contains.hpp>
-#include <boost/mpl/x11/erase.hpp>
-#include <boost/mpl/x11/has_key.hpp>
-#include <boost/mpl/x11/insert.hpp>
-#include <boost/mpl/x11/order.hpp>
-#include <boost/mpl/x11/size.hpp>
-#include <boost/mpl/x11/at.hpp>
-#endif
 
 namespace ucpf { namespace yesod { namespace mpl {
 
@@ -132,7 +125,7 @@ BOOST_AUTO_TEST_CASE(map_0)
 	BOOST_CHECK((std::is_same<at<m2_1, int>::type, unsigned>::value));
 	BOOST_CHECK((std::is_same<at<m2_1, long>::type, unsigned>::value));
 }
-#if 0
+
 BOOST_AUTO_TEST_CASE(map_1)
 {
 	typedef map<> m;
@@ -243,5 +236,4 @@ BOOST_AUTO_TEST_CASE(map_3)
 
 	BOOST_CHECK((std::is_same<at<with_char_too, char>::type, long>::value));
 }
-#endif
 }}}
