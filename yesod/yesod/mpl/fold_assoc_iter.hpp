@@ -21,6 +21,7 @@
 #define UCPF_YESOD_MPL_FOLD_ASSOC_ITER_DEC_11_2013_1800
 
 #include <yesod/mpl/apply.hpp>
+#include <yesod/mpl/lambda.hpp>
 #include <yesod/mpl/detail/op_assoc.hpp>
 
 namespace ucpf { namespace yesod { namespace mpl {

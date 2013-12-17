@@ -20,6 +20,7 @@
 #define UCPF_YESOD_MPL_COPY_DEC_16_2013_1400
 
 #include <yesod/mpl/fold.hpp>
+#include <yesod/mpl/clear.hpp>
 #include <yesod/mpl/inserter.hpp>
 
 namespace ucpf { namespace yesod { namespace mpl {

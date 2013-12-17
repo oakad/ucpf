@@ -15,44 +15,34 @@
     file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ==============================================================================*/
 
-#if !defined(UCPF_YESOD_MPL_DISTANCE_DEC_11_2013_1800)
-#define UCPF_YESOD_MPL_DISTANCE_DEC_11_2013_1800
+#if !defined(UCPF_YESOD_MPL_REVERSE_DEC_17_2013_1750)
+#define UCPF_YESOD_MPL_REVERSE_DEC_17_2013_1750
 
-#include <yesod/mpl/tag.hpp>
-#include <yesod/mpl/iter_fold.hpp>
-#include <yesod/mpl/sequence_fwd.hpp>
-#include <yesod/mpl/iterator_range.hpp>
+#include <yesod/mpl/copy.hpp>
 
 namespace ucpf { namespace yesod { namespace mpl {
-namespace detail {
 
-template <typename Tag>
-struct distance_impl {
-	template <typename First, typename Last>
-	struct apply : iter_fold<
-		iterator_range<First, Last>, long_<0>, next<>
-	>::type {};
-};
-
-}
+template <typename...>
+struct reverse;
 
 template <>
-struct distance<> {
+struct reverse<> {
 	template <typename T0, typename T1, typename... Tn>
-	struct apply : distance<T0, T1> {};
+	struct apply : reverse<T0> {};
 };
 
 template <typename Tag>
-struct lambda<distance<>, Tag, long_<-1>> {
+struct lambda<reverse<>, Tag, long_<-1>> {
 	typedef false_type is_le;
-	typedef distance<> result_;
-	typedef distance<> type;
+	typedef reverse<> result_;
+	typedef reverse<> type; 
 };
 
-template <typename First, typename Last>
-struct distance<First, Last> : detail::distance_impl<
-	typename tag<First>::type
->::template apply<First, Last> {};
+template <typename Sequence>
+struct reverse<Sequence> : reverse_copy<Sequence> {};
+
+template <typename Sequence, typename Inserter>
+struct reverse<Sequence, Inserter> : reverse_copy<Sequence, Inserter> {};
 
 }}}
 

@@ -19,6 +19,7 @@
 #define UCPF_YESOD_MPL_ERASE_DEC_11_2013_1520
 
 #include <yesod/mpl/fold.hpp>
+#include <yesod/mpl/clear.hpp>
 
 namespace ucpf { namespace yesod { namespace mpl {
 namespace detail {

@@ -6,13 +6,13 @@
     file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ==============================================================================*/
 
-#define BOOST_TEST_MODULE mpl
+#define BOOST_TEST_MODULE yesod_mpl
 #include <boost/test/included/unit_test.hpp>
 
-#include <boost/mpl/x11/vector.hpp>
-#include <boost/mpl/x11/at.hpp>
+#include <yesod/mpl/at.hpp>
+#include <yesod/mpl/vector.hpp>
 
-namespace boost { namespace mpl { namespace x11 {
+namespace ucpf { namespace yesod { namespace mpl {
 namespace test {
 
 template <typename Seq, int n>
