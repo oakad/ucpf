@@ -46,7 +46,7 @@ struct single_element_iter<T, true> {
 template <typename T, bool IsLast, typename Distance>
 struct advance<detail::single_element_iter<T, IsLast>, Distance> {
 	typedef detail::single_element_iter<
-		T, (Distance::value ? true : IsLast)
+		T, (Distance::value ? (Distance::value > 0) : IsLast)
 	> type;
 };
 

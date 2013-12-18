@@ -6,8 +6,8 @@
  * shed by the Free Software Foundation.
  */
 
-#if !defined(UCPF_YESOD_MPL_MAKE_VALUE_DEC_17_2013_1730)
-#define UCPF_YESOD_MPL_MAKE_VALUE_DEC_17_2013_1730
+#if !defined(UCPF_YESOD_MPL_VALUE_CAST_DEC_17_2013_1730)
+#define UCPF_YESOD_MPL_VALUE_CAST_DEC_17_2013_1730
 
 #include <yesod/mpl/unpack_args.hpp>
 
@@ -15,12 +15,14 @@ namespace ucpf { namespace yesod { namespace mpl {
 namespace detail {
 
 template <typename ValueType>
-struct make_value_impl {
+struct value_cast_impl {
 	template <typename...>
 	struct apply;
 
 	template <typename T0>
 	struct apply<T0> {
+		typedef apply type;
+
 		static ValueType &push_back(ValueType &v)
 		{
 			v.push_back(T0::value);
@@ -30,6 +32,8 @@ struct make_value_impl {
 
 	template <typename T0, typename... Tn>
 	struct apply<T0, Tn...> {
+		typedef apply type;
+
 		static ValueType &push_back(ValueType &v)
 		{
 			v.push_back(T0::value);
@@ -41,14 +45,15 @@ struct make_value_impl {
 }
 
 template <typename Sequence, typename ValueType>
-ValueType &make_value(ValueType &in)
+ValueType value_cast()
 {
-	typedef apply_wrap<
-		unpack_args<detail::make_value_impl<ValueType>>,
+	ValueType rv;
+	typedef typename apply_wrap<
+		unpack_args<detail::value_cast_impl<ValueType>>,
 		Sequence
-	> v;
+	>::type v;
 
-	return v::push_back(in);
+	return v::push_back(rv);
 }
 
 }}}

@@ -28,8 +28,24 @@
 
 namespace ucpf { namespace yesod { namespace mpl {
 
+template <typename...>
+struct fold;
+
+template <>
+struct fold<> {
+	template <typename T0, typename T1, typename T2, typename... Tn>
+	struct apply : fold<T0, T1, T2> {};
+};
+
+template <typename Tag>
+struct lambda<fold<>, Tag, long_<-1>> {
+	typedef false_type is_le;
+	typedef fold<> result_;
+	typedef fold<> type;
+};
+
 template <typename Sequence, typename State, typename Op>
-struct fold {
+struct fold<Sequence, State, Op> {
 	typedef typename fold_assoc_iter<
 		typename detail::op_assoc::left,
 		typename lambda<Op>::type::template apply<
@@ -41,8 +57,24 @@ struct fold {
 	>::type type;
 };
 
+template <typename...>
+struct reverse_fold;
+
+template <>
+struct reverse_fold<> {
+	template <typename T0, typename T1, typename T2, typename... Tn>
+	struct apply : fold<T0, T1, T2> {};
+};
+
+template <typename Tag>
+struct lambda<reverse_fold<>, Tag, long_<-1>> {
+	typedef false_type is_le;
+	typedef reverse_fold<> result_;
+	typedef reverse_fold<> type;
+};
+
 template <typename Sequence, typename State, typename Op>
-struct reverse_fold {
+struct reverse_fold<Sequence, State, Op> {
 	typedef typename fold_assoc_iter<
 		typename detail::op_assoc::right,
 		typename lambda<Op>::type::template apply<

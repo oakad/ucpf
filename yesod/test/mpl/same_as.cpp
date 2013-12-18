@@ -17,8 +17,8 @@ namespace ucpf { namespace yesod { namespace mpl {
 
 BOOST_AUTO_TEST_CASE(same_as_0)
 {
-	BOOST_CHECK((apply<same_as<int>, int>::value));
-	BOOST_CHECK(!(apply<same_as<int>, long>::value));
+	BOOST_CHECK((apply<same_as<int>, int>::type::value));
+	BOOST_CHECK(!(apply<same_as<int>, long>::type::value));
 }
 
 }}}

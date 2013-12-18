@@ -107,7 +107,7 @@ struct list_c : list<integral_constant<T, Cn>...> {
 
 template <typename T>
 struct list_c<T> : list<> {
-	typedef list_c type;
+	typedef list<> type;
 	typedef T value_type;
 };
 
