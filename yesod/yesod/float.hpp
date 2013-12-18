@@ -8,12 +8,12 @@
 #if !defined(UCPF_YESOD_FLOAT_NOV_15_2013_1215)
 #define UCPF_YESOD_FLOAT_NOV_15_2013_1215
 
-#include <type_traits>
-#include <boost/operators.hpp>
-#include <boost/mpl/x11/at.hpp>
-#include <boost/mpl/x11/map.hpp>
-#include <boost/mpl/x11/has_key.hpp>
+#include <yesod/mpl/at.hpp>
+#include <yesod/mpl/map.hpp>
+#include <yesod/mpl/has_key.hpp>
 #include <yesod/static_log2.hpp>
+
+#include <boost/operators.hpp>
 
 namespace ucpf { namespace yesod {
 namespace detail {
@@ -38,25 +38,25 @@ template <
 	constexpr static unsigned int exponent_bits = ExponentBits;
 };
 
-typedef typename boost::mpl::x11::map<
-	boost::mpl::x11::pair<
-		boost::mpl::x11::uint_<8>,
+typedef typename mpl::map<
+	mpl::pair<
+		mpl::uint_<8>,
 		storable_float_traits<uint8_t, uint8_t, 3, 4>
 	>,
-	boost::mpl::x11::pair<
-		boost::mpl::x11::uint_<16>,
+	mpl::pair<
+		mpl::uint_<16>,
 		storable_float_traits<uint16_t, uint16_t, 10, 5>
 	>,
-	boost::mpl::x11::pair<
-		boost::mpl::x11::uint_<32>,
+	mpl::pair<
+		mpl::uint_<32>,
 		storable_float_traits<uint32_t, float>
 	>,
-	boost::mpl::x11::pair<
-		boost::mpl::x11::uint_<64>,
+	mpl::pair<
+		mpl::uint_<64>,
 		storable_float_traits<uint64_t, double>
 	>,
-	boost::mpl::x11::pair<
-		boost::mpl::x11::uint_<128>,
+	mpl::pair<
+		mpl::uint_<128>,
 		storable_float_traits<unsigned __int128, __float128>
 	>
 >::type fp_storage_types;
@@ -78,9 +78,9 @@ template <unsigned int N>
 struct float_t {
 	typedef detail::float_tag tag;
 
-	typedef typename boost::mpl::x11::at<
+	typedef typename mpl::at<
 		detail::fp_storage_types,
-		boost::mpl::x11::uint_<N>
+		mpl::uint_<N>
 	>::type traits_type;
 	typedef typename traits_type::storage_type storage_type;
 	typedef typename traits_type::machine_type machine_type;
@@ -126,19 +126,19 @@ struct has_tag<T, TagT, true> : std::integral_constant<
 template <typename T>
 struct is_floating_point : std::integral_constant<
 	bool, std::is_floating_point<T>::value | has_tag<
-		T, float_tag, boost::mpl::x11::detail::has_tag<T>::value
+		T, float_tag, mpl::detail::has_tag<T>::value
 	>::value
 > {};
 
-typedef typename boost::mpl::x11::map<
-	boost::mpl::x11::pair<float, float_t<32>>,
-	boost::mpl::x11::pair<double, float_t<64>>,
-	boost::mpl::x11::pair<long double, typename std::conditional<
+typedef typename mpl::map<
+	mpl::pair<float, float_t<32>>,
+	mpl::pair<double, float_t<64>>,
+	mpl::pair<long double, typename std::conditional<
 		(std::numeric_limits<long double>::digits
 		 > std::numeric_limits<double>::digits),
 		float_t<128>, float_t<64>
 	>>,
-	boost::mpl::x11::pair<__float128, float_t<128>>
+	mpl::pair<__float128, float_t<128>>
 >::type fp_adapter_types;
 
 }
@@ -150,9 +150,9 @@ using is_floating_point = typename detail::is_floating_point<
 
 template <typename T>
 using fp_adapter_type = std::conditional<
-	boost::mpl::x11::has_key<
+	mpl::has_key<
 		detail::fp_adapter_types, typename std::remove_cv<T>::type
-	>::value, typename boost::mpl::x11::at<
+	>::value, typename mpl::at<
 		detail::fp_adapter_types, typename std::remove_cv<T>::type
 	>::type, T
 >;

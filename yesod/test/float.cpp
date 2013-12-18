@@ -11,8 +11,6 @@
 
 #include <yesod/float.hpp>
 
-#include <typeinfo>
-
 namespace ucpf { namespace yesod {
 namespace test {
 
