@@ -32,6 +32,39 @@ struct xx_impl {
 	};
 };
 
+template <typename... Tn>
+struct aa {
+	typedef package<Tn...> x_pack;
+	typedef list<Tn...> x_type;
+};
+
+template <typename... Tn>
+void t3(aa<Tn...> x_arg)
+{
+	auto rv(value_cast<
+		typename decltype(x_arg)::x_type, std::vector<int>
+	>());
+
+	typedef typename std::conditional<
+		(sizeof...(Tn) > 3),
+		typename apply_wrap<arg<3>, Tn...>::type,
+		int_<-1>
+	>::type z1;
+	typedef typename std::conditional<
+		(sizeof...(Tn) > 4),
+		typename apply_wrap<arg<4>, Tn...>::type,
+		int_<-2>
+	>::type z2;
+
+	rv.push_back(z1::value);
+	rv.push_back(z2::value);
+	for (int v : rv)
+		printf("%d ", v);
+
+
+	printf("\n");
+}
+
 //template <typename T0, typename T1, typename T2>
 //void t2(xx<T0, T1, T2> x_arg)
 template <typename Pack>
@@ -50,10 +83,14 @@ void t2(typename apply<unpack_args<xx_impl>, Pack>::type x_arg)
 
 void t1()
 {
-	typedef xx<int_<1>, int_<2>, int_<3>> xa;
-	typedef xx<int_<9>, int_<8>, int_<7>> xb;
-	t2<typename xa::x_pack>(xa());
-	t2<typename xb::x_pack>(xb());
+	typedef aa<int_<1>, int_<2>, int_<3>> xa;
+	typedef aa<int_<1>, int_<2>, int_<3>, int_<4>> xb;
+	typedef aa<int_<1>, int_<2>, int_<3>, int_<4>, int_<5>> xc;
+	typedef aa<int_<9>, int_<8>, int_<7>, int_<6>, int_<5>, int_<4>> xd;
+	t3(xa());
+	t3(xb());
+	t3(xc());
+	t3(xd());
 }
 
 }}}

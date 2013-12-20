@@ -20,12 +20,14 @@ struct void_ {
 template <typename T>
 struct is_void_ : false_type {};
 
-template <> struct is_void_<void_> : true_type {};
+template <>
+struct is_void_<void_> : true_type {};
 
 template <typename T>
 struct is_not_void_ : true_type {};
 
-template <> struct is_not_void_<void_> : false_type {};
+template <>
+struct is_not_void_<void_> : false_type {};
 
 }}}
 
