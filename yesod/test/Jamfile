@@ -9,7 +9,6 @@ alias test_case : : : : <include>..
 
 run float.cpp : : test_case ;
 run is_sequence.cpp : : test_case ;
-run iterator_facade.cpp : : test_case ;
 run rcu.cpp : : test_case ;
 run rope.cpp : : test_case ;
 run shared_mutex.cpp : : test_case ;

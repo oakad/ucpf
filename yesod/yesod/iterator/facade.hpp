@@ -19,62 +19,15 @@
 ==============================================================================*/
 
 #if !defined(UCPF_YESOD_ITERATOR_FACADE_DEC_19_2013_1330)
-#defined UCPF_YESOD_ITERATOR_FACADE_DEC_19_2013_1330
+#define UCPF_YESOD_ITERATOR_FACADE_DEC_19_2013_1330
 
-#include <yesod/mpl/logical.hpp>
+#include <yesod/iterator/categories.hpp>
 
-namespace ucpf { namespace yesod {
-
-struct no_traversal_tag {};
-
-struct incrementable_traversal_tag : no_traversal_tag {};
-
-struct single_pass_traversal_tag : incrementable_traversal_tag {};
-
-struct forward_traversal_tag : single_pass_traversal_tag {};
-
-struct bidirectional_traversal_tag : forward_traversal_tag {};
-
-struct random_access_traversal_tag : bidirectional_traversal_tag {};
-
+namespace ucpf { namespace yesod { namespace iterator {
 namespace detail {
 
-typedef mpl::list<
-	mpl::pair<std::random_access_iterator_tag, random_access_traversal_tag>,
-	mpl::pair<std::bidirectional_iterator_tag, bidirectional_traversal_tag>,
-	mpl::pair<std::forward_iterator_tag, forward_traversal_tag>,
-	mpl::pair<std::input_iterator_tag, single_pass_traversal_tag>,
-	mpl::pair<std::output_iterator_tag, incrementable_traversal_tag>
-> traversal_of_category;
-
-template <typename T>
-struct is_reference_to_const : std::false_type
-{};
-
-template <typename T>
-struct is_reference_to_const<T const &> : std::true_type
-{};
-
-template <typename ValueParam, typename Reference>
-using iterator_writability_disabled = mpl::or_<
-	std::is_const<Reference>,
-	is_reference_to_const<Reference>,
-	std::is_const<ValueParam>
->;
-
-template <typename T>
-using is_iterator_category = mpl::or_<
-	std::is_convertible<T, std::input_iterator_tag>,
-	std::is_convertible<T, std::output_iterator_tag>
->;
-
-template <typename T>
-using is_iterator_traversal = std::is_convertible<
-	T, incrementable_traversal_tag
->;
-
 template <typename Traversal, typename ValueParam, typename Reference>
-struct iterator_facade_default_category {
+struct facade_default_category {
 	template <typename T>
 	struct has_traversal {
 		template <typename U>
@@ -84,9 +37,9 @@ struct iterator_facade_default_category {
 		>;
 	};
 
-	typedef typename mpl::find_if<
+	typedef typename mpl::deref<typename mpl::find_if<
 		traversal_of_category, has_traversal<Traversal>
-	>::type x_category_type;
+	>::type>::type x_category_type;
 
 	typedef mpl::or_<
 		mpl::and_<
@@ -112,104 +65,60 @@ struct iterator_facade_default_category {
 	>::type type;
 };
 
-template <typename Category>
-struct iterator_category_to_traversal {
-	template <typename T>
-	struct has_category {
-		template <typename U>
-		using apply = std::is_convertible<
-			T,
-			typename mpl::first<U>::type
-		>;
-	};
-
-	typedef typename mpl::if_<
-		std::is_convertible<Category, incrementable_traversal_tag>,
-		Category,
-		typename mpl::second<typename mpl::find_if<
-			traversal_of_category, has_category<Category>
-		>::type>::type
-	>::type;
-};
-
-template <typename Category, typename Traversal>
-struct iterator_category_with_traversal : Category, Traversal {
-	static_assert(
-		std::is_convertible<
-			typename iterator_category_to_traversal<Category>::type,
-			Traversal
-		>::value,
-		"iterator category and traversal types do not match"
-	);
-	static_assert(
-		is_iterator_category<Category>::value,
-	       "is_iterator_category<Category>::value"
-	);
-	static_assert(
-		!is_iterator_category<Traversal>::value,
-		"!is_iterator_category<Traversal>::value"
-	);
-	static_assert(
-		!is_iterator_traversal<Category>::value,
-		"!is_iterator_traversal<Category>::value"
-	);
-	static_assert(
-		is_iterator_traversal<Traversal>::value,
-		"is_iterator_traversal<Traversal>::value"
-	);
-};
-
 template <typename Traversal, typename ValueParam, typename Reference>
-struct facade_iterator_category_impl {
+struct facade_category_impl {
 	static_assert(
-		!is_iterator_category<Traversal>::value,
-		"!is_iterator_category<Traversal>::value"
+		!is_category<Traversal>::value,
+		"!is_category<Traversal>::value"
 	);
 
-	typedef typename iterator_facade_default_category<
+	typedef typename facade_default_category<
 		Traversal, ValueParam, Reference
 	>::type category;
 
 	typedef typename mpl::if_<
 		std::is_same<
 			Traversal,
-			typename iterator_category_to_traversal<category>::type
+			typename category_to_traversal<category>::type
 		>,
 		category,
-		iterator_category_with_traversal<category, Traversal>
+		category_with_traversal<category, Traversal>
 	>::type type;
 };
 
 template <
 	typename CategoryOrTraversal, typename ValueParam, typename Reference
-> using facade_iterator_category = mpl::eval_if<
-	is_iterator_category<CategoryOrTraversal>,
+> using facade_category = mpl::eval_if<
+	is_category<CategoryOrTraversal>,
 	mpl::identity<CategoryOrTraversal>,
-	facade_iterator_category_impl<
+	facade_category_impl<
 		CategoryOrTraversal, ValueParam, Reference
 	>
 >;
 
+template <typename T0, typename T1>
+using is_interoperable = std::integral_constant<
+	bool,
+	std::is_convertible<T0, T1>::value | std::is_convertible<T1, T0>::value
+>;
+
 template <typename T0, typename T1, typename Return>
 using enable_if_interoperable = std::enable_if<
-	mpl::or_<
-		std::is_convertible<T0, T1>,
-		std::is_convertible<T1, T0>
-	>, Return
+	is_interoperable<T0, T1>::value, Return
 >;
 
 template <
 	typename ValueParam, typename CategoryOrTraversal, typename Reference,
 	typename Difference
-> struct iterator_facade_types {
-	typedef typename facade_iterator_category<
+> struct facade_types {
+	typedef typename facade_category<
 		CategoryOrTraversal, ValueParam, Reference
 	>::type iterator_category;
 
 	typedef typename std::remove_const<ValueParam>::type value_type;
 
 	typedef typename mpl::eval_if<
-		iterator_writability_disabled<ValueParam, Reference>,
+		writability_disabled<ValueParam, Reference>,
 		std::add_pointer<const value_type>,
 		std::add_pointer<value_type>
 	>::type pointer;
@@ -275,10 +184,10 @@ private:
 };
 
 template <typename ValueType, typename Reference>
-using use_operator_brackets_proxy : mpl::not_<
+using use_operator_brackets_proxy = mpl::not_<
 	mpl::and_<
 		std::is_pod<ValueType>,
-		iterator_writability_disabled<ValueType, Reference>
+		writability_disabled<ValueType, Reference>
 	>
 >;
 
@@ -309,107 +218,110 @@ typename Iterator::value_type make_operator_brackets_result(
 
 struct choose_difference_type {
 	template <typename T0, typename T1>
-	using apply = mpl::eval_if<
-		std::is_convertible<T1, T0>,
-		typename std::iterator_traits<T0>::difference_type type,
-		typename std::iterator_traits<T1>::difference_type type
+	using apply = mpl::eval_if_c<
+		std::is_convertible<T1, T0>::value,
+		typename std::iterator_traits<T0>::difference_type,
+		typename std::iterator_traits<T1>::difference_type
 	>;
 };
 
 }
 
-struct iterator_core_access {
+template <typename... Tn>
+struct facade;
+
+struct core_access {
 	template <typename... Tn>
-	friend struct iterator_facade;
+	friend struct facade;
 
 	template <typename... Tn, typename... Un>
-	friend typename enable_if_interoperable<
-		typename iterator_facade<Tn...>::derived_type,
-		typename iterator_facade<Un...>::derived_type,
+	friend typename detail::enable_if_interoperable<
+		typename facade<Tn...>::derived_type,
+		typename facade<Un...>::derived_type,
 		bool
 	>::type operator==(
-		iterator_facade<Tn...> const &lhs,
-		iterator_facade<Un...> const &rhs
+		facade<Tn...> const &lhs,
+		facade<Un...> const &rhs
 	);
 
 	template <typename... Tn, typename... Un>
-	friend typename enable_if_interoperable<
-		typename iterator_facade<Tn...>::derived_type,
-		typename iterator_facade<Un...>::derived_type,
+	friend typename detail::enable_if_interoperable<
+		typename facade<Tn...>::derived_type,
+		typename facade<Un...>::derived_type,
 		bool
 	>::type operator!=(
-		iterator_facade<Tn...> const &lhs,
-		iterator_facade<Un...> const &rhs
+		facade<Tn...> const &lhs,
+		facade<Un...> const &rhs
 	);
 
 	template <typename... Tn, typename... Un>
-	friend typename enable_if_interoperable<
-		typename iterator_facade<Tn...>::derived_type,
-		typename iterator_facade<Un...>::derived_type,
+	friend typename detail::enable_if_interoperable<
+		typename facade<Tn...>::derived_type,
+		typename facade<Un...>::derived_type,
 		bool
 	>::type operator<(
-		iterator_facade<Tn...> const &lhs,
-		iterator_facade<Un...> const &rhs
+		facade<Tn...> const &lhs,
+		facade<Un...> const &rhs
 	);
 
 	template <typename... Tn, typename... Un>
-	friend typename enable_if_interoperable<
-		typename iterator_facade<Tn...>::derived_type,
-		typename iterator_facade<Un...>::derived_type,
+	friend typename detail::enable_if_interoperable<
+		typename facade<Tn...>::derived_type,
+		typename facade<Un...>::derived_type,
 		bool
 	>::type operator>(
-		iterator_facade<Tn...> const &lhs,
-		iterator_facade<Un...> const &rhs
+		facade<Tn...> const &lhs,
+		facade<Un...> const &rhs
 	);
 
 	template <typename... Tn, typename... Un>
-	friend typename enable_if_interoperable<
-		typename iterator_facade<Tn...>::derived_type,
-		typename iterator_facade<Un...>::derived_type,
+	friend typename detail::enable_if_interoperable<
+		typename facade<Tn...>::derived_type,
+		typename facade<Un...>::derived_type,
 		bool
 	>::type operator<=(
-		iterator_facade<Tn...> const &lhs,
-		iterator_facade<Un...> const &rhs
+		facade<Tn...> const &lhs,
+		facade<Un...> const &rhs
 	);
 
 	template <typename... Tn, typename... Un>
-	friend typename enable_if_interoperable<
-		typename iterator_facade<Tn...>::derived_type,
-		typename iterator_facade<Un...>::derived_type,
+	friend typename detail::enable_if_interoperable<
+		typename facade<Tn...>::derived_type,
+		typename facade<Un...>::derived_type,
 		bool
 	>::type operator>=(
-		iterator_facade<Tn...> const &lhs,
-		iterator_facade<Un...> const &rhs
+		facade<Tn...> const &lhs,
+		facade<Un...> const &rhs
 	);
 
 	template <typename... Tn, typename... Un>
-	friend typename enable_if_interoperable<
-		typename iterator_facade<Tn...>::derived_type,
-		typename iterator_facade<Un...>::derived_type,
-		typename mpl::apply<
-			choose_difference_type,
-			typename iterator_facade<Tn...>::derived_type,
-			typename iterator_facade<Un...>::derived_type
+	friend typename detail::enable_if_interoperable<
+		typename facade<Tn...>::derived_type,
+		typename facade<Un...>::derived_type,
+		typename mpl::apply_wrap<
+			detail::choose_difference_type,
+			typename facade<Tn...>::derived_type,
+			typename facade<Un...>::derived_type
 		>::type
 	>::type operator-(
-		iterator_facade<Tn...> const &lhs,
-		iterator_facade<Un...> const &rhs
+		facade<Tn...> const &lhs,
+		facade<Un...> const &rhs
 	);
 
 	template <typename... Tn>
-	friend typename iterator_facade<Tn...>::derived_type operator+(
-		iterator_facade<Tn...>const &lhs,
-		typename iterator_facade<
+	friend typename facade<Tn...>::derived_type operator+(
+		facade<Tn...>const &lhs,
+		typename facade<
 			Tn...
 		>::derived_type::difference_type rhs
 	);
 
 	template <typename... Tn>
-	friend typename iterator_facade<Tn...>::derived_type operator+(
-		typename iterator_facade<
+	friend typename facade<Tn...>::derived_type operator+(
+		typename facade<
 			Tn...
 		>::derived_type::difference_type lhs,
-		iterator_facade<Tn...> const &rhs
+		facade<Tn...> const &rhs
 	);
 
 	template <typename Facade>
@@ -466,26 +378,26 @@ struct iterator_core_access {
 
 	template <typename... Tn>
 	static auto derived(
-		iterator_facade<Tn...> &f
-	) -> typename iterator_facade<Tn...>::derived_type &
+		facade<Tn...> &f
+	) -> typename facade<Tn...>::derived_type &
 	{
 		return *static_cast<
-			typename iterator_facade<Tn...>::derived_type *
+			typename facade<Tn...>::derived_type *
 		>(&f);
 	}
 
 	template <typename... Tn>
 	static auto derived(
-		iterator_facade<Tn...> &f
-	) -> typename iterator_facade<Tn...>::derived_type const &
+		facade<Tn...> &f
+	) -> typename facade<Tn...>::derived_type const &
 	{
 		return *static_cast<
-			typename iterator_facade<Tn...>::derived_type const *
+			typename facade<Tn...>::derived_type const *
 		>(&f);
 	}
 
 private:
-	iterator_core_access();
+	core_access();
 };
 
 /* Expected arguments in order:
@@ -496,7 +408,7 @@ private:
  * 5. Difference type
  */
 template <typename... Tn>
-struct iterator_facade {
+struct facade {
 	static_assert(
 		sizeof...(Tn) > 2,
 		"At least the derived type for CRTP, value type and category "
@@ -535,12 +447,12 @@ public:
 
 private:
 
-	typedef detail::iterator_facade_types<
-		x_value_type, x_category_type, reference_type, difference_type
+	typedef detail::facade_types<
+		x_value_type, x_category_type, reference, difference_type
 	> associated_types;
 
 	typedef detail::operator_arrow_dispatch<
-		reference_type, typename associated_types::pointer
+		reference, typename associated_types::pointer
 	> operator_arrow_dispatch_;
 
 public:
@@ -550,7 +462,7 @@ public:
 
 	reference operator*() const
 	{
-		return iterator_core_access::dereference(
+		return core_access::dereference(
 			this->derived()
 		);
 	}
@@ -573,40 +485,40 @@ public:
 		);
 	}
 
-	Derived &operator++()
+	derived_type &operator++()
 	{
-		iterator_core_access::increment(this->derived());
+		core_access::increment(this->derived());
 		return this->derived();
 	}
 
-	Derived &operator--()
+	derived_type &operator--()
 	{
-		iterator_core_access::decrement(this->derived());
+		core_access::decrement(this->derived());
 		return this->derived();
 	}
 
-	Derived operator--(int)
+	derived_type operator--(int)
 	{
-		Derived tmp(this->derived());
+		derived_type tmp(this->derived());
 		--*this;
 		return tmp;
 	}
 
-	Derived &operator+=(difference_type n)
+	derived_type &operator+=(difference_type n)
 	{
-		iterator_core_access::advance(this->derived(), n);
+		core_access::advance(this->derived(), n);
 		return this->derived();
 	}
 
-	Derived &operator-=(difference_type n)
+	derived_type &operator-=(difference_type n)
 	{
-		iterator_core_access::advance(this->derived(), -n);
+		core_access::advance(this->derived(), -n);
 		return this->derived();
 	}
 
-	Derived operator-(difference_type x) const
+	derived_type operator-(difference_type x) const
 	{
-		Derived result(this->derived());
+		derived_type result(this->derived());
 		return result -= x;
 	}
 };
@@ -686,7 +598,7 @@ template <
 		std::is_convertible<Reference, Value const &>,
 		mpl::not_<
 			std::is_convertible<
-				typename iterator_category_to_traversal<
+				typename category_to_traversal<
 					CategoryOrTraversal
 				>::type, forward_traversal_tag
 			>
@@ -704,12 +616,12 @@ template <
 
 template <typename... Tn>
 auto operator++(
-	iterator_facade<Tn...> &f, int
+	facade<Tn...> &f, int
 ) -> typename detail::postfix_increment_result<
-	typename iter_type::derived_type,
-	typename iter_type::x_value_type,
-	typename iter_type::reference,
-	typename iter_type::x_category_type
+	typename facade<Tn...>::derived_type,
+	typename facade<Tn...>::x_value_type,
+	typename facade<Tn...>::reference,
+	typename facade<Tn...>::x_category_type
 >::type
 {
 	typedef decltype(f) iter_type;
@@ -721,30 +633,30 @@ auto operator++(
 		typename iter_type::x_category_type
 	>::type tmp(*static_cast<typename iter_type::derived_type *>(&f));
 
-	++i;
+	++f;
 
 	return tmp;
 }
 
 template <typename... Tn, typename... Un>
 typename detail::enable_if_interoperable<
-	typename iterator_facade<Tn...>::derived_type,
-	typename iterator_facade<Un...>::derived_type,
+	typename facade<Tn...>::derived_type,
+	typename facade<Un...>::derived_type,
 	bool
 >::type operator==(
-	iterator_facade<Tn...> const &lhs,
-	iterator_facade<Un...> const &rhs
+	facade<Tn...> const &lhs,
+	facade<Un...> const &rhs
 )
 {
 	typedef typename decltype(lhs)::derived_type lh_derived;
 	typedef typename decltype(rhs)::derived_type rh_derived;
 
 	static_assert(
-		std::is_interoperable<lh_derived, rh_derived>::value,
-		"std::is_interoperable<lh_derived, rh_derived>::value"
+		detail::is_interoperable<lh_derived, rh_derived>::value,
+		"detail::is_interoperable<lh_derived, rh_derived>::value"
 	);
 
-	return iterator_core_access::equal(
+	return core_access::equal(
 		*static_cast<lh_derived const *>(&lhs),
 		*static_cast<rh_derived const *>(&rhs),
 		std::is_convertible<rh_derived, lh_derived>()
@@ -753,23 +665,23 @@ typename detail::enable_if_interoperable<
 
 template <typename... Tn, typename... Un>
 typename detail::enable_if_interoperable<
-	typename iterator_facade<Tn...>::derived_type,
-	typename iterator_facade<Un...>::derived_type,
+	typename facade<Tn...>::derived_type,
+	typename facade<Un...>::derived_type,
 	bool
 >::type operator!=(
-	iterator_facade<Tn...> const &lhs,
-	iterator_facade<Un...> const &rhs
+	facade<Tn...> const &lhs,
+	facade<Un...> const &rhs
 )
 {
 	typedef typename decltype(lhs)::derived_type lh_derived;
 	typedef typename decltype(rhs)::derived_type rh_derived;
 
 	static_assert(
-		std::is_interoperable<lh_derived, rh_derived>::value,
-		"std::is_interoperable<lh_derived, rh_derived>::value"
+		detail::is_interoperable<lh_derived, rh_derived>::value,
+		"detail::is_interoperable<lh_derived, rh_derived>::value"
 	);
 
-	return !iterator_core_access::equal(
+	return !core_access::equal(
 		*static_cast<lh_derived const *>(&lhs),
 		*static_cast<rh_derived const *>(&rhs),
 		std::is_convertible<rh_derived, lh_derived>()
@@ -778,23 +690,23 @@ typename detail::enable_if_interoperable<
 
 template <typename... Tn, typename... Un>
 typename detail::enable_if_interoperable<
-	typename iterator_facade<Tn...>::derived_type,
-	typename iterator_facade<Un...>::derived_type,
+	typename facade<Tn...>::derived_type,
+	typename facade<Un...>::derived_type,
 	bool
 >::type operator<(
-	iterator_facade<Tn...> const &lhs,
-	iterator_facade<Un...> const &rhs
+	facade<Tn...> const &lhs,
+	facade<Un...> const &rhs
 )
 {
 	typedef typename decltype(lhs)::derived_type lh_derived;
 	typedef typename decltype(rhs)::derived_type rh_derived;
 
 	static_assert(
-		std::is_interoperable<lh_derived, rh_derived>::value,
-		"std::is_interoperable<lh_derived, rh_derived>::value"
+		detail::is_interoperable<lh_derived, rh_derived>::value,
+		"detail::is_interoperable<lh_derived, rh_derived>::value"
 	);
 
-	return 0 > iterator_core_access::distance_from(
+	return 0 > core_access::distance_from(
 		*static_cast<lh_derived const *>(&lhs),
 		*static_cast<rh_derived const *>(&rhs),
 		std::is_convertible<rh_derived, lh_derived>()
@@ -803,23 +715,23 @@ typename detail::enable_if_interoperable<
 
 template <typename... Tn, typename... Un>
 typename detail::enable_if_interoperable<
-	typename iterator_facade<Tn...>::derived_type,
-	typename iterator_facade<Un...>::derived_type,
+	typename facade<Tn...>::derived_type,
+	typename facade<Un...>::derived_type,
 	bool
 >::type operator>(
-	iterator_facade<Tn...> const &lhs,
-	iterator_facade<Un...> const &rhs
+	facade<Tn...> const &lhs,
+	facade<Un...> const &rhs
 )
 {
 	typedef typename decltype(lhs)::derived_type lh_derived;
 	typedef typename decltype(rhs)::derived_type rh_derived;
 
 	static_assert(
-		std::is_interoperable<lh_derived, rh_derived>::value,
-		"std::is_interoperable<lh_derived, rh_derived>::value"
+		detail::is_interoperable<lh_derived, rh_derived>::value,
+		"detail::is_interoperable<lh_derived, rh_derived>::value"
 	);
 
-	return 0 < iterator_core_access::distance_from(
+	return 0 < core_access::distance_from(
 		*static_cast<lh_derived const *>(&lhs),
 		*static_cast<rh_derived const *>(&rhs),
 		std::is_convertible<rh_derived, lh_derived>()
@@ -828,23 +740,23 @@ typename detail::enable_if_interoperable<
 
 template <typename... Tn, typename... Un>
 typename detail::enable_if_interoperable<
-	typename iterator_facade<Tn...>::derived_type,
-	typename iterator_facade<Un...>::derived_type,
+	typename facade<Tn...>::derived_type,
+	typename facade<Un...>::derived_type,
 	bool
 >::type operator<=(
-	iterator_facade<Tn...> const &lhs,
-	iterator_facade<Un...> const &rhs
+	facade<Tn...> const &lhs,
+	facade<Un...> const &rhs
 )
 {
 	typedef typename decltype(lhs)::derived_type lh_derived;
 	typedef typename decltype(rhs)::derived_type rh_derived;
 
 	static_assert(
-		std::is_interoperable<lh_derived, rh_derived>::value,
-		"std::is_interoperable<lh_derived, rh_derived>::value"
+		detail::is_interoperable<lh_derived, rh_derived>::value,
+		"detail::is_interoperable<lh_derived, rh_derived>::value"
 	);
 
-	return 0 >= iterator_core_access::distance_from(
+	return 0 >= core_access::distance_from(
 		*static_cast<lh_derived const *>(&lhs),
 		*static_cast<rh_derived const *>(&rhs),
 		std::is_convertible<rh_derived, lh_derived>()
@@ -853,23 +765,23 @@ typename detail::enable_if_interoperable<
 
 template <typename... Tn, typename... Un>
 typename detail::enable_if_interoperable<
-	typename iterator_facade<Tn...>::derived_type,
-	typename iterator_facade<Un...>::derived_type,
+	typename facade<Tn...>::derived_type,
+	typename facade<Un...>::derived_type,
 	bool
 >::type operator>=(
-	iterator_facade<Tn...> const &lhs,
-	iterator_facade<Un...> const &rhs
+	facade<Tn...> const &lhs,
+	facade<Un...> const &rhs
 )
 {
 	typedef typename decltype(lhs)::derived_type lh_derived;
 	typedef typename decltype(rhs)::derived_type rh_derived;
 
 	static_assert(
-		std::is_interoperable<lh_derived, rh_derived>::value,
-		"std::is_interoperable<lh_derived, rh_derived>::value"
+		detail::is_interoperable<lh_derived, rh_derived>::value,
+		"detail::is_interoperable<lh_derived, rh_derived>::value"
 	);
 
-	return 0 <= iterator_core_access::distance_from(
+	return 0 <= core_access::distance_from(
 		*static_cast<lh_derived const *>(&lhs),
 		*static_cast<rh_derived const *>(&rhs),
 		std::is_convertible<rh_derived, lh_derived>()
@@ -878,27 +790,27 @@ typename detail::enable_if_interoperable<
 
 template <typename... Tn, typename... Un>
 typename detail::enable_if_interoperable<
-	typename iterator_facade<Tn...>::derived_type,
-	typename iterator_facade<Un...>::derived_type,
+	typename facade<Tn...>::derived_type,
+	typename facade<Un...>::derived_type,
 	typename mpl::apply<
 		detail::choose_difference_type,
-		typename iterator_facade<Tn...>::derived_type,
-		typename iterator_facade<Un...>::derived_type
+		typename facade<Tn...>::derived_type,
+		typename facade<Un...>::derived_type
 	>::type
 >::type operator-(
-	iterator_facade<Tn...> const &lhs,
-	iterator_facade<Un...> const &rhs
+	facade<Tn...> const &lhs,
+	facade<Un...> const &rhs
 )
 {
 	typedef typename decltype(lhs)::derived_type lh_derived;
 	typedef typename decltype(rhs)::derived_type rh_derived;
 
 	static_assert(
-		std::is_interoperable<lh_derived, rh_derived>::value,
-		"std::is_interoperable<lh_derived, rh_derived>::value"
+		detail::is_interoperable<lh_derived, rh_derived>::value,
+		"detail::is_interoperable<lh_derived, rh_derived>::value"
 	);
 	
-	return iterator_core_access::distance_from(
+	return core_access::distance_from(
 		*static_cast<lh_derived const *>(&lhs),
 		*static_cast<rh_derived const *>(&rhs),
 		std::is_convertible<rh_derived, lh_derived>()
@@ -907,9 +819,9 @@ typename detail::enable_if_interoperable<
 
 template <typename... Tn>
 auto operator+(
-	iterator_facade<Tn...> const &lhs,
-	typename iterator_facade<Tn...>::derived_type::difference_type rhs
-) -> lh_derived
+	facade<Tn...> const &lhs,
+	typename facade<Tn...>::derived_type::difference_type rhs
+) -> typename facade<Tn...>::derived_type
 {
 	typedef typename decltype(lhs)::derived_type lh_derived;
 	lh_derived tmp(static_cast<lh_derived const &>(lhs));
@@ -918,14 +830,14 @@ auto operator+(
 
 template <typename... Tn>
 auto operator+(
-	typename iterator_facade<Tn...>::derived_type::difference_type lhs,
-	iterator_facade<Tn...> const &rhs
-) -> rh_derived
+	typename facade<Tn...>::derived_type::difference_type lhs,
+	facade<Tn...> const &rhs
+) ->  typename facade<Tn...>::derived_type
 {
 	typedef typename decltype(rhs)::derived_type rh_derived;
 	rh_derived tmp(static_cast<rh_derived const &>(rhs));
 	return tmp += lhs; 
 }
 
-}}
+}}}
 #endif

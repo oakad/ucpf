@@ -9,13 +9,15 @@
 #define BOOST_TEST_MODULE yesod_mpl
 #include <boost/test/included/unit_test.hpp>
 
-#include <yesod/iterator_facade.hpp>
+#include <yesod/iterator/facade.hpp>
 
-namespace ucpf { namespace yesod {
+#include "test_iterator.hpp"
+
+namespace ucpf { namespace yesod { namespace iterator {
 namespace test {
 
 template <typename Ref>
-struct counter_iterator : iterator_facade<
+struct counter_iterator : facade<
 	counter_iterator<Ref>, int const, single_pass_traversal_tag, Ref
 > {
 	counter_iterator()
@@ -67,7 +69,7 @@ struct value
 	{}
 };
 
-struct input_iter : iterator_facade<
+struct input_iter : facade<
 	input_iter, value, single_pass_traversal_tag, value
 > {
 	input_iter()
@@ -97,7 +99,7 @@ struct wrapper {
 	wrapper(
 		wrapper<U> const &other,
 		typename std::enable_if<
-			std::is_convertible<U, T>
+			std::is_convertible<U, T>::value
 		>::type * = nullptr
 	) : m_x(other.m_x)
 	{}
@@ -105,7 +107,7 @@ struct wrapper {
 	T m_x;
 };
 
-struct iterator_with_proxy_reference : iterator_facade<
+struct iterator_with_proxy_reference : facade<
 	iterator_with_proxy_reference, wrapper<int>,
 	incrementable_traversal_tag, wrapper<int &>
 > {
@@ -130,13 +132,15 @@ BOOST_AUTO_TEST_CASE(iterator_facade_0)
 {
 	int state = 0;
 	test::readable_iterator_test(
-		test::counter_iterator<int const&>(&state), 0
+		test::counter_iterator<int const &>(&state), 0
 	);
 
 	state = 3;
-	test::readable_iterator_test(test::counter_iterator<proxy>(&state), 3);
+	test::readable_iterator_test(
+		test::counter_iterator<test::proxy>(&state), 3
+	);
 	test::writable_iterator_test(
-		test::counter_iterator<proxy>(&state), 9, 7
+		test::counter_iterator<test::proxy>(&state), 9, 7
 	);
 	BOOST_CHECK_EQUAL(state, 8);
 }
@@ -147,9 +151,9 @@ BOOST_AUTO_TEST_CASE(iterator_facade_1)
 	(*p).mutator();
 	p->mutator();
 
-	BOOST_CHECK(std::is_same<                                   \
+	BOOST_CHECK((std::is_same<                                  \
 		test::input_iter::pointer, decltype(p.operator->()) \
-	>::value);
+	>::value));
 }
 
 BOOST_AUTO_TEST_CASE(iterator_facade_2)
@@ -169,4 +173,4 @@ BOOST_AUTO_TEST_CASE(iterator_facade_2)
 
 }
 
-}}
+}}}
