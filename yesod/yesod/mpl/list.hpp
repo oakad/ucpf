@@ -64,16 +64,6 @@ struct list_iterator {
 
 }
 
-template <typename Node>
-struct deref<detail::list_iterator<Node>> {
-	typedef typename Node::item type;
-};
-
-template <typename Node>
-struct next<detail::list_iterator<Node>> {
-	typedef detail::list_iterator<typename Node::next> type;
-};
-
 template <typename T, typename Tag>
 struct lambda<detail::list_iterator<T>, Tag, long_<1>> {
 	typedef false_type is_le;
@@ -109,6 +99,21 @@ template <typename T>
 struct list_c<T> : list<> {
 	typedef list<> type;
 	typedef T value_type;
+};
+
+template <typename Node>
+struct deref<detail::list_iterator<Node>> {
+	typedef typename Node::item type;
+};
+
+template <>
+struct deref<detail::list_iterator<list<>>> {
+	typedef list<> type;
+};
+
+template <typename Node>
+struct next<detail::list_iterator<Node>> {
+	typedef detail::list_iterator<typename Node::next> type;
 };
 
 namespace detail {

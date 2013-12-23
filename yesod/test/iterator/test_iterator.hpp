@@ -11,10 +11,13 @@
 #if !defined(UCPF_YESOD_ITERATOR_TEST_ITERATOR_DEC_20_2013_2300)
 #define UCPF_YESOD_ITERATOR_TEST_ITERATOR_DEC_20_2013_2300
 
+#include <yesod/iterator/is_lvalue_iterator.hpp>
+
 namespace ucpf { namespace yesod { namespace iterator { namespace test {
 namespace is_incrementable_ {
 
 struct tag {};
+
 struct any {
 	template <typename T>
 	any(T const &);
@@ -24,25 +27,21 @@ tag operator++(any const &);
 tag operator++(any const &,int);
 tag operator,(tag, int);
 
-char (&check_(tag))[2];
-
 template <typename T>
-char check_(T const &);
+std::true_type check_(T const &);
+
+std::false_type check_(tag);
 
 template <typename T>
 struct impl {
 	static typename std::remove_cv<T>::type &x;
-	static constexpr bool value = sizeof(
-		check_((++x, 0))
-	) == 1;
+	static constexpr bool value = decltype(check_((++x, 0)))::value;
 };
 
 template <typename T>
 struct postfix_impl {
 	static typename std::remove_cv<T>::type &x;
-	static constexpr bool value = sizeof(
-		check_((x++, 0))
-	) == 1;
+	static constexpr bool value = decltype(check_((x++, 0)))::value;
 };
 }
 

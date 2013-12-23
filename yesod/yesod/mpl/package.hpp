@@ -85,7 +85,7 @@ template <
 namespace detail {
 
 template <typename... Tn>
-struct iterator_fwd {
+struct package_iterator {
 	typedef forward_iterator_tag category;
 };
 
@@ -114,7 +114,7 @@ struct begin_impl<package_tag> {
 
 	template<typename... Tn>
 	struct apply_impl<package<Tn...>> {  
-		typedef iterator_fwd<Tn...> type;
+		typedef package_iterator<Tn...> type;
 	};
 
 	template <typename Package>
@@ -142,7 +142,7 @@ struct end_impl<package_tag> {
 
 	template <typename... Tn>
 	struct apply_impl<package<Tn...>> {  
-		typedef iterator_fwd<> type;
+		typedef package_iterator<> type;
         };
 
 	template <typename Package>
@@ -226,13 +226,18 @@ struct size_impl<package_tag> {
 }
 
 template <typename T0, typename... Tn>
-struct deref<detail::iterator_fwd<T0, Tn...>> {
+struct deref<detail::package_iterator<T0, Tn...>> {
 	typedef T0 type;
 };
 
+template <>
+struct deref<detail::package_iterator<>> {
+	typedef package<> type;
+};
+
 template <typename T0, typename... Tn>
-struct next<detail::iterator_fwd<T0, Tn...>> {
-	typedef detail::iterator_fwd<Tn...> type;
+struct next<detail::package_iterator<T0, Tn...>> {
+	typedef detail::package_iterator<Tn...> type;
 };
 
 }}}

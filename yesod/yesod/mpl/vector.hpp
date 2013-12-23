@@ -123,7 +123,7 @@ struct vector_iterator {
 }
 
 template <typename Vector, long n_>
-struct next <detail::vector_iterator<Vector, n_>> {
+struct next<detail::vector_iterator<Vector, n_>> {
 	typedef detail::vector_iterator<Vector, (n_ + 1)> type;
 };
 
