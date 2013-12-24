@@ -225,6 +225,93 @@ struct choose_difference_type {
 	>;
 };
 
+template <typename Iterator>
+struct postfix_increment_proxy {
+private:
+	typedef typename std::iterator_traits<Iterator>::value_type value_type;
+	mutable value_type stored_value;
+
+public:
+	explicit postfix_increment_proxy(Iterator const &x)
+	: stored_value(*x)
+	{}
+
+	value_type &operator*() const
+	{
+		return this->stored_value;
+	}
+};
+
+template <typename Iterator>
+struct writable_postfix_increment_proxy {
+private:
+	typedef typename std::iterator_traits<Iterator>::value_type value_type;
+	mutable value_type stored_value;
+	Iterator stored_iterator;
+
+public:
+	explicit writable_postfix_increment_proxy(Iterator const &x)
+	: stored_value(*x), stored_iterator(x)
+	{}
+
+	writable_postfix_increment_proxy const &operator*() const
+	{
+		return *this;
+	}
+
+	operator value_type&() const
+	{
+		return stored_value;
+	}
+
+	template <typename T>
+	T const &operator=(T const& x) const
+	{
+		*this->stored_iterator = x;
+		return x;
+	}
+
+	template <typename T>
+	T &operator=(T &x) const
+	{
+		*this->stored_iterator = x;
+		return x;
+	}
+
+	operator Iterator const&() const
+	{
+		return stored_iterator;
+	}
+};
+
+template <typename Reference, typename Value>
+using is_non_proxy_reference = std::is_convertible<
+	typename std::remove_reference<Reference>::type const volatile *,
+	Value const volatile*
+>;
+
+template <
+	typename Iterator, typename Value, typename Reference,
+	typename CategoryOrTraversal
+> using postfix_increment_result = mpl::eval_if<
+	mpl::and_<
+		std::is_convertible<Reference, Value const &>,
+		mpl::not_<
+			std::is_convertible<
+				typename category_to_traversal<
+					CategoryOrTraversal
+				>::type, forward_traversal_tag
+			>
+		>
+	>,
+	mpl::if_<
+		is_non_proxy_reference<Reference, Value>,
+		postfix_increment_proxy<Iterator>,
+		writable_postfix_increment_proxy<Iterator>
+	>,
+	mpl::identity<Iterator>
+>;
+
 }
 
 template <typename... Tn>
@@ -491,6 +578,19 @@ public:
 		return this->derived();
 	}
 
+	typename detail::postfix_increment_result<
+		derived_type, x_value_type, reference, x_category_type
+	>::type operator++(int)
+	{
+		typename detail::postfix_increment_result<
+			derived_type, x_value_type, reference, x_category_type
+		>::type tmp(*static_cast<derived_type *>(this));
+
+		core_access::increment(this->derived());
+
+		return tmp;
+	}
+
 	derived_type &operator--()
 	{
 		core_access::decrement(this->derived());
@@ -522,121 +622,6 @@ public:
 		return result -= x;
 	}
 };
-
-namespace detail {
-
-template <typename Iterator>
-struct postfix_increment_proxy {
-private:
-	typedef typename std::iterator_traits<Iterator>::value_type value_type;
-	mutable value_type stored_value;
-
-public:
-	explicit postfix_increment_proxy(Iterator const &x)
-	: stored_value(*x)
-	{}
-
-	value_type &operator*() const
-	{
-		return this->stored_value;
-	}
-};
-
-template <typename Iterator>
-struct writable_postfix_increment_proxy {
-private:
-	typedef typename std::iterator_traits<Iterator>::value_type value_type;
-	mutable value_type stored_value;
-	Iterator stored_iterator;
-
-public:
-	explicit writable_postfix_increment_proxy(Iterator const &x)
-	: stored_value(*x), stored_iterator(x)
-	{}
-
-	writable_postfix_increment_proxy const &operator*() const
-	{
-		return *this;
-	}
-
-	operator value_type&() const
-	{
-		return stored_value;
-	}
-
-	template <typename T>
-	T const &operator=(T const& x) const
-	{
-		*this->stored_iterator = x;
-		return x;
-	}
-
-	template <typename T>
-	T &operator=(T &x) const
-	{
-		*this->stored_iterator = x;
-		return x;
-	}
-
-	operator Iterator const&() const
-	{
-		return stored_iterator;
-	}
-};
-
-template <typename Reference, typename Value>
-using is_non_proxy_reference = std::is_convertible<
-	typename std::remove_reference<Reference>::type const volatile *,
-	Value const volatile*
->;
- 
-template <
-	typename Iterator, typename Value, typename Reference,
-	typename CategoryOrTraversal
-> using postfix_increment_result = mpl::eval_if<
-	mpl::and_<
-		std::is_convertible<Reference, Value const &>,
-		mpl::not_<
-			std::is_convertible<
-				typename category_to_traversal<
-					CategoryOrTraversal
-				>::type, forward_traversal_tag
-			>
-		>
-	>,
-	mpl::if_<
-		is_non_proxy_reference<Reference, Value>,
-		postfix_increment_proxy<Iterator>,
-		writable_postfix_increment_proxy<Iterator>
-	>,
-	mpl::identity<Iterator>
->;
-
-}
-
-template <typename... Tn>
-auto operator++(
-	facade<Tn...> &f, int
-) -> typename detail::postfix_increment_result<
-	typename facade<Tn...>::derived_type,
-	typename facade<Tn...>::x_value_type,
-	typename facade<Tn...>::reference,
-	typename facade<Tn...>::x_category_type
->::type
-{
-	typedef decltype(f) iter_type;
-
-	typename detail::postfix_increment_result<
-		typename iter_type::derived_type,
-		typename iter_type::x_value_type,
-		typename iter_type::reference,
-		typename iter_type::x_category_type
-	>::type tmp(*static_cast<typename iter_type::derived_type *>(&f));
-
-	++f;
-
-	return tmp;
-}
 
 template <typename... Tn, typename... Un>
 typename detail::enable_if_interoperable<

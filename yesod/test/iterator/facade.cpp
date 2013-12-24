@@ -168,8 +168,8 @@ BOOST_AUTO_TEST_CASE(iterator_facade_2)
 	BOOST_CHECK_EQUAL(i.m_x, 1);
 
 	++i->m_x;
-	BOOST_CHECK_EQUAL(x, 1);
-	BOOST_CHECK_EQUAL(i.m_x, 1);
+	BOOST_CHECK_EQUAL(x, 2);
+	BOOST_CHECK_EQUAL(i.m_x, 2);
 
 }
 
