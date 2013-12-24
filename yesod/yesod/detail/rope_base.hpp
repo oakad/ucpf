@@ -32,7 +32,7 @@
 #include <functional>
 #include <algorithm>
 #include <yesod/counted_ptr.hpp>
-#include <boost/iterator/iterator_facade.hpp>
+#include <yesod/iterator/facade.hpp>
 
 namespace ucpf { namespace yesod {
 
@@ -674,9 +674,9 @@ public:
 		size_type pos;
 	};
 
-	struct const_iterator : public boost::iterator_facade <
+	struct const_iterator : yesod::iterator::facade<
 		const_iterator, value_type const,
-		boost::random_access_traversal_tag
+		yesod::iterator::random_access_traversal_tag
 	>, iterator_base {
 		const_iterator() = default;
 
@@ -694,7 +694,7 @@ public:
 
 	private:
 		friend struct rope;
-		friend class boost::iterator_core_access;
+		friend struct yesod::iterator::core_access;
 
 		const_iterator(rope_rep_ptr const &root_, size_type pos_)
 		: iterator_base(root_, pos_)
@@ -742,9 +742,9 @@ public:
 		}
 	};
 
-	struct iterator : public boost::iterator_facade <
+	struct iterator : yesod::iterator::facade<
 		iterator, reference,
-		boost::random_access_traversal_tag
+		yesod::iterator::random_access_traversal_tag
 	>, iterator_base {
 		iterator()
 		: root_rope(nullptr)
@@ -760,7 +760,7 @@ public:
 
 	private:
 		friend struct rope;
-		friend class boost::iterator_core_access;
+		friend struct yesod::iterator::core_access;
 
 		iterator(rope_type *r, size_type pos_)
 		: iterator_base(std::get<0>(r->treeplus), pos_), root_rope(r)

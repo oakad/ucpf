@@ -10,9 +10,10 @@
 #define UBB_MEMFD_DEC_05_2013_1545
 
 #include <ext/string_map.hpp>
-#include <cstring>
-#include <mutex>
+#include <yesod/shared_mutex.hpp>
+
 #include <map>
+#include <cstring>
 
 namespace ubb {
 
@@ -78,7 +79,6 @@ class memfd {
 		virtual void truncate(off_t length);
 
 		int block_order;
-		mutable std::mutex lock;
 		std::map<off_t, char *> data;
 	};
 
@@ -87,7 +87,7 @@ class memfd {
 
 		node_type open(std::string const &name)
 		{
-			std::lock_guard<std::mutex> l_g(lock);
+			ucpf::yesod::shared_lock<decltype(lock)> l_g(lock);
 			node_type *rv(files.find(name));
 			if (rv)
 				return *rv;
@@ -97,7 +97,7 @@ class memfd {
 
 		bool create(std::string const &name, node_type &node_)
 		{
-			std::lock_guard<std::mutex> l_g(lock);
+			std::unique_lock<decltype(lock)> l_g(lock);
 			auto v(files.at(name));
 			if (!v) {
 				v.swap(node_);
@@ -106,7 +106,7 @@ class memfd {
 				return false;
 		}
 
-		std::mutex lock;
+		ucpf::yesod::shared_mutex lock;
 		ext::string_map<char, node_type> files;
 	} base;
 
@@ -152,7 +152,7 @@ public:
 
 	static void remove(std::string const &name)
 	{
-		std::lock_guard<std::mutex> l_g(base.lock);
+		std::unique_lock<decltype(base.lock)> l_g(base.lock);
 		base.files.remove(name);
 	}
 
@@ -198,7 +198,6 @@ public:
 				node
 			));
 			if (x_node) {
-				std::lock_guard<std::mutex> l_g(x_node->lock);
 				rv.size = node->size;
 				rv.read_only = false;
 			} else

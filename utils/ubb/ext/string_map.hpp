@@ -20,7 +20,7 @@
 #if !defined(UBB_EXT_STRING_MAP_DEC_05_2013_1820)
 #define UBB_EXT_STRING_MAP_DEC_05_2013_1820
 
-#include <ext/is_sequence.hpp>
+#include <yesod/is_sequence.hpp>
 #include <ext/tst.hpp>
 
 #include <initializer_list>

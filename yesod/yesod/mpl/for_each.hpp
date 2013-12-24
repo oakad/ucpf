@@ -23,7 +23,6 @@
 #include <yesod/mpl/lambda.hpp>
 
 #include <functional>
-#include <boost/utility/value_init.hpp>
 
 namespace ucpf { namespace yesod { namespace mpl {
 namespace detail {
@@ -35,13 +34,13 @@ inline F &unwrap(F &f, int)
 }
 
 template <typename F>
-inline F &unwrap(boost::reference_wrapper<F> &f, int)
+inline F &unwrap(std::reference_wrapper<F> &f, int)
 {
 	return f;
 }
 
 template <typename F>
-inline F &unwrap(boost::reference_wrapper<F> const &f, int)
+inline F &unwrap(std::reference_wrapper<F> const &f, int)
 {
 	return f;
 }
@@ -68,8 +67,8 @@ struct for_each_impl<false> {
 		typedef typename deref<Iterator>::type item;
 		typedef typename apply<TransformFunc, item>::type arg;
 
-		boost::value_initialized<arg> x;
-		unwrap(f, 0)(get(x));
+		arg x{};
+		unwrap(f, 0)(x);
 
 		typedef typename next<Iterator>::type iter;
 		for_each_impl<
