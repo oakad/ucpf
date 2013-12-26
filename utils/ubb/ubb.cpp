@@ -7,12 +7,14 @@
  */
 
 #include <jsapi.h>
-#include <sqlite3.h>
+#include <sqlite.hpp>
+
+#include <cerrno>
+#include <cstdlib>
 
 namespace {
 
 constexpr int jsvm_err_offset = -32;
-constexpr int db_err_offset = -64;
 
 
 struct ubb_js {
@@ -113,63 +115,18 @@ JSFunctionSpec ubb_js::functions[] = {
 	JS_FS_END
 };
 
-struct ubb_db {
-	static void sqlite_error_reporter(
-		void *ctx, int err, char const *message
-	);
-
-	ubb_db()
-	:error(0)
-	{
-		int rv;
-		rv = sqlite3_config(SQLITE_CONFIG_MULTITHREAD);
-		if (rv != SQLITE_OK) {
-			error = db_err_offset - rv;
-			return;
-		}
-
-		rv = sqlite3_config(
-			SQLITE_CONFIG_LOG, &ubb_db::sqlite_error_reporter,
-			nullptr
-		);
-		if (rv != SQLITE_OK) {
-			error = db_err_offset - rv;
-			return;
-		}
-
-		rv = sqlite3_config(SQLITE_CONFIG_URI, 1);
-		if (rv != SQLITE_OK) {
-			error = db_err_offset - rv;
-			return;
-		}
-
-		rv = sqlite3_initialize();
-		if (rv != SQLITE_OK)
-			error = db_err_offset - rv;
-	}
-
-	~ubb_db()
-	{
-		sqlite3_shutdown();
-	}
-
-	int error;
-};
-
-void ubb_db::sqlite_error_reporter(
-	void *ctx, int err, char const *message
-)
-{
-	printf("js: %s (%d)\n", message, err);
 }
 
+static void sqlite3_shutdown_()
+{
+	sqlite3_shutdown();
 }
 
 int main(int argc, char **argv)
 {
-	ubb_db db;
-	if (db.error)
-		return db.error;
+	if (!ubb::sqlite_init())
+		return -ELIBBAD;
+	std::atexit(sqlite3_shutdown_);
 
 	ubb_js app;
 	if (app.error)
@@ -183,6 +140,6 @@ int main(int argc, char **argv)
 	jsval args[] = { STRING_TO_JSVAL(msg1), STRING_TO_JSVAL(msg2) };
 	jsval rv = JSVAL_VOID;
 	JS_CallFunctionName(app.ctx, app.g_obj, "print", 2, args, &rv);
-	printf("aaa\n");
+	ubb::test();
 	return 0;
 }

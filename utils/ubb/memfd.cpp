@@ -7,9 +7,12 @@
  */
 
 #include "memfd.hpp"
+
 #include <algorithm>
 
 namespace ubb {
+
+memfd::memfd_base memfd::base;
 
 size_t memfd::rw_data_node::read(char *buf, size_t count, off_t offset) const
 {

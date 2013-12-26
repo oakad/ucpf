@@ -26,7 +26,7 @@ sub check_line_end {
 
 ($s_name) = @ARGV;
 printf("struct %s {\n\tstatic char const data alignas(8) [];\n", $s_name);
-printf("\tstatic size_t const size;\n};\n\n");
+printf("\tstatic unsigned long const size;\n};\n\n");
 printf("char const %s::data alignas(8) [] =\n", $s_name);
 
 printf("\t\"");
@@ -55,5 +55,5 @@ while (1) {
 	}
 }
 printf("\";\n\n");
-printf("size_t const %s::size = %d;\n", $s_name, $total_chars);
+printf("unsigned long const %s::size = %d;\n", $s_name, $total_chars);
 #printf("\", %d\n", ${total_chars});

@@ -13,6 +13,7 @@
 
 namespace ubb {
 
+bool sqlite_init();
 void test();
 
 }

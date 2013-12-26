@@ -17,7 +17,8 @@
 
 namespace ubb {
 
-class memfd {
+struct memfd {
+private:
 	struct data_node {
 		data_node(size_t size_)
 		: size(size_)
@@ -98,7 +99,7 @@ class memfd {
 		bool create(std::string const &name, node_type &node_)
 		{
 			std::unique_lock<decltype(lock)> l_g(lock);
-			auto v(files.at(name));
+			auto &v(files.at(name));
 			if (!v) {
 				v.swap(node_);
 				return true;
@@ -111,25 +112,22 @@ class memfd {
 	} base;
 
 	memfd_base::node_type node;
-	bool writer;
 
 public:
-	template <typename T, bool ReadOnly>
+	template <bool ReadOnly>
 	static memfd create(
-		std::string const &name, T const &data_
+		std::string const &name, char const *data, size_t size
 	)
 	{
 		memfd rv;
 		memfd_base::node_type n_data;
 
 		if (ReadOnly) {
-			auto s_data(std::make_shared<ro_data_node>(
-				data_.data, data_.size()
-			));
+			auto s_data(std::make_shared<ro_data_node>(data, size));
 			n_data = std::dynamic_pointer_cast<data_node>(s_data);
 		} else {
 			auto s_data(std::make_shared<rw_data_node>());
-			s_data->write(data_.data, data_.size, 0);
+			s_data->write(data, size, 0);
 			n_data = std::dynamic_pointer_cast<data_node>(s_data);
 		}
 
@@ -185,13 +183,14 @@ public:
 
 	struct stat {
 		size_t size;
+		size_t block_size;
 		bool read_only;
 		bool exists;
 	};
 
 	stat fstat() const
 	{
-		stat rv({0, (bool)node, true});
+		stat rv({0, 0, true, (bool)node});
 
 		if (rv.exists) {
 			auto x_node(std::dynamic_pointer_cast<rw_data_node>(
@@ -202,6 +201,9 @@ public:
 				rv.read_only = false;
 			} else
 				rv.size = node->size;
+
+			rv.block_size = rv.size > (1 << 20)
+					? (1 << 12) : (1 << 9);
 		}
 		return rv;
 	}
