@@ -6,14 +6,14 @@
  * shed by the Free Software Foundation.
  */
 
-#if !defined(UBB_SQLITE_NOV_29_2013_2300)
-#define UBB_SQLITE_NOV_29_2013_2300
+#if !defined(UBB_JS_SQLITE_DEC_27_2013_1845)
+#define UBB_JS_SQLITE_DEC_27_2013_1845
+
+#include <jsapi.h>
 
 namespace ubb {
 
-bool sqlite_init();
-void sqlite_shutdown();
-void test();
+bool js_sqlite_class_init(JSContext *ctx, JSObject *obj);
 
 }
 #endif

@@ -6,8 +6,8 @@
  * shed by the Free Software Foundation.
  */
 
-#include <jsapi.h>
 #include <sqlite.hpp>
+#include <js_sqlite.hpp>
 
 #include <cerrno>
 #include <cstdlib>
@@ -53,6 +53,9 @@ struct ubb_js {
 
 		if (!JS_DefineFunctions(ctx, g_obj, functions))
 			error = jsvm_err_offset - 5;
+
+		if (!ubb::js_sqlite_class_init(ctx, g_obj))
+			error = jsvm_err_offset - 6;
 	}
 
 	~ubb_js()
@@ -73,13 +76,21 @@ struct ubb_js {
 };
 
 JSClass ubb_js::global_class = {
-	"global",
-	JSCLASS_NEW_RESOLVE | JSCLASS_GLOBAL_FLAGS,
-	JS_PropertyStub, JS_PropertyStub,
-	JS_PropertyStub, JS_StrictPropertyStub,
-	JS_EnumerateStub, JS_ResolveStub,
-	JS_ConvertStub, nullptr,
-	JSCLASS_NO_OPTIONAL_MEMBERS
+	.name = "global",
+	.flags = JSCLASS_NEW_RESOLVE | JSCLASS_GLOBAL_FLAGS,
+	.addProperty = JS_PropertyStub,
+	.delProperty = JS_PropertyStub,
+	.getProperty = JS_PropertyStub,
+	.setProperty = JS_StrictPropertyStub,
+	.enumerate = JS_EnumerateStub,
+	.resolve = JS_ResolveStub,
+	.convert = JS_ConvertStub,
+	.finalize = nullptr,
+	.checkAccess = nullptr,
+	.call = nullptr,
+	.hasInstance = nullptr,
+	.construct = nullptr,
+	.trace = nullptr
 };
 
 void ubb_js::js_error_reporter(
@@ -117,16 +128,11 @@ JSFunctionSpec ubb_js::functions[] = {
 
 }
 
-static void sqlite3_shutdown_()
-{
-	sqlite3_shutdown();
-}
-
 int main(int argc, char **argv)
 {
 	if (!ubb::sqlite_init())
 		return -ELIBBAD;
-	std::atexit(sqlite3_shutdown_);
+	std::atexit(ubb::sqlite_shutdown);
 
 	ubb_js app;
 	if (app.error)

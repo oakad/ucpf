@@ -10,7 +10,7 @@ LIBS   += $(JS_LIBS) $(SQLITE_LIBS)
 
 CXX = g++
 
-OBJ = ubb.o sqlite.o memfd.o ubb_base.o
+OBJ = ubb.o sqlite.o js_sqlite.o memfd.o ubb_base.o
 
 ubb : $(OBJ)
 	$(CXX) $(LDFLAGS) $(LIBS) -o $@ $^
@@ -18,6 +18,8 @@ ubb : $(OBJ)
 memfd.o : memfd.hpp
 
 sqlite.o : sqlite.hpp memfd.hpp
+
+js_sqlite.o : js_sqlite.hpp
 
 ubb_base.cpp : ubb_base.bin
 	./bin2cstr.pl ubb_base_data < $< > $@

@@ -9,6 +9,8 @@
 #include "memfd.hpp"
 #include "sqlite.hpp"
 
+#include <sqlite3.h>
+
 #include <random>
 #include <thread>
 
@@ -203,7 +205,13 @@ struct memfs {
 	static int lock(sqlite3_file *file, int state)
 	{
 		auto self(reinterpret_cast<memfs *>(file));
-		printf("xx lock %p\n", self);
+		printf("xx lock %p, %d\n", self, state);
+		/*
+		switch (state) {
+		case SHARED_LOCK:
+		
+		}
+		*/
 		return SQLITE_OK;
 	}
 
@@ -351,6 +359,11 @@ bool sqlite_init()
 		return false;
 	}
 	return true;
+}
+
+void sqlite_shutdown()
+{
+	sqlite3_shutdown();
 }
 
 int test_cb(void *ctx, int col_cnt, char **rows, char **headers)
