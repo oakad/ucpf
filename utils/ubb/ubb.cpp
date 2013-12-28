@@ -9,8 +9,12 @@
 #include <sqlite.hpp>
 #include <js_sqlite.hpp>
 
+#include <string>
 #include <cerrno>
 #include <cstdlib>
+
+#include <readline/history.h>
+#include <readline/readline.h>
 
 namespace {
 
@@ -126,8 +130,75 @@ JSFunctionSpec ubb_js::functions[] = {
 	JS_FS_END
 };
 
+bool stop_and_exit = false;
+
+void interactive_shell(JSContext *ctx, JSObject *obj)
+{
+	char *str_in(nullptr);
+	std::string str_buf;
+	jsval rv;
+
+	while (!stop_and_exit) {
+		str_in = readline("ubb> ");
+		if (!str_in)
+			break;
+
+		if (!str_buf.empty())
+			str_buf.push_back(' ');
+
+		str_buf.append(str_in);
+		free(str_in);
+
+		while (JS_TRUE != JS_BufferIsCompilableUnit(
+			ctx, JS_TRUE, obj, str_buf.c_str(), str_buf.size()
+		)) {
+			str_in = readline("");
+			if (!str_in)
+				return;
+
+			if (!str_buf.empty())
+				str_buf.push_back(' ');
+
+			str_buf.append(str_in);
+			free(str_in);
+		}
+
+		if (JS_EvaluateScript(
+			ctx, obj, str_buf.c_str(), str_buf.size(),
+			nullptr, 0, &rv
+		) && !JSVAL_IS_VOID(rv)) {
+			JS::RootedString str_out(
+				ctx, JS_ValueToString(ctx, rv)
+			);
+			auto p_str(JS_EncodeString(ctx, str_out));
+			printf("%s\n", p_str);
+			JS_free(ctx, p_str);
+		}
+		add_history(str_buf.c_str());
+		str_buf.clear();
+	}
 }
 
+}
+/*
+ * base 85
+
+ 0 - 9: 0 1 2 3 4 5 6 7 8 9
+10 - 19: a b c d e f g h i j
+20 - 29: k l m n o p q r s t
+30 - 39: u v w x y z A B C D
+40 - 49: E F G H I J K L M N
+50 - 59: O P Q R S T U V W X
+60 - 69: Y Z . - : + = ^ ! /
+70 - 79: * ? & < > ( ) [ ] {
+80 - 84: } @ % $ #
+
+
+0x86 | 0x4F | 0xD2 | 0x6F | 0xB5 | 0x59 | 0xF7 | 0x5B
+
+H | e | l | l | o | W | o | r | l | d
+
+*/
 int main(int argc, char **argv)
 {
 	if (!ubb::sqlite_init())
@@ -146,6 +217,7 @@ int main(int argc, char **argv)
 	jsval args[] = { STRING_TO_JSVAL(msg1), STRING_TO_JSVAL(msg2) };
 	jsval rv = JSVAL_VOID;
 	JS_CallFunctionName(app.ctx, app.g_obj, "print", 2, args, &rv);
-	ubb::test();
+	//ubb::test();
+	interactive_shell(app.ctx, app.g_obj);
 	return 0;
 }

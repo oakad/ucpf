@@ -6,7 +6,7 @@ SQLITE_LIBS   = $(shell pkg-config --libs sqlite3)
 CXXFLAGS += -std=c++11 -g -pthread -I.
 LDFLAGS += -std=c++11 -g -pthread
 CXXFLAGS += $(JS_CFLAGS) $(SQLITE_CFLAGS)
-LIBS   += $(JS_LIBS) $(SQLITE_LIBS)
+LIBS   += $(JS_LIBS) $(SQLITE_LIBS) -lreadline
 
 CXX = g++
 
