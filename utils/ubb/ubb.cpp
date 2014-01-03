@@ -180,25 +180,7 @@ void interactive_shell(JSContext *ctx, JSObject *obj)
 }
 
 }
-/*
- * base 85
 
- 0 - 9: 0 1 2 3 4 5 6 7 8 9
-10 - 19: a b c d e f g h i j
-20 - 29: k l m n o p q r s t
-30 - 39: u v w x y z A B C D
-40 - 49: E F G H I J K L M N
-50 - 59: O P Q R S T U V W X
-60 - 69: Y Z . - : + = ^ ! /
-70 - 79: * ? & < > ( ) [ ] {
-80 - 84: } @ % $ #
-
-
-0x86 | 0x4F | 0xD2 | 0x6F | 0xB5 | 0x59 | 0xF7 | 0x5B
-
-H | e | l | l | o | W | o | r | l | d
-
-*/
 int main(int argc, char **argv)
 {
 	if (!ubb::sqlite_init())

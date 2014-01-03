@@ -1,2 +1,0 @@
-
-lib yesod : [ glob *.cpp ] : <include>.. ;
