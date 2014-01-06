@@ -10,10 +10,7 @@ alias test_case : : : : <include>..
 run base86.cpp : : test_case ;
 run float.cpp : : test_case ;
 run is_sequence.cpp : : test_case ;
-run rcu.cpp : : test_case ;
 run rope.cpp : : test_case ;
 run shared_mutex.cpp : : test_case ;
-run stack.cpp : : test_case ;
-run stack_decs.cpp : : test_case ;
+run sparse_vector.cpp : : test_case ;
 run static_log2.cpp : : test_case ;
-run tls.cpp : : test_case ;
