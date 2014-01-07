@@ -14,3 +14,4 @@ run rope.cpp : : test_case ;
 run shared_mutex.cpp : : test_case ;
 run sparse_vector.cpp : : test_case ;
 run static_log2.cpp : : test_case ;
+run string_map.cpp : : test_case ;

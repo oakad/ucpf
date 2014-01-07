@@ -21,13 +21,25 @@ struct s {
 	s()
 	: count0(global_count), count1(global_count * 5)
 	{
+		printf("s t %p %d %d\n", this, count0, count1);
 		++global_count;
+	}
+
+	s(s const &other)
+	: count0(other.count0), count1(other.count1)
+	{
+		printf("s c %p %d %d\n", this, count0, count1);
+	}
+
+	~s()
+	{
+		printf("s d %p %d %d\n", this, count0, count1);
 	}
 };
 
 int s::global_count = 0;
 
-struct char_vector_policy : default_sparse_vector_policy<char> {
+struct char_vector_policy : default_sparse_vector_policy {
 	constexpr static size_t data_node_order = 8;
 };
 
@@ -37,5 +49,15 @@ BOOST_AUTO_TEST_CASE(sparse_vector_0)
 {
 	sparse_vector<test::s> v0;
 	sparse_vector<char, test::char_vector_policy> v1;
+
+	v0.push_back(test::s());
+	v0.push_back(test::s());
+	v0.push_back(test::s());
+	BOOST_CHECK_EQUAL(v0[1].count0, 1);
+	v1.push_back('a');
+	v1.push_back('b');
+	v1.push_back('c');
+	BOOST_CHECK_EQUAL(v1[2], 'c');
 }
+
 }}
