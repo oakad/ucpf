@@ -42,6 +42,20 @@ template <
 	typedef typename allocator_type::const_reference const_reference;
 	typedef typename allocator_traits_type::size_type size_type;
 
+	string_map()
+	: trie_root(-1, 0)
+	{}
+
+	template <typename Iterator, typename... Args>
+	reference emplace_at(
+		Iterator first, Iterator last, Args&&... args
+	)
+	{
+		for (; first != last; ++first) {
+			
+		}
+	}
+
 private:
 	struct value_pair {
 		union {
@@ -78,6 +92,7 @@ private:
 		data_node_order = Policy::value_node_order;
 	};
 
+	std::pair<long, long> trie_root;
 	sparse_vector<std::pair<long, long>, trie_vector_policy> trie;
 	sparse_vector<value_pair, value_vector_policy> values;
 };

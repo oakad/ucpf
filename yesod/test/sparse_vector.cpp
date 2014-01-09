@@ -50,14 +50,14 @@ BOOST_AUTO_TEST_CASE(sparse_vector_0)
 	sparse_vector<test::s> v0;
 	sparse_vector<char, test::char_vector_policy> v1;
 
-	v0.push_back(test::s());
-	v0.push_back(test::s());
-	v0.push_back(test::s());
-	BOOST_CHECK_EQUAL(v0[1].count0, 1);
-	v1.push_back('a');
-	v1.push_back('b');
-	v1.push_back('c');
-	BOOST_CHECK_EQUAL(v1[2], 'c');
+	v0.emplace_at(10, test::s());
+	v0.emplace_at(20, test::s());
+	v0.emplace_at(30, test::s());
+	BOOST_CHECK_EQUAL(v0[20].count0, 1);
+	v1.emplace_at(5, 'a');
+	v1.emplace_at(10, 'b');
+	v1.emplace_at(15, 'c');
+	BOOST_CHECK_EQUAL(v1[15], 'c');
 }
 
 }}

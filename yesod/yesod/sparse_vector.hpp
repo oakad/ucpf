@@ -39,36 +39,74 @@ template <
 	typedef typename allocator_traits_type::size_type size_type;
 
 	sparse_vector()
-	: root_node(nullptr, allocator_type()), size(0), height(0)
+	: root_node(nullptr, allocator_type()), height(0)
 	{}
+
+	~sparse_vector()
+	{
+		clear();
+	}
+
+	void swap(sparse_vector &other)
+	{
+		std::swap(height, other.height);
+
+		if (allocator_traits_type::propagate_on_container_swap::value)
+			std::swap(root_node, other.root_node);
+		else
+			std::swap(
+				std::get<0>(root_node),
+				std::get<0>(other.root_node)
+			);
+	}
+
+	void clear()
+	{
+		destroy_ptr_node(std::get<0>(root_node), height);
+		std::get<0>(root_node) = nullptr;
+		height = 0;
+	}
+
+	bool empty() const
+	{
+		return !height;
+	}
 
 	reference operator[](size_type pos)
 	{
-		auto p(data_node_at(pos));
+		auto node(data_node_at(pos));
 		return reinterpret_cast<reference>(
-			p->items[node_offset(pos, 1)]
+			node->items[node_offset(pos, 1)]
 		);
 	}
 
 	const_reference operator[](size_type pos) const
 	{
-		auto p(data_node_at(pos));
+		auto node(data_node_at(pos));
 		return reinterpret_cast<const_reference>(
-			p->items[node_offset(pos, 1)]
+			node->items[node_offset(pos, 1)]
 		);
 	}
 
-	void push_back(value_type const &v)
+	reference at(size_type pos)
 	{
-		auto p(data_node_alloc_at(size));
-		allocator_traits_type::construct(
-			std::get<1>(root_node),
-			p->get_raw(
-				std::get<1>(root_node),
-				node_offset(size, 1)
-			), v
+		auto node(data_node_alloc_at(pos));
+		return reinterpret_cast<reference>(
+			node->items[node_offset(pos, 1)]
 		);
-		++size;
+	}
+
+	template <typename... Args>
+	reference emplace_at(size_type pos, Args&&... args)
+	{
+		auto node(data_node_alloc_at(pos));
+		auto p(node->get_raw(
+			std::get<1>(root_node), node_offset(pos, 1)
+		));
+		allocator_traits_type::construct(
+			std::get<1>(root_node), p, std::forward<Args>(args)...
+		);
+		return *p;
 	}
 
 private:
@@ -77,13 +115,26 @@ private:
 	>::type value_storage_type;
 
 	std::tuple<void *, allocator_type> root_node;
-	size_type size;
 	size_type height;
 
-	struct data_node_triv {
+	struct data_node {
+		typedef typename sparse_vector::allocator_traits_type
+		::template rebind_alloc<data_node> allocator_type;
+
+		typedef typename sparse_vector::allocator_traits_type
+		::template rebind_traits<data_node> allocator_traits_type;
+
 		value_type *get_raw(allocator_type &a, size_type pos)
 		{
-			return reinterpret_cast<value_type *>(&items[pos]);
+			auto p(reinterpret_cast<value_type *>(&items[pos]));
+			allocator_traits_type::destroy(a, p);
+			return p;
+		}
+
+		data_node(allocator_type &a)
+		{
+			for (auto &p: items)
+				allocator_traits_type::construct(a, &p);
 		}
 
 		std::array<
@@ -91,64 +142,79 @@ private:
 		> items;
 	};
 
-	struct data_node_obj : data_node_triv {
-		value_type *get_raw(allocator_type &a, size_type pos)
-		{
-			auto rv(reinterpret_cast<value_type *>(
-				&data_node_triv::items[pos]
-			));
-
-			if (item_init.test(pos)) {
-				allocator_traits_type::destroy(a, rv);
-				item_init.reset(pos);
-			}
-			return rv;
-		}
-
-		std::bitset<(1UL << Policy::data_node_order)> item_init;
-	};
-
-	typedef typename std::conditional<
-		std::is_trivial<value_type>::value,
-		data_node_triv, data_node_obj
-	>::type data_node;
-
 	data_node *make_data_node()
 	{
-		typename allocator_traits_type::template rebind_alloc<
-			data_node
-		> node_alloc(
-			std::get<1>(root_node)
-		);
-		typedef typename allocator_traits_type::template rebind_traits<
-			data_node
-		> alloc_traits;
+		data_node::allocator_type node_alloc(std::get<1>(root_node));
 
-		auto rv(alloc_traits::allocate(node_alloc, 1));
-		alloc_traits::construct(node_alloc, rv);
-		return rv;
+		auto node(data_node::allocator_traits_type::allocate(
+			node_alloc, 1
+		));
+		data_node::allocator_traits_type::construct(
+			node_alloc, node, std::get<1>(root_node)
+		);
+		return node;
+	}
+
+	void destroy_data_node(void *raw_node)
+	{
+		if (!raw_node)
+			return;
+
+		auto node(reinterpret_cast<data_node *>(raw_node));
+		for (auto &p: items)
+			allocator_traits_type::destroy(a, &p);
+
+		data_node::allocator_type node_alloc(std::get<1>(root_node));
+
+		data_node::allocator_traits_type::destroy(node_alloc, node);
+		data_node::allocator_traits_type::deallocate(
+			node_alloc, node, 1
+		);
 	}
 
 	struct ptr_node {
+		typedef typename sparse_vector::allocator_traits_type
+		::template rebind_alloc<ptr_node> allocator_type;
+
+		typedef typename sparse_vector::allocator_traits_type
+		::template rebind_traits<ptr_node> allocator_traits_type;
+
 		std::array<void *, (1UL << Policy::ptr_node_order)> items;
 	};
 
 	ptr_node *make_ptr_node()
 	{
-		typename allocator_traits_type::template rebind_alloc<
-			ptr_node
-		> node_alloc(std::get<1>(root_node));
+		ptr_node::allocator_type node_alloc(std::get<1>(root_node));
 
-		typedef typename allocator_traits_type::template rebind_traits<
-			ptr_node
-		> alloc_traits;
-
-		auto rv(alloc_traits::allocate(node_alloc, 1));
-		alloc_traits::construct(node_alloc, rv);
+		auto rv(ptr_node::allocator_traits_type::allocate(
+			node_alloc, 1
+		));
+		ptr_node::allocator_traits_type::construct(node_alloc, rv);
 		std::fill(rv->items.begin(), rv->items.end(), nullptr);
 		return rv;
 	}
 
+	void destroy_ptr_node(void *raw_node, size_type height)
+	{
+		if (!raw_node)
+			return;
+
+		if (height == 1) {
+			destroy_data_node(raw_node);
+			return;
+		}
+
+		auto node(reinterpret_cast<ptr_node *>(raw_node));
+		for (auto p: items)
+			destroy_ptr_node(p, height - 1);
+
+		ptr_node::allocator_type node_alloc(std::get<1>(root_node));
+
+		ptr_node::allocator_traits_type::destroy(node_alloc, node);
+		ptr_node::allocator_traits_type::deallocate(
+			node_alloc, node, 1
+		);
+	}
 	static size_type node_offset(size_type pos, size_type h)
 	{
 		auto l_pos(pos & ((1UL << Policy::data_node_order) - 1));
