@@ -72,6 +72,10 @@ template <
 		return !height;
 	}
 
+	void discard(std::function<bool (value_type const &)> pred, bool reset);
+
+	void shrink_to_fit(size_type first, size_type last);
+
 	reference operator[](size_type pos)
 	{
 		auto node(data_node_at(pos));
