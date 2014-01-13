@@ -39,11 +39,11 @@ template <
 
 	typedef typename std::allocator_traits<
 		typename Policy::allocator_type
-	>::template rebind_traits<value_type> allocator_traits_type;
+	>::template rebind_traits<value_type> allocator_traits;
 
 	typedef typename allocator_type::reference reference;
 	typedef typename allocator_type::const_reference const_reference;
-	typedef typename allocator_traits_type::size_type size_type;
+	typedef typename allocator_traits::size_type size_type;
 
 	string_map()
 	: trie_root(3, 0)
@@ -98,21 +98,133 @@ private:
 		pair_type &p, Iterator first, Iterator last, Args&&... args
 	)
 	{
-		
-		if ((last - first) > Policy::short_suffix_length) {
-			try {
-			} catch(...)
+		typedef typename value_pair::allocator_traits
+		vp_allocator_traits;
+		typedef typename value_pair::char_allocator_traits
+		char_allocator_traits;
+
+		value_pair::allocator_type a(trie.get_allocator());
+		value_pair::char_allocator_type ca(a);
+		auto suffix_length(last - first);
+		decltype(suffix_length) init_length(0);
+
+		std::unique_ptr<
+			char_type[], std::function<void (char_type *)>
+		> s(
+			nullptr, [
+				&ca, &init_length, suffix_length
+			](char_type *p) -> void {
+				for (auto cnt(init_length); cnt; --cnt)
+					char_allocator_traits::destroy(
+						ca, &p[cnt - 1]
+					);
+
+				char_allocator_traits::deallocate(
+					ca, p, suffix_length
+				);
+			}
+		);
+
+		if (suffix_length > Policy::short_suffix_length) {
+			s.reset(char_allocator_traits::allocate(
+				ca, suffix_length
+			));
+			for (; init_length < suffix_length; ++init_length) {
+				char_allocator_traits::construct(
+					ca, &s[init_length], *first
+				);
+				++first;
+			}
 		}
+
+		auto v(vp_allocator_traits::allocate(a, 1));
+		vp_allocator_traits::construct(
+			a, v, std::forward<Args>(args)...
+		);
+
+		if (s) {
+			v.long_suffix.data = s.release();
+			v.long_suffix.offset = 0;
+		} else {
+			std::unique_ptr<
+				value_pair, std::function<void (value_pair *)>
+			> uv(
+				v, [
+					&a, &ca, &init_length, suffix_length
+				](value_pair *p) -> void {
+					for (auto cnt(init_length); cnt; --cnt)
+						char_allocator_traits::destroy(
+							ca, &p->short_suffix[
+								cnt - 1
+							]
+						);
+					vp_allocator_traits::destroy(
+						a, p
+					);
+					vp_allocator_traits::deallocate(
+						a, p, 1
+					);
+				}
+			);
+
+			uv.release();
+		}
+
+		v->suffix_length = suffix_length;
+		p.first = reinterpret_cast<uintptr_t>(v);
+		p.second = 1;
+		return v->value;
+	}
+
+	void destroy_value(value_pair *p)
+	{
+		value_pair::allocator_type a(trie.get_allocator());
+		value_pair::char_allocator_type ca(a);
+
+		if (p->suffix_length > Policy::short_suffix_length) {
+			for (
+				auto cnt(p->suffix_length);
+				cnt > p->long_suffix.offset;
+				--cnt
+			)
+				value_pair::char_allocator_traits::destroy(
+					ca, &p->long_suffix.data[cnt - 1]
+				);
+
+			value_pair::char_allocator_traits::deallocate(
+				ca, p->data, p->suffix_length
+			);
+		} else {
+			for (auto cnt(p->suffix_length); cnt; --cnt)
+				value_pair::char_allocator_traits::destroy(
+					ca, &p->short_suffix[cnt - 1]
+				);
+		}
+		value_pair::allocator_traits::destroy(a, p);
+		value_pair::allocator_traits::deallocate(a, p, 1);
 	}
 
 	struct alignas(uintptr_t) value_pair {
+		typedef typename std::allocator_traits<
+			typename Policy::allocator_type
+		>::template rebind_alloc<value_pair> allocator_type;
+		typedef typename std::allocator_traits<
+			typename Policy::allocator_type
+		>::template rebind_alloc<char_type> char_allocator_type;
+
+		typedef typename std::allocator_traits<
+			typename Policy::allocator_type
+		>::template rebind_traits<value_pair> allocator_traits;
+		typedef typename std::allocator_traits<
+			typename Policy::allocator_type
+		>::template rebind_traits<char_type> char_allocator_traits;
 
 		template <typename... Args>
 		value_pair(Args&&... args)
-		: value(std::forward<Args>(args...))
+		: suffix_length(0), value(std::forward<Args>(args...))
 		{}
 
-		size_type key_length;
+		size_type suffix_length;
 		value_type value;
 
 		union {
@@ -121,9 +233,7 @@ private:
 				size_type offset;
 			} long_suffix;
 
-			std::array<
-				char_type, Policy::short_suffix_length
-			> short_suffix;
+			char_type short_suffix[Policy::short_suffix_length];
 		};
 	};
 

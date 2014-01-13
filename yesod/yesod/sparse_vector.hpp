@@ -31,12 +31,12 @@ template <
 
 	typedef typename std::allocator_traits<
 		typename Policy::allocator_type
-	>::template rebind_traits<value_type> allocator_traits_type;
+	>::template rebind_traits<value_type> allocator_traits;
 
 
 	typedef typename allocator_type::reference reference;
 	typedef typename allocator_type::const_reference const_reference;
-	typedef typename allocator_traits_type::size_type size_type;
+	typedef typename allocator_traits::size_type size_type;
 
 	sparse_vector()
 	: root_node(nullptr, allocator_type()), height(0)
@@ -51,7 +51,7 @@ template <
 	{
 		std::swap(height, other.height);
 
-		if (allocator_traits_type::propagate_on_container_swap::value)
+		if (allocator_traits::propagate_on_container_swap::value)
 			std::swap(root_node, other.root_node);
 		else
 			std::swap(
@@ -107,10 +107,15 @@ template <
 		auto p(node->get_raw(
 			std::get<1>(root_node), node_offset(pos, 1)
 		));
-		allocator_traits_type::construct(
+		allocator_traits::construct(
 			std::get<1>(root_node), p, std::forward<Args>(args)...
 		);
 		return *p;
+	}
+
+	allocator_type get_allocator() const
+	{
+		return std::get<1>(root_node);
 	}
 
 private:
@@ -122,23 +127,23 @@ private:
 	size_type height;
 
 	struct data_node {
-		typedef typename sparse_vector::allocator_traits_type
+		typedef typename sparse_vector::allocator_traits
 		::template rebind_alloc<data_node> allocator_type;
 
-		typedef typename sparse_vector::allocator_traits_type
-		::template rebind_traits<data_node> allocator_traits_type;
+		typedef typename sparse_vector::allocator_traits
+		::template rebind_traits<data_node> allocator_traits;
 
 		value_type *get_raw(allocator_type &a, size_type pos)
 		{
 			auto p(reinterpret_cast<value_type *>(&items[pos]));
-			allocator_traits_type::destroy(a, p);
+			allocator_traits::destroy(a, p);
 			return p;
 		}
 
 		data_node(allocator_type &a)
 		{
 			for (auto &p: items)
-				allocator_traits_type::construct(a, &p);
+				allocator_traits::construct(a, &p);
 		}
 
 		std::array<
@@ -150,10 +155,10 @@ private:
 	{
 		data_node::allocator_type node_alloc(std::get<1>(root_node));
 
-		auto node(data_node::allocator_traits_type::allocate(
+		auto node(data_node::allocator_traits::allocate(
 			node_alloc, 1
 		));
-		data_node::allocator_traits_type::construct(
+		data_node::allocator_traits::construct(
 			node_alloc, node, std::get<1>(root_node)
 		);
 		return node;
@@ -166,22 +171,22 @@ private:
 
 		auto node(reinterpret_cast<data_node *>(raw_node));
 		for (auto &p: items)
-			allocator_traits_type::destroy(a, &p);
+			allocator_traits::destroy(a, &p);
 
 		data_node::allocator_type node_alloc(std::get<1>(root_node));
 
-		data_node::allocator_traits_type::destroy(node_alloc, node);
-		data_node::allocator_traits_type::deallocate(
+		data_node::allocator_traits::destroy(node_alloc, node);
+		data_node::allocator_traits::deallocate(
 			node_alloc, node, 1
 		);
 	}
 
 	struct ptr_node {
-		typedef typename sparse_vector::allocator_traits_type
+		typedef typename sparse_vector::allocator_traits
 		::template rebind_alloc<ptr_node> allocator_type;
 
-		typedef typename sparse_vector::allocator_traits_type
-		::template rebind_traits<ptr_node> allocator_traits_type;
+		typedef typename sparse_vector::allocator_traits
+		::template rebind_traits<ptr_node> allocator_traits;
 
 		std::array<void *, (1UL << Policy::ptr_node_order)> items;
 	};
@@ -190,10 +195,10 @@ private:
 	{
 		ptr_node::allocator_type node_alloc(std::get<1>(root_node));
 
-		auto rv(ptr_node::allocator_traits_type::allocate(
+		auto rv(ptr_node::allocator_traits::allocate(
 			node_alloc, 1
 		));
-		ptr_node::allocator_traits_type::construct(node_alloc, rv);
+		ptr_node::allocator_traits::construct(node_alloc, rv);
 		std::fill(rv->items.begin(), rv->items.end(), nullptr);
 		return rv;
 	}
@@ -214,8 +219,8 @@ private:
 
 		ptr_node::allocator_type node_alloc(std::get<1>(root_node));
 
-		ptr_node::allocator_traits_type::destroy(node_alloc, node);
-		ptr_node::allocator_traits_type::deallocate(
+		ptr_node::allocator_traits::destroy(node_alloc, node);
+		ptr_node::allocator_traits::deallocate(
 			node_alloc, node, 1
 		);
 	}
