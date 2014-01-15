@@ -5,37 +5,12 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_YESOD_SPARSE_VECTOR_BASE_JAN_06_2014_1320)
-#define UCPF_YESOD_SPARSE_VECTOR_BASE_JAN_06_2014_1320
+#if !defined(UCPF_YESOD_DETAIL_SPARSE_VECTOR_BASE_JAN_06_2014_1320)
+#define UCPF_YESOD_DETAIL_SPARSE_VECTOR_BASE_JAN_06_2014_1320
 
-#include <array>
-#include <tuple>
-#include <bitset>
+#include <yesod/detail/placement_array.hpp>
 
 namespace ucpf { namespace yesod {
-namespace detail {
-
-template <typename ValueType, size_t Order>
-struct node_base {
-};
-
-template <typename ValueType, size_t Order>
-struct cp_node_base : node_base<ValueType, Order> {
-	std::bitset<size_t(1) << Order> stored;
-	size_t count;
-};
-
-template <typename ValueType, size_t Order, size_t CompOrd>
-struct cp_node : cp_node_base<ValueType, Order> {
-	static node_base *construct();
-	static void destroy(node_base *p);
-
-	ValueType items[size_t(1) << CompOrd];
-};
-
-
-
-}
 
 template <
 	typename ValueType, typename Policy
@@ -55,11 +30,10 @@ template <
 	typedef typename allocator_type::const_reference const_reference;
 	typedef typename allocator_traits::pointer pointer;
 	typedef typename allocator_traits::const_pointer const_pointer;
-	typedef typename allocator_traits::void_pointer void_pointer;
 	typedef typename allocator_traits::size_type size_type;
 
 	sparse_vector()
-	: root_node(nullptr, allocator_type()), height(0)
+	: height(0), root_node(nullptr, allocator_type())
 	{}
 
 	~sparse_vector()
@@ -82,7 +56,7 @@ template <
 
 	void clear()
 	{
-		destroy_ptr_node(std::get<0>(root_node), height);
+		destroy_node_r(std::get<0>(root_node), height);
 		std::get<0>(root_node) = nullptr;
 		height = 0;
 	}
@@ -131,124 +105,20 @@ template <
 	}
 
 private:
-	struct data_node_pod;
-	struct data_node_obj;
+	typedef typename allocator_traits::void_pointer node_pointer;
 
-	typedef typename std::aligned_storage<
-		sizeof(ValueType), std::alignment_of<ValueType>::value
-	>::type value_storage_type;
+	typedef detail::placement_array<
+		node_pointer, (size_t(1) << Policy::ptr_node_order), true,
+		typename Policy::allocator_type
+	> ptr_node;
 
-	typedef typename std::conditional<
-		std::is_pod<ValueType>::value, data_node_pod, data_node_obj
-	>::type data_node;
+	typedef detail::placement_array<
+		ValueType, (size_t(1) << Policy::data_node_order),
+		std::is_pod<ValueType>::value, typename Policy::allocator_type
+	> data_node;
 
-	std::tuple<void_pointer, allocator_type> root_node;
 	size_type height;
-
-	struct data_node_pod {
-		typedef typename sparse_vector::allocator_traits
-		::template rebind_alloc<data_node_pod> node_allocator_type;
-
-		typedef typename sparse_vector::allocator_traits
-		::template rebind_traits<data_node_pod> node_allocator_traits;
-
-		data_node_pod()
-		{}
-
-		data_node_pod(allocator_type &a)
-		{
-			for (auto &p: items)
-				allocator_traits::construct(a, &p);
-		}
-
-		reference operator[](size_type pos)
-		{
-			return reinterpret_cast<reference>(items[pos]);
-		}
-
-		const_reference operator[](size_type pos) const
-		{
-			return reinterpret_cast<const_reference>(items[pos]);
-		}
-
-		reference at(size_type pos, allocator_type &a)
-		{
-			return reinterpret_cast<reference>(items[pos]);
-		}
-
-		template <typename... Args>
-		reference emplace_at(
-			size_type pos, allocator_type &a, Args&&... args
-		)
-		{
-			auto p(&(*this)[pos]);
-			allocator_traits::construct(
-				a, p, std::forward<Args>(args)...
-			);
-			return *p;
-		}
-
-		void destroy(allocator_type &a)
-		{}
-
-		std::array<
-			value_storage_type, (1UL << Policy::data_node_order)
-		> items;
-	};
-
-	struct data_node_obj : data_node_pod {
-		typedef typename sparse_vector::allocator_traits
-		::template rebind_alloc<data_node_obj> node_allocator_type;
-
-		typedef typename sparse_vector::allocator_traits
-		::template rebind_traits<data_node_obj> node_allocator_traits;
-
-		data_node_obj(allocator_type &a)
-		: data_node_pod()
-		{
-		}
-
-		reference at(size_type pos, allocator_type &a)
-		{
-			if (!value_set.test(pos)) {
-				allocator_traits::construct(
-					a, reinterpret_cast<pointer>(
-						&data_node_pod::items[pos]
-					)
-				);
-				value_set.set(pos);
-			}
-
-			return reinterpret_cast<reference>(
-				data_node_pod::items[pos]
-			);
-		}
-
-		template <typename... Args>
-		reference emplace_at(
-			size_type pos, allocator_type &a, Args&&... args
-		);
-		void destroy(allocator_type &a);
-
-		std::bitset<1UL << Policy::data_node_order> value_set;
-	};
-
-	struct ptr_node {
-		typedef typename sparse_vector::allocator_traits
-		::template rebind_alloc<ptr_node> node_allocator_type;
-
-		typedef typename sparse_vector::allocator_traits
-		::template rebind_traits<ptr_node> node_allocator_traits;
-
-		ptr_node()
-		{
-			std::fill(items.begin(), items.end(), nullptr);
-		}
-
-		std::array<void_pointer, (1UL << Policy::ptr_node_order)> items;
-	};
-
-
+	std::tuple<node_pointer, allocator_type> root_node;
 
 	static size_type node_offset(size_type pos, size_type h)
 	{
@@ -261,10 +131,7 @@ private:
 		       & ((1UL << Policy::ptr_node_order) - 2);
 	}
 
-	data_node *make_data_node();
-	void destroy_data_node(void_pointer raw_node);
-	ptr_node *make_ptr_node();
-	void destroy_ptr_node(void_pointer raw_node, size_type height);
+	void destroy_node_r(node_pointer p_, size_type h);
 	data_node *data_node_at(size_type pos);
 	data_node const *data_node_at(size_type pos) const;
 	data_node *data_node_alloc_at(size_type pos);

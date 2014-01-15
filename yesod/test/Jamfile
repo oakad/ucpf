@@ -9,6 +9,7 @@ alias test_case : : : : <include>..
 
 run array_element_count.cpp : : test_case ;
 run base86.cpp : : test_case ;
+run compressed_index_lut.cpp : : test_case ;
 run float.cpp : : test_case ;
 run is_sequence.cpp : : test_case ;
 run rope.cpp : : test_case ;
