@@ -29,6 +29,9 @@ struct string_map {
 	typedef typename allocator_type::reference reference;
 	typedef typename allocator_type::const_reference const_reference;
 	typedef typename allocator_traits::size_type size_type;
+	typedef typename allocator_traits::pointer pointer;
+	typedef typename allocator_traits::const_pointer const_pointer;
+
 
 	string_map()
 	: trie_root(3, 0)
@@ -41,26 +44,61 @@ struct string_map {
 	template <typename Iterator, typename... Args>
 	reference emplace_at(
 		Iterator first, Iterator last, Args&&... args
-	)
+	);
+
+	template <typename Iterator>
+	pointer find(Iterator first, Iterator last)
 	{
-		auto l_pos(1);
+		uintptr_t l_pos(1);
 		auto n_pos(log_offset(trie_root.first, deref_char(first)));
 		++first;
 		for (; first != last; ++first) {
-			auto &p(trie.at(vec_offset(n_pos)));
-			if (!p.second) {
-				p.first = reinterpret_cast<uintptr_t>(
-					value_pair::construct(
-						trie.get_allocator(),
-						first, last,
-						std::forward<Args>(args)...
-					)
-				);
-				p.second = 1;
+			auto p(trie.ptr_at(vec_offset(n_pos)));
+			if (!p || (p->second != l_pos))
+				break;
+
+			if (!(p->first & 1)) {
+				auto v(reinterpret_cast<value_pair *>(
+					p->first
+				));
+				if (v->match(first, last))
+					return &v->value;
 			}
-			
 		}
+
+		return nullptr;
 	}
+
+	template <typename Iterator>
+	const_pointer find(Iterator first, Iterator last) const
+	{
+		uintptr_t l_pos(1);
+		auto n_pos(log_offset(trie_root.first, deref_char(first)));
+		++first;
+		for (; first != last; ++first) {
+			auto p(trie.ptr_at(vec_offset(n_pos)));
+			if (!p || (p->second != l_pos))
+				break;
+
+			if (!(p->first & 1)) {
+				auto v(reinterpret_cast<value_pair const *>(
+					p->first
+				));
+				if (v->match(first, last))
+					return &v->value;
+			}
+		}
+
+		return nullptr;
+	}
+
+	std::basic_ostream<
+		char_type, typename Policy::char_traits_type
+	> &dump(
+		std::basic_ostream<
+			char_type, typename Policy::char_traits_type
+		> &os
+	);
 
 private:
 	typedef std::pair<uintptr_t, uintptr_t> pair_type;
@@ -105,12 +143,6 @@ private:
 		template <typename Alloc>
 		static void destroy(Alloc const &a, value_pair *p);
 
-		template <typename... Args>
-		value_pair(Args&&... args)
-		: suffix_length(0), value(std::forward<Args>(args)...),
-		  long_suffix{nullptr, 0}
-		{}
-
 		char_type *suffix()
 		{
 			if (suffix_length <= Policy::short_suffix_length)
@@ -127,6 +159,21 @@ private:
 				return long_suffix.data + offset;
 		}
 
+		template <typename Iterator>
+		bool match(Iterator first, Iterator last) const
+		{
+			if ((last - first) != suffix_length)
+				return false;
+
+			if (suffix_length <= Policy::short_suffix_length)
+				return std::equal(first, last, short_suffix);
+			else
+				return std::equal(
+					first, last,
+					long_suffix.data + long_suffix.offset
+				);
+		}
+
 		size_type suffix_length;
 		value_type value;
 
@@ -140,6 +187,12 @@ private:
 		};
 
 	private:
+		template <typename... Args>
+		value_pair(Args&&... args)
+		: suffix_length(0), value(std::forward<Args>(args)...),
+		  long_suffix{nullptr, 0}
+		{}
+
 		~value_pair()
 		{}
 	};

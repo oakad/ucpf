@@ -109,6 +109,30 @@ template <
 		return const_iterator(&(*this)[N]);
 	}
 
+	pointer ptr_at(size_type pos)
+	{
+		auto p(&(*this)[pos]);
+
+		if (!IsPodArray) {
+			if (!std::get<1>(items).test(pos))
+				return nullptr;
+		}
+
+		return p;
+	}
+
+	const_pointer ptr_at(size_type pos) const
+	{
+		auto p(&(*this)[pos]);
+
+		if (!IsPodArray) {
+			if (!std::get<1>(items).test(pos))
+				return nullptr;
+		}
+
+		return p;
+	}
+
 	template <typename Alloc1>
 	reference at(size_type pos, Alloc1 const &a_)
 	{

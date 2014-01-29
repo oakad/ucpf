@@ -66,6 +66,8 @@ template <
 		return !height;
 	}
 
+	void for_each(std::function<bool (size_type, const_reference)> f) const;
+
 	template <typename Pred>
 	void remove_if(Pred pred);
 
@@ -79,6 +81,20 @@ template <
 	{
 		auto &node(*data_node_at(pos));
 		return node[node_offset(pos, 1)];
+	}
+
+	pointer ptr_at(size_type pos)
+	{
+		auto node(data_node_at(pos));
+		if (node)
+			return node->ptr_at(node_offset(pos, 1));
+	}
+
+	const_pointer ptr_at(size_type pos) const
+	{
+		auto node(data_node_at(pos));
+		if (node)
+			return node->ptr_at(node_offset(pos, 1));
 	}
 
 	reference at(size_type pos)

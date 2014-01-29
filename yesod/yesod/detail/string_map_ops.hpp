@@ -11,6 +11,44 @@
 namespace ucpf { namespace yesod {
 
 template <typename CharType, typename ValueType, typename Policy>
+template <typename Iterator, typename... Args>
+auto string_map<CharType, ValueType, Policy>::emplace_at(
+	Iterator first, Iterator last, Args&&... args
+) -> reference
+{
+	uintptr_t l_pos(1);
+	auto n_pos(log_offset(trie_root.first, deref_char(first)));
+	++first;
+	for (; first != last; ++first) {
+		auto &p(trie.at(vec_offset(n_pos)));
+		if (!p.second) {
+			p.first = reinterpret_cast<uintptr_t>(
+				value_pair::construct(
+					trie.get_allocator(),
+					first, last,
+					std::forward<Args>(args)...
+				)
+			);
+			p.second = l_pos;
+		} else {
+			
+		}
+	}
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+std::basic_ostream<
+	char_type, typename Policy::char_traits_type
+> &dump(
+	std::basic_ostream<
+		char_type, typename Policy::char_traits_type
+	> &os
+)
+{
+	
+}
+
+template <typename CharType, typename ValueType, typename Policy>
 template <typename Alloc, typename Iterator, typename... Args>
 auto string_map<CharType, ValueType, Policy>::value_pair::construct(
 	Alloc const &a_, Iterator first, Iterator last, Args&&... args

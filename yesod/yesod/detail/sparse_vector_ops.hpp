@@ -11,6 +11,71 @@
 namespace ucpf { namespace yesod {
 
 template <typename ValueType, typename Policy>
+void sparse_vector::for_each(
+	std::function<bool (size_type, const_reference)> f
+) const
+{
+	if (!height)
+		return;
+
+	if (height == 1) {
+		auto n(reinterpret_cast<data_node const *>(
+			std::get<0>(root_node)
+		));
+		n->for_each(0, f);
+		return;
+	}
+
+	struct vector_pos {
+		node_pointer p;
+		size_type g_offset;
+		size_type l_offset;
+		size_type skip;
+
+		vector_pos() = default;
+
+		vector_pos(node_pointer p_, size_type h)
+		: p(p_), g_offset(0), l_offset(0),
+		  skip(
+			  Policy::data_node_order
+			  + (height - 2) * Policy::ptr_node_order
+		  )
+		{
+		}
+
+		ptr_node const *get_pptr() const
+		{
+			return reinterpret_cast<ptr_node const *>(p);
+		}
+
+		ptr_node const *get_dptr() const
+		{
+			return reinterpret_cast<data_node const *>(p);
+		}
+	};
+
+	vector_pos h_ref[height];
+	h_ref[0] = vector_pos({
+		std::get<0>(root_node), 0, 0,
+		
+	});
+	auto h_pos(0);
+
+	while (true) {
+		if ((h_pos + 1) == height) {
+			auto n(reinterpret_cast<data_node const *>(
+				std::get<0>(h_ref[h_pos])
+			));
+			if (n)
+				n->for_each(std::get<1>(h_ref[h_pos]), f);
+
+			--h_pos;
+			std::get<0
+		}
+	}
+}
+
+template <typename ValueType, typename Policy>
 void sparse_vector<ValueType, Policy>::destroy_node_r(
 	node_pointer p_, size_type h
 )
