@@ -66,7 +66,9 @@ template <
 		return !height;
 	}
 
-	void for_each(std::function<bool (size_type, const_reference)> f) const;
+	bool for_each(
+		std::function<bool (size_type, const_reference)> &&f
+	) const;
 
 	template <typename Pred>
 	void remove_if(Pred pred);
@@ -146,6 +148,11 @@ private:
 		return (pos >> (Policy::ptr_node_order * (h - 2)))
 		       & ((1UL << Policy::ptr_node_order) - 2);
 	}
+
+	bool for_each_impl(
+		ptr_node const *p, size_type h, size_type &offset,
+		std::function<bool (size_type, const_reference)> &&f
+	) const;
 
 	void destroy_node_r(node_pointer p_, size_type h);
 	data_node *data_node_at(size_type pos);

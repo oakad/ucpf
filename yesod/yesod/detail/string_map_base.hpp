@@ -98,7 +98,7 @@ struct string_map {
 		std::basic_ostream<
 			char_type, typename Policy::char_traits_type
 		> &os
-	);
+	) const;
 
 private:
 	typedef std::pair<uintptr_t, uintptr_t> pair_type;

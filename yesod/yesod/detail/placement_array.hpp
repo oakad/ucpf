@@ -60,6 +60,7 @@ template <
 	template <typename Alloc1>
 	static void destroy(Alloc1 const &a_, placement_array *p)
 	{
+		p->destroy(a_);
 		self_allocator_type a(a_);
 		self_allocator_traits::destroy(a, p);
 		self_allocator_traits::deallocate(a, p, 1);
@@ -202,6 +203,25 @@ template <
 		return *p;
 	}
 
+	bool for_each(
+		size_type offset,
+		std::function<bool (size_type, const_reference)> &&f
+	) const
+	{
+		for (
+			size_type pos(0);
+			pos < std::get<0>(items).size();
+			++pos
+		) {
+			if (std::get<1>(items).test(pos)) {
+				if (!f(pos + offset, (*this)[pos]))
+					return false;
+			}
+		}
+		return true;
+	}
+
+private:
 	template <typename Alloc1>
 	void destroy(Alloc1 const &a_)
 	{

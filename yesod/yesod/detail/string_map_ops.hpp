@@ -43,9 +43,34 @@ std::basic_ostream<
 	std::basic_ostream<
 		char_type, typename Policy::char_traits_type
 	> &os
-)
+) const
 {
-	
+	std::function<
+		bool (size_type, pair_type const &)
+	> f = [&os](size_type pos, pair_type const &p) -> bool {
+		os << pos << " (" << pos * 2 + 5 << ')';
+		if (p.first & 1) {
+			os << ": " << p.first << " (";
+			os << p.first ? (p.first - 5) / 2 : 0 << "), ";
+			os << p.second << " (";
+			os << p.second ? (p.second - 5) / 2 : 0 << ")\n";
+		} else {
+			auto vp(reinterpret_cast<value_pair const *>(p.first));
+			os << ": (" << vp << ", " << p.second << ')';
+			if (vp) {
+				os << " -> \"";
+				auto sp(vp->suffix());
+				for (size_type c(0); c < vp->suffix_length; ++c)
+					os << sp[c];
+				os << '\"';
+			}
+			os << '\n';
+		}
+	};
+
+	os << "r: " << trie_root.first << '\n';
+	trie.for_each(f);
+	return os;
 }
 
 template <typename CharType, typename ValueType, typename Policy>

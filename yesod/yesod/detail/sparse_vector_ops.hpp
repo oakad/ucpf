@@ -11,68 +11,63 @@
 namespace ucpf { namespace yesod {
 
 template <typename ValueType, typename Policy>
-void sparse_vector::for_each(
-	std::function<bool (size_type, const_reference)> f
+bool sparse_vector<ValueType, Policy>::for_each(
+	std::function<bool (size_type, const_reference)> &&f
 ) const
 {
 	if (!height)
-		return;
+		return true;
 
 	if (height == 1) {
 		auto n(reinterpret_cast<data_node const *>(
 			std::get<0>(root_node)
 		));
-		n->for_each(0, f);
-		return;
+		return n->for_each(0, f);
 	}
 
-	struct vector_pos {
-		node_pointer p;
-		size_type g_offset;
-		size_type l_offset;
-		size_type skip;
+	size_type offset(0);
 
-		vector_pos() = default;
+	return for_each_impl(
+		reinterpret_cast<ptr_node const *>(std::get<0>(root_node)),
+		0, offset, f
+	);
+}
 
-		vector_pos(node_pointer p_, size_type h)
-		: p(p_), g_offset(0), l_offset(0),
-		  skip(
-			  Policy::data_node_order
-			  + (height - 2) * Policy::ptr_node_order
-		  )
-		{
+template <typename ValueType, typename Policy>
+bool sparse_vector<ValueType, Policy>::for_each_impl(
+	ptr_node const *p, size_type h, size_type &offset,
+	std::function<bool (size_type, const_reference)> &&f
+) const
+{
+	if ((height - h) == 2) {
+		for (auto q: *p) {
+			if (q) {
+				auto dq(reinterpret_cast<data_node const *>(q));
+				if (!dq->for_each(offset, f))
+					return false;
+			}
 		}
+		offset += size_type(1) << (
+			Policy::data_node_order + Policy::ptr_node_order
+		);
+		return true;
+	}
 
-		ptr_node const *get_pptr() const
-		{
-			return reinterpret_cast<ptr_node const *>(p);
-		}
-
-		ptr_node const *get_dptr() const
-		{
-			return reinterpret_cast<data_node const *>(p);
-		}
-	};
-
-	vector_pos h_ref[height];
-	h_ref[0] = vector_pos({
-		std::get<0>(root_node), 0, 0,
-		
-	});
-	auto h_pos(0);
-
-	while (true) {
-		if ((h_pos + 1) == height) {
-			auto n(reinterpret_cast<data_node const *>(
-				std::get<0>(h_ref[h_pos])
-			));
-			if (n)
-				n->for_each(std::get<1>(h_ref[h_pos]), f);
-
-			--h_pos;
-			std::get<0
+	for (auto q: *p) {
+		if (q) {
+			if (!for_each_impl(
+				reinterpret_cast<ptr_node const *>(q),
+				++h, offset, f
+			))
+				return false;
+		} else {
+			offset += size_type(1) << (
+				Policy::data_node_order
+				+ (Policy::ptr_node_order * (height - h - 1))
+			);
 		}
 	}
+	return true;
 }
 
 template <typename ValueType, typename Policy>
