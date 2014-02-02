@@ -95,6 +95,11 @@ template <
 		return iterator(&(*this)[0]);
 	}
 
+	const_iterator begin() const
+	{
+		return const_iterator(&(*this)[0]);
+	}
+
 	const_iterator cbegin() const
 	{
 		return const_iterator(&(*this)[0]);
@@ -103,6 +108,11 @@ template <
 	iterator end()
 	{
 		return iterator(&(*this)[N]);
+	}
+
+	const_iterator end() const
+	{
+		return const_iterator(&(*this)[N]);
 	}
 
 	const_iterator cend() const

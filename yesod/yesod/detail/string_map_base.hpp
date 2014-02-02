@@ -37,23 +37,40 @@ struct string_map {
 	: trie_root(3, 0)
 	{}
 
-/* logical:  1 2 3 4 5...
- * physical: r 0 1 2 3...
- * encoded:  3 5 7 9 11...
- */
+	template <typename StringType, typename... Args>
+	std::pair<reference, bool> emplace_at(StringType &&s, Args&&... args)
+	{
+		return emplace_at(
+			std::begin(s), std::end(s), std::forward<Args>(args)...
+		);
+	}
+
 	template <typename Iterator, typename... Args>
-	reference emplace_at(
+	std::pair<reference, bool> emplace_at(
 		Iterator first, Iterator last, Args&&... args
 	);
+
+	template <typename StringType>
+	pointer find(StringType &&s)
+	{
+		return find(std::begin(s), std::end(s));
+	}
+
+	template <typename StringType>
+	const_pointer find(StringType &&s) const
+	{
+		return find(std::begin(s), std::end(s));
+	}
 
 	template <typename Iterator>
 	pointer find(Iterator first, Iterator last)
 	{
-		uintptr_t l_pos(1);
-		auto n_pos(log_offset(trie_root.first, deref_char(first)));
-		++first;
-		for (; first != last; ++first) {
+		uintptr_t l_pos(trie_root.first);
+		do {
+			auto n_pos(log_offset(l_pos, deref_char(first)));
 			auto p(trie.ptr_at(vec_offset(n_pos)));
+			++first;
+
 			if (!p || (p->second != l_pos))
 				break;
 
@@ -64,7 +81,7 @@ struct string_map {
 				if (v->match(first, last))
 					return &v->value;
 			}
-		}
+		} while (first != last);
 
 		return nullptr;
 	}
@@ -72,11 +89,12 @@ struct string_map {
 	template <typename Iterator>
 	const_pointer find(Iterator first, Iterator last) const
 	{
-		uintptr_t l_pos(1);
-		auto n_pos(log_offset(trie_root.first, deref_char(first)));
-		++first;
-		for (; first != last; ++first) {
+		uintptr_t l_pos(trie_root.first);
+		do {
+			auto n_pos(log_offset(l_pos, deref_char(first)));
 			auto p(trie.ptr_at(vec_offset(n_pos)));
+			++first;
+
 			if (!p || (p->second != l_pos))
 				break;
 
@@ -87,16 +105,16 @@ struct string_map {
 				if (v->match(first, last))
 					return &v->value;
 			}
-		}
+		} while (first != last);
 
 		return nullptr;
 	}
 
 	std::basic_ostream<
-		char_type, typename Policy::char_traits_type
+		CharType, typename Policy::char_traits_type
 	> &dump(
 		std::basic_ostream<
-			char_type, typename Policy::char_traits_type
+			CharType, typename Policy::char_traits_type
 		> &os
 	) const;
 
@@ -109,14 +127,20 @@ private:
 		return static_cast<index_char_type>(*iter);
 	}
 
+/* logical:  1 2 3 4 5...
+ * physical: r 0 1 2 3...
+ * encoded:  3 5 7 9 11...
+ */
+	/* encoded v -> encoded (v + c) */
 	static uintptr_t log_offset(uintptr_t v, index_char_type c)
 	{
 		return v + ((uintptr_t(c) + 1) << 1);
 	}
 
+	/* encoded -> physical */
 	static uintptr_t vec_offset(uintptr_t v)
 	{
-		return (v >> 1) - 2;
+		return (v - 5) >> 1;
 	}
 
 	struct alignas(uintptr_t) value_pair {
@@ -148,7 +172,7 @@ private:
 			if (suffix_length <= Policy::short_suffix_length)
 				return short_suffix;
 			else
-				return long_suffix.data + offset;
+				return long_suffix.data + long_suffix.offset;
 		}
 
 		char_type const *suffix() const
@@ -156,22 +180,31 @@ private:
 			if (suffix_length <= Policy::short_suffix_length)
 				return short_suffix;
 			else
-				return long_suffix.data + offset;
+				return long_suffix.data + long_suffix.offset;
 		}
 
 		template <typename Iterator>
 		bool match(Iterator first, Iterator last) const
 		{
-			if ((last - first) != suffix_length)
-				return false;
+			return (suffix_length == (last - first)) && (
+				suffix_length == common_length(first, last)
+			);
+		}
 
-			if (suffix_length <= Policy::short_suffix_length)
-				return std::equal(first, last, short_suffix);
-			else
-				return std::equal(
-					first, last,
-					long_suffix.data + long_suffix.offset
-				);
+		template <typename Iterator>
+		size_type common_length(Iterator first, Iterator last) const
+		{
+			size_type pos(0);
+			auto s_ptr(suffix());
+
+			while ((pos < suffix_length) && (first != last)) {
+				if (s_ptr[pos] != *first)
+					break;
+
+				++first;
+				++pos;
+			}
+			return pos;
 		}
 
 		size_type suffix_length;
@@ -186,7 +219,6 @@ private:
 			char_type short_suffix[Policy::short_suffix_length];
 		};
 
-	private:
 		template <typename... Args>
 		value_pair(Args&&... args)
 		: suffix_length(0), value(std::forward<Args>(args)...),

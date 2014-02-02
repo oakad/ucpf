@@ -22,14 +22,14 @@ bool sparse_vector<ValueType, Policy>::for_each(
 		auto n(reinterpret_cast<data_node const *>(
 			std::get<0>(root_node)
 		));
-		return n->for_each(0, f);
+		return n->for_each(0, std::forward<decltype(f)>(f));
 	}
 
 	size_type offset(0);
 
 	return for_each_impl(
 		reinterpret_cast<ptr_node const *>(std::get<0>(root_node)),
-		0, offset, f
+		0, offset, std::forward<decltype(f)>(f)
 	);
 }
 
@@ -43,7 +43,9 @@ bool sparse_vector<ValueType, Policy>::for_each_impl(
 		for (auto q: *p) {
 			if (q) {
 				auto dq(reinterpret_cast<data_node const *>(q));
-				if (!dq->for_each(offset, f))
+				if (!dq->for_each(
+					offset, std::forward<decltype(f)>(f)
+				))
 					return false;
 			}
 		}
@@ -57,7 +59,7 @@ bool sparse_vector<ValueType, Policy>::for_each_impl(
 		if (q) {
 			if (!for_each_impl(
 				reinterpret_cast<ptr_node const *>(q),
-				++h, offset, f
+				++h, offset, std::forward<decltype(f)>(f)
 			))
 				return false;
 		} else {
