@@ -194,12 +194,69 @@ void string_map<CharType, ValueType, Policy>::value_pair::destroy(
 
 	if (p->suffix_length > Policy::short_suffix_length)
 		char_allocator_traits::deallocate(
-			ca, p->long_suffix.data, p->suffix_length
+			ca, p->long_suffix.data,
+			p->suffix_length + p->long_suffix.offset
 		);
 
 	pair_allocator_type pa(a_);
 	pair_allocator_traits::destroy(pa, p);
 	pair_allocator_traits::deallocate(pa, p, 1);
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+template <typename Alloc>
+void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
+	Alloc const &a_, size_type count
+)
+{
+	int mode(p->suffix_length > Policy::short_suffix_length ? 2 : 0);
+	mode |= (p->suffix_length - count) > Policy::short_suffix_length
+		? 1 : 0;
+	char_allocator_type ca(a_);
+
+	switch (mode) {
+	case 0: { // short to short
+		std::move(
+			&short_suffix[count], &short_suffix[suffix_length],
+			&short_suffix[0]
+		);
+		for (auto c(suffix_length - count); c < suffix_length; ++c)
+			char_allocator_traits::destroy(
+				ca, short_suffix[c]
+			);
+		break;
+	}
+	case 2: { // long to short
+		auto data(long_suffix.data);
+		auto offset(long_suffix.offset);
+
+		for (size_type c(0); c < (suffix_length - count); ++c) {
+			char_allocator_traits::construct(
+				ca, short_suffix[c],
+				std::move(data[offset + count + c])
+			);
+
+		for (auto c(suffix_length - 1); c >= 0; --c)
+			char_allocator_traits::destroy(
+				ca, &data[offset + c]
+			);
+
+		char_allocator_traits::deallocate(
+			ca, data, offset + suffix_length
+		);
+		break;
+	}
+	case 3: { // long to long
+		auto next_offset(long_suffix.offset + count);
+		for (; long_suffix.offset < next_offset; ++long_suffix.offset)
+			char_allocator_traits::destroy(
+				ca, long_suffix.data[long_suffix.offset]
+			);
+		break;
+	}
+	}
+
+	suffix_length -= count;
 }
 
 }}

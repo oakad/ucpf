@@ -167,6 +167,9 @@ private:
 		template <typename Alloc>
 		static void destroy(Alloc const &a, value_pair *p);
 
+		template <typename Alloc>
+		void shrink_suffix(Alloc const &a, size_type count);
+
 		char_type *suffix()
 		{
 			if (suffix_length <= Policy::short_suffix_length)
