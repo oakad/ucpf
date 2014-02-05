@@ -88,15 +88,13 @@ template <
 	pointer ptr_at(size_type pos)
 	{
 		auto node(data_node_at(pos));
-		if (node)
-			return node->ptr_at(node_offset(pos, 1));
+		return node ? node->ptr_at(node_offset(pos, 1)) : nullptr;
 	}
 
 	const_pointer ptr_at(size_type pos) const
 	{
 		auto node(data_node_at(pos));
-		if (node)
-			return node->ptr_at(node_offset(pos, 1));
+		return node ? node->ptr_at(node_offset(pos, 1)) : nullptr;
 	}
 
 	reference at(size_type pos)
@@ -127,13 +125,15 @@ private:
 	typedef typename allocator_traits::void_pointer node_pointer;
 
 	typedef detail::placement_array<
-		node_pointer, (size_t(1) << Policy::ptr_node_order), true,
+		node_pointer, (size_t(1) << Policy::ptr_node_order),
+		detail::placement_array_pod_policy,
 		typename Policy::allocator_type
 	> ptr_node;
 
 	typedef detail::placement_array<
 		ValueType, (size_t(1) << Policy::data_node_order),
-		std::is_pod<ValueType>::value, typename Policy::allocator_type
+		typename Policy::data_node_policy,
+		typename Policy::allocator_type
 	> data_node;
 
 	size_type height;

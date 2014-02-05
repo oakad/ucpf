@@ -65,49 +65,19 @@ struct string_map {
 	template <typename Iterator>
 	pointer find(Iterator first, Iterator last)
 	{
-		uintptr_t l_pos(trie_root.first);
-		do {
-			auto n_pos(log_offset(l_pos, deref_char(first)));
-			auto p(trie.ptr_at(vec_offset(n_pos)));
-			++first;
-
-			if (!p || (p->second != l_pos))
-				break;
-
-			if (!(p->first & 1)) {
-				auto v(reinterpret_cast<value_pair *>(
-					p->first
-				));
-				if (v->match(first, last))
-					return &v->value;
-			}
-		} while (first != last);
-
-		return nullptr;
+		auto rv(reinterpret_cast<value_pair *>(std::get<0>(
+			find_impl(first, last)
+		)));
+		return rv ? &rv->value : nullptr;
 	}
 
 	template <typename Iterator>
 	const_pointer find(Iterator first, Iterator last) const
 	{
-		uintptr_t l_pos(trie_root.first);
-		do {
-			auto n_pos(log_offset(l_pos, deref_char(first)));
-			auto p(trie.ptr_at(vec_offset(n_pos)));
-			++first;
-
-			if (!p || (p->second != l_pos))
-				break;
-
-			if (!(p->first & 1)) {
-				auto v(reinterpret_cast<value_pair const *>(
-					p->first
-				));
-				if (v->match(first, last))
-					return &v->value;
-			}
-		} while (first != last);
-
-		return nullptr;
+		auto rv(reinterpret_cast<value_pair const *>(std::get<0>(
+			find_impl(first, last)
+		)));
+		return rv ? &rv->value : nullptr;
 	}
 
 	std::basic_ostream<
@@ -127,14 +97,16 @@ private:
 		return static_cast<index_char_type>(*iter);
 	}
 
-/* logical:  1 2 3 4 5...
- * physical: r 0 1 2 3...
- * encoded:  3 5 7 9 11...
- */
-	/* encoded v -> encoded (v + c) */
+	/* logical:  1 2 3 4 5...
+	 * physical: r 0 1 2 3...
+	 * encoded:  3 5 7 9 11...
+	 *
+	 * encoded v -> encoded (v + c)
+	 * offset 1 is a virtual string terminator
+	 */
 	static uintptr_t log_offset(uintptr_t v, index_char_type c)
 	{
-		return v + ((uintptr_t(c) + 1) << 1);
+		return v + ((uintptr_t(c) + 2) << 1);
 	}
 
 	/* encoded -> physical */
@@ -142,6 +114,11 @@ private:
 	{
 		return (v - 5) >> 1;
 	}
+
+	template <typename Iterator>
+	std::tuple<uintptr_t, uintptr_t, uintptr_t> find_impl(
+		Iterator &first, Iterator const &last
+	) const;
 
 	struct alignas(uintptr_t) value_pair {
 		typedef typename std::allocator_traits<
@@ -232,6 +209,14 @@ private:
 		{}
 	};
 
+	struct pair_vector_policy : detail::placement_array_pod_policy {
+		template <typename ArrayType>
+		static bool test_valid(ArrayType const &a, size_t pos)
+		{
+			return a[pos].first != 0;
+		}
+	};
+
 	struct trie_vector_policy {
 		typedef typename Policy::allocator_type allocator_type;
 
@@ -240,6 +225,8 @@ private:
 
 		constexpr static size_t
 		data_node_order = Policy::trie_node_order;
+
+		typedef pair_vector_policy data_node_policy;
 	};
 
 	pair_type trie_root;

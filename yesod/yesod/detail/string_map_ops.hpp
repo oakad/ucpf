@@ -42,7 +42,7 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 			}
 		} else {
 			rv = reinterpret_cast<value_pair *>(p.first);
-			auto c_pos(rv->common_legth(first, last));
+			auto c_pos(rv->common_length(first, last));
 			if (((last - first) == c_pos) && (
 				rv->suffix_length == c_pos
 			)) {
@@ -100,6 +100,38 @@ std::basic_ostream<
 	os << "r: " << trie_root.first << '\n';
 	trie.for_each(std::forward<decltype(f)>(f));
 	return os;
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+template <typename Iterator>
+auto string_map<CharType, ValueType, Policy>::find_impl(
+	Iterator &first, Iterator const &last
+) const -> std::tuple<uintptr_t, uintptr_t, uintptr_t>
+{
+	uintptr_t l_pos(trie_root.first);
+	do {
+		auto n_pos(log_offset(l_pos, deref_char(first)));
+		auto p(trie.ptr_at(vec_offset(n_pos)));
+		++first;
+
+		if (!p || !p->first || p->second != l_pos)
+			return std::make_tuple(0, 0, 0);
+
+		if (!(p->first & 1))
+			return std::tie(p->first, p->second, n_pos);
+
+		l_pos = p->first;
+	} while (first != last);
+
+	/* Check for virtual key terminator (will appear if one key is a
+	 * substring of another).
+	 */
+	auto n_pos(log_offset(l_pos, 1));
+	auto p(trie.ptr_at(vec_offset(n_pos)));
+	if (p && p->first && p->second == l_pos && !(p->first & 1))
+		return std::tie(p->first, p->second, n_pos);
+
+	return std::make_tuple(0, 0, 0);
 }
 
 template <typename CharType, typename ValueType, typename Policy>
@@ -209,8 +241,8 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 	Alloc const &a_, size_type count
 )
 {
-	int mode(p->suffix_length > Policy::short_suffix_length ? 2 : 0);
-	mode |= (p->suffix_length - count) > Policy::short_suffix_length
+	int mode(suffix_length > Policy::short_suffix_length ? 2 : 0);
+	mode |= (suffix_length - count) > Policy::short_suffix_length
 		? 1 : 0;
 	char_allocator_type ca(a_);
 
@@ -230,7 +262,7 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 		auto data(long_suffix.data);
 		auto offset(long_suffix.offset);
 
-		for (size_type c(0); c < (suffix_length - count); ++c) {
+		for (size_type c(0); c < (suffix_length - count); ++c)
 			char_allocator_traits::construct(
 				ca, short_suffix[c],
 				std::move(data[offset + count + c])

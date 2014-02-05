@@ -15,7 +15,50 @@
 namespace ucpf { namespace yesod { namespace detail {
 
 template <
-	typename ValueType, size_t N, bool IsPodArray,
+	typename ValueType, size_t N, typename Policy, typename Alloc,
+	typename StoredType
+> struct placement_array;
+
+struct placement_array_pod_policy {
+	struct metadata_type {};
+	constexpr static bool needs_safe_initialization = false;
+
+	template <typename ArrayType>
+	static bool test_valid(ArrayType const &a, size_t pos)
+	{
+		return a[pos] != 0;
+	}
+
+	template <typename ArrayType>
+	static void set_valid(ArrayType &a, size_t pos, bool valid)
+	{}
+};
+
+template <size_t N>
+struct placement_array_obj_policy {
+	typedef std::bitset<N> metadata_type;
+	constexpr static bool needs_safe_initialization = true;
+
+	template <typename ArrayType>
+	static bool test_valid(ArrayType const &a, size_t pos)
+	{
+		return a.get_metadata().test(pos);
+	}
+
+	template <typename ArrayType>
+	static void set_valid(ArrayType &a, size_t pos, bool valid)
+	{
+		a.get_metadata().set(pos, valid);
+	}
+};
+
+template <
+	typename ValueType, size_t N,
+	typename Policy = typename std::conditional<
+		std::is_pod<ValueType>::value,
+		placement_array_pod_policy,
+		placement_array_obj_policy<N>
+	>::type,
 	typename Alloc = std::allocator<void>,
 	typename StoredType = typename std::aligned_storage<
 		sizeof(ValueType), std::alignment_of<ValueType>::value
@@ -69,13 +112,23 @@ template <
 	template <typename Alloc1>
 	placement_array(Alloc1 const &a_)
 	{
-		if (IsPodArray) {
+		if (!Policy::needs_safe_initialization) {
 			allocator_type a(a_);
 			for (auto &p: std::get<0>(items))
 				allocator_traits::construct(
 					a, reinterpret_cast<pointer>(&p)
 				);
 		}
+	}
+
+	typename Policy::metadata_type const &get_metadata() const
+	{
+		return std::get<1>(items);
+	}
+
+	typename Policy::metadata_type &get_metadata()
+	{
+		return std::get<1>(items);
 	}
 
 	reference operator[](size_type pos)
@@ -124,10 +177,11 @@ template <
 	{
 		auto p(&(*this)[pos]);
 
-		if (!IsPodArray) {
-			if (!std::get<1>(items).test(pos))
-				return nullptr;
-		}
+		if (
+			Policy::needs_safe_initialization
+			&& !Policy::test_valid(*this, pos)
+		)
+			return nullptr;
 
 		return p;
 	}
@@ -136,10 +190,11 @@ template <
 	{
 		auto p(&(*this)[pos]);
 
-		if (!IsPodArray) {
-			if (!std::get<1>(items).test(pos))
-				return nullptr;
-		}
+		if (
+			Policy::needs_safe_initialization
+			&& !Policy::test_valid(*this, pos)
+		)
+			return nullptr;
 
 		return p;
 	}
@@ -149,11 +204,11 @@ template <
 	{
 		auto p(&(*this)[pos]);
 
-		if (!IsPodArray) {
-			if (!std::get<1>(items).test(pos)) {
+		if (Policy::needs_safe_initialization) {
+			if (!Policy::test_valid(*this, pos)) {
 				allocator_type a(a_);
 				allocator_traits::construct(a, p);
-				std::get<1>(items).set(pos);
+				Policy::set_valid(*this, pos, true);
 			}
 		}
 
@@ -166,18 +221,18 @@ template <
 		auto p(&(*this)[pos]);
 		allocator_type a(a_);
 
-		if (IsPodArray) {
+		if (!Policy::needs_safe_initialization) {
 			allocator_traits::construct(
 				a, p, std::forward<Args>(args)...
 			);
 			return *p;
 		}
 
-		if (!std::get<1>(items).test(pos)) {
+		if (!Policy::test_valid(*this, pos)) {
 			allocator_traits::construct(
 				a, p, std::forward<Args>(args)...
 			);
-			std::get<1>(items).set(pos);
+			Policy::set_valid(*this, pos, true);
 			return *p;
 		}
 
@@ -201,7 +256,9 @@ template <
 			allocator_traits::allocate(a, 1), backup_deleter
 		);
 
-		allocator_traits::construct(a, bp.get(), std::move(*p));
+		allocator_traits::construct(
+			a, bp.get(), std::move_if_noexcept(*p)
+		);
 		restore_mode = 1;
 
 		allocator_traits::destroy(a, p);
@@ -223,7 +280,7 @@ template <
 			pos < std::get<0>(items).size();
 			++pos
 		) {
-			if (std::get<1>(items).test(pos)) {
+			if (Policy::test_valid(*this, pos)) {
 				if (!f(pos + offset, (*this)[pos]))
 					return false;
 			}
@@ -235,14 +292,14 @@ private:
 	template <typename Alloc1>
 	void destroy(Alloc1 const &a_)
 	{
-		if (!IsPodArray) {
+		if (Policy::needs_safe_initialization) {
 			allocator_type a(a_);
 			for (
 				size_type pos(0);
 				pos < std::get<0>(items).size();
 				++pos
 			) {
-				if (std::get<1>(items).test(pos))
+				if (Policy::test_valid(*this, pos))
 					allocator_traits::destroy(
 						a, &(*this)[pos]
 					);
@@ -250,28 +307,8 @@ private:
 		}
 	}
 
-	struct dummy_bitset {
-		bool test( size_t pos ) const
-		{
-			return true;
-		}
-
-		dummy_bitset &set()
-		{
-			return *this;
-		}
-
-		dummy_bitset &set(size_t pos, bool value = true)
-		{
-			return *this;
-		}
-	};
-
 	std::tuple<
-		std::array<StoredType, N>,
-		typename std::conditional<
-			IsPodArray, dummy_bitset, std::bitset<N>
-		>::type
+		std::array<StoredType, N>, typename Policy::metadata_type
 	> items;
 };
 

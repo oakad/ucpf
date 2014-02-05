@@ -39,7 +39,7 @@ struct s {
 
 int s::global_count = 0;
 
-struct char_vector_policy : default_sparse_vector_policy {
+struct char_vector_policy : sparse_vector_default_policy<char> {
 	constexpr static size_t data_node_order = 8;
 };
 

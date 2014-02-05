@@ -14,7 +14,7 @@
 namespace ucpf { namespace yesod {
 
 template <typename CharType>
-struct default_string_map_policy {
+struct string_map_default_policy {
 	typedef std::allocator<void> allocator_type;
 	typedef std::char_traits<CharType> char_traits_type;
 	typedef typename std::make_unsigned<
@@ -28,7 +28,7 @@ struct default_string_map_policy {
 
 template <
 	typename CharType, typename ValueType,
-	typename Policy = default_string_map_policy<CharType>
+	typename Policy = string_map_default_policy<CharType>
 > struct string_map;
 
 }}
