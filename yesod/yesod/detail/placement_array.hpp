@@ -14,56 +14,74 @@
 
 namespace ucpf { namespace yesod { namespace detail {
 
-template <
-	typename ValueType, size_t N, typename Policy, typename Alloc,
-	typename StoredType
-> struct placement_array;
-
-struct placement_array_pod_policy {
-	struct metadata_type {};
-	constexpr static bool needs_safe_initialization = false;
-
-	template <typename ArrayType>
-	static bool test_valid(ArrayType const &a, size_t pos)
+template <size_t N, typename ValueValidPred = void, bool IsPodType = false>
+struct placement_array_base {
+	bool needs_safe_initialization() const
 	{
-		return a[pos] != 0;
+		return true;
 	}
 
-	template <typename ArrayType>
-	static void set_valid(ArrayType &a, size_t pos, bool valid)
+	template <typename T>
+	bool test_valid(T const *v, size_t pos) const
+	{
+		return value_valid.test(pos);
+	}
+
+	template <typename T>
+	void set_valid(T const *v, size_t pos, bool valid)
+	{
+		value_valid.set(pos, valid);
+	}
+
+	std::bitset<N> value_valid;
+};
+
+template <size_t N, typename ValueValidPred>
+struct placement_array_base<N, ValueValidPred, true> {
+	bool needs_safe_initialization() const
+	{
+		return false;
+	}
+
+	template <typename T>
+	bool test_valid(T const *v, size_t pos) const
+	{
+		return ValueValidPred::test(*v);
+	}
+
+	template <typename T>
+	void set_valid(T const *v, size_t pos, bool valid)
 	{}
 };
 
 template <size_t N>
-struct placement_array_obj_policy {
-	typedef std::bitset<N> metadata_type;
-	constexpr static bool needs_safe_initialization = true;
-
-	template <typename ArrayType>
-	static bool test_valid(ArrayType const &a, size_t pos)
+struct placement_array_base<N, void, true> {
+	bool needs_safe_initialization() const
 	{
-		return a.get_metadata().test(pos);
+		return false;
 	}
 
-	template <typename ArrayType>
-	static void set_valid(ArrayType &a, size_t pos, bool valid)
+	template <typename T>
+	bool test_valid(T const *v, size_t pos) const
 	{
-		a.get_metadata().set(pos, valid);
+		return *v != 0;
 	}
+
+	template <typename T>
+	void set_valid(T const *v, size_t pos, bool valid)
+	{}
 };
 
 template <
 	typename ValueType, size_t N,
-	typename Policy = typename std::conditional<
-		std::is_pod<ValueType>::value,
-		placement_array_pod_policy,
-		placement_array_obj_policy<N>
-	>::type,
 	typename Alloc = std::allocator<void>,
+	typename ValueValidPred = void,
 	typename StoredType = typename std::aligned_storage<
 		sizeof(ValueType), std::alignment_of<ValueType>::value
 	>::type
-> struct placement_array {
+> struct placement_array : placement_array_base<
+	N, ValueValidPred, std::is_pod<ValueType>::value
+> {
 	typedef typename std::allocator_traits<Alloc>::template rebind_alloc<
 		placement_array
 	> self_allocator_type;
@@ -112,35 +130,23 @@ template <
 	template <typename Alloc1>
 	placement_array(Alloc1 const &a_)
 	{
-		if (!Policy::needs_safe_initialization) {
+		if (!this->needs_safe_initialization()) {
 			allocator_type a(a_);
-			for (auto &p: std::get<0>(items))
+			for (auto &p: items)
 				allocator_traits::construct(
 					a, reinterpret_cast<pointer>(&p)
 				);
 		}
 	}
 
-	typename Policy::metadata_type const &get_metadata() const
-	{
-		return std::get<1>(items);
-	}
-
-	typename Policy::metadata_type &get_metadata()
-	{
-		return std::get<1>(items);
-	}
-
 	reference operator[](size_type pos)
 	{
-		return reinterpret_cast<reference>(std::get<0>(items)[pos]);
+		return reinterpret_cast<reference>(items[pos]);
 	}
 
 	const_reference operator[](size_type pos) const
 	{
-		return reinterpret_cast<const_reference>(
-			std::get<0>(items)[pos]
-		);
+		return reinterpret_cast<const_reference>(items[pos]);
 	}
 
 	iterator begin()
@@ -177,10 +183,7 @@ template <
 	{
 		auto p(&(*this)[pos]);
 
-		if (
-			Policy::needs_safe_initialization
-			&& !Policy::test_valid(*this, pos)
-		)
+		if (!this->test_valid(p, pos))
 			return nullptr;
 
 		return p;
@@ -190,10 +193,7 @@ template <
 	{
 		auto p(&(*this)[pos]);
 
-		if (
-			Policy::needs_safe_initialization
-			&& !Policy::test_valid(*this, pos)
-		)
+		if (!this->test_valid(p, pos))
 			return nullptr;
 
 		return p;
@@ -204,11 +204,11 @@ template <
 	{
 		auto p(&(*this)[pos]);
 
-		if (Policy::needs_safe_initialization) {
-			if (!Policy::test_valid(*this, pos)) {
+		if (this->needs_safe_initialization()) {
+			if (!this->test_valid(p, pos)) {
 				allocator_type a(a_);
 				allocator_traits::construct(a, p);
-				Policy::set_valid(*this, pos, true);
+				this->set_valid(p, pos, true);
 			}
 		}
 
@@ -221,18 +221,18 @@ template <
 		auto p(&(*this)[pos]);
 		allocator_type a(a_);
 
-		if (!Policy::needs_safe_initialization) {
+		if (!this->needs_safe_initialization()) {
 			allocator_traits::construct(
 				a, p, std::forward<Args>(args)...
 			);
 			return *p;
 		}
 
-		if (!Policy::test_valid(*this, pos)) {
+		if (!this->test_valid(p, pos)) {
 			allocator_traits::construct(
 				a, p, std::forward<Args>(args)...
 			);
-			Policy::set_valid(*this, pos, true);
+			this->set_valid(p, pos, true);
 			return *p;
 		}
 
@@ -275,12 +275,8 @@ template <
 		std::function<bool (size_type, const_reference)> &&f
 	) const
 	{
-		for (
-			size_type pos(0);
-			pos < std::get<0>(items).size();
-			++pos
-		) {
-			if (Policy::test_valid(*this, pos)) {
+		for (size_type pos(0); pos < items.size(); ++pos) {
+			if (this->test_valid(&(*this)[pos], pos)) {
 				if (!f(pos + offset, (*this)[pos]))
 					return false;
 			}
@@ -292,14 +288,10 @@ private:
 	template <typename Alloc1>
 	void destroy(Alloc1 const &a_)
 	{
-		if (Policy::needs_safe_initialization) {
+		if (this->needs_safe_initialization()) {
 			allocator_type a(a_);
-			for (
-				size_type pos(0);
-				pos < std::get<0>(items).size();
-				++pos
-			) {
-				if (Policy::test_valid(*this, pos))
+			for (size_type pos(0); pos < items.size(); ++pos) {
+				if (this->test_valid(&(*this)[pos], pos))
 					allocator_traits::destroy(
 						a, &(*this)[pos]
 					);
@@ -307,9 +299,7 @@ private:
 		}
 	}
 
-	std::tuple<
-		std::array<StoredType, N>, typename Policy::metadata_type
-	> items;
+	std::array<StoredType, N> items;
 };
 
 }}}

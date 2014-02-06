@@ -9,8 +9,41 @@
 #define UCPF_YESOD_DETAIL_SPARSE_VECTOR_BASE_JAN_06_2014_1320
 
 #include <yesod/detail/placement_array.hpp>
+#include <yesod/mpl/detail/type_wrapper.hpp>
 
 namespace ucpf { namespace yesod {
+namespace detail {
+
+using ucpf::yesod::mpl::detail::type_wrapper;
+
+template <typename T>
+struct has_value_valid_pred {
+	template <typename U>
+	static std::true_type test(
+		type_wrapper<U> const volatile *,
+		type_wrapper<typename U::value_valid_pred> * = 0
+	);
+
+	static std::false_type test(...);
+
+	typedef decltype(
+		test(static_cast<type_wrapper<T> *>(nullptr))
+	) type;
+
+	static const bool value = type::value;
+};
+
+template <typename Policy, bool HasPredicate = false>
+struct sparse_vector_value_predicate {
+	typedef void type;
+};
+
+template <typename Policy>
+struct sparse_vector_value_predicate<Policy, true> {
+	typedef typename Policy::value_valid_pred type;
+};
+
+}
 
 template <
 	typename ValueType, typename Policy
@@ -126,14 +159,15 @@ private:
 
 	typedef detail::placement_array<
 		node_pointer, (size_t(1) << Policy::ptr_node_order),
-		detail::placement_array_pod_policy,
-		typename Policy::allocator_type
+		typename Policy::allocator_type, void
 	> ptr_node;
 
 	typedef detail::placement_array<
 		ValueType, (size_t(1) << Policy::data_node_order),
-		typename Policy::data_node_policy,
-		typename Policy::allocator_type
+		typename Policy::allocator_type,
+		typename detail::sparse_vector_value_predicate<
+			Policy, detail::has_value_valid_pred<Policy>::value
+		>::type
 	> data_node;
 
 	size_type height;

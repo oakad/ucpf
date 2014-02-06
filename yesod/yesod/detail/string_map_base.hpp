@@ -209,11 +209,11 @@ private:
 		{}
 	};
 
-	struct pair_vector_policy : detail::placement_array_pod_policy {
-		template <typename ArrayType>
-		static bool test_valid(ArrayType const &a, size_t pos)
+	struct pair_valid_pred 
+	{
+		static bool test(pair_type const &p, size_t pos)
 		{
-			return a[pos].first != 0;
+			return p.first != 0;
 		}
 	};
 
@@ -226,7 +226,7 @@ private:
 		constexpr static size_t
 		data_node_order = Policy::trie_node_order;
 
-		typedef pair_vector_policy data_node_policy;
+		typedef pair_valid_pred value_valid_pred;
 	};
 
 	pair_type trie_root;
