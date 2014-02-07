@@ -21,7 +21,7 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 	bool inserted(true);
 
 	do {
-		auto n_pos(log_offset(l_pos, deref_char(first)));
+		auto n_pos(char_offset(l_pos, deref_char(first)));
 		auto &p(trie.at(vec_offset(n_pos)));
 		printf("yy %p\n", &p);
 		++first;
@@ -110,7 +110,7 @@ auto string_map<CharType, ValueType, Policy>::find_impl(
 {
 	uintptr_t l_pos(trie_root.first);
 	do {
-		auto n_pos(log_offset(l_pos, deref_char(first)));
+		auto n_pos(char_offset(l_pos, deref_char(first)));
 		auto p(trie.ptr_at(vec_offset(n_pos)));
 		++first;
 
@@ -126,12 +126,83 @@ auto string_map<CharType, ValueType, Policy>::find_impl(
 	/* Check for virtual key terminator (will appear if one key is a
 	 * substring of another).
 	 */
-	auto n_pos(log_offset(l_pos, 1));
+	auto n_pos(char_offset(l_pos, 1));
 	auto p(trie.ptr_at(vec_offset(n_pos)));
 	if (p && p->first && p->second == l_pos && !(p->first & 1))
 		return std::tie(p->first, p->second, n_pos);
 
 	return std::make_tuple(0, 0, 0);
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+auto string_map<CharType, ValueType, Policy>::unroll_key(
+	pair_type *p, uintptr_t pos, size_type count, index_char_type other
+) -> std::pair<pair_type *, uintptr_t>
+{
+	size_type shrink(0);
+	std::unique_ptr<value_pair, std::function<void (value_pair *)>> v_ptr(
+		reinterpret_cast<value_pair *>(p->first),
+		[&shrink, this](value_pair *v) -> void {
+			if (shrink)
+				v->shrink_suffix(trie.get_allocator(), shrink);
+		}
+	);
+
+	auto suffix(v_ptr->suffix());
+	if (count == v_ptr->suffix_length)
+		++count;
+
+	uintptr_t next_pos(0);
+	while ((count - shrink) > 1) {
+		next_pos = char_offset(1, suffix[shrink]);
+		auto next_p(trie.emplace_at_above(
+			vec_pos(next_pos),
+			reinterpret_cast<uintptr_t>(v_ptr.get()),
+			pos
+		));
+		p->first = log_offset(next_p.second - vec_pos(next_pos));
+		pos = log_offset(next_p.second);
+		++shrink;
+		p = &next_p.first;
+	}
+
+	index_char_type p_char(terminator_char);
+
+	if (shrink != v_ptr->suffix_length)
+		p_char = suffix[shrink++];
+
+	auto min_char(std::min(p_char, other));
+	auto max_char(std::max(p_char, other));
+	uintptr_t adj_pos(1);
+
+	while (true) {
+		next_pos = char_offset(adj_pos, min_char);
+		auto xp(trie.find_empty_above(vec_pos(next_pos)));
+
+		adj_pos = log_offset(xp - vec_pos(next_pos));
+		if (trie.is_empty(vec_pos(char_offset(adj_pos, max_char))))
+			break;
+
+		adj_pos += 2;
+	}
+#error !!!
+	std::pair<pair_type *, uintptr_t> rv(nullptr, 0);
+	if (shrink == v_ptr->suffix_length) {
+		auto next_pos(char_offset(1, terminator_char));
+		auto next_p(trie.emplace_at_above(
+			vec_pos(next_pos),
+			reinterpret_cast<uintptr_t>(v_ptr.get()),
+			pos
+		));
+		rv.first = p;
+		rv.second = pos;
+		p->first = log_offset(next_p.second - vec_pos(next_pos));
+		pos = log_offset(next_p.second);
+		++shrink;
+		p = &next_p.first;
+	}
+
+	return rv;
 }
 
 template <typename CharType, typename ValueType, typename Policy>

@@ -34,7 +34,7 @@ struct string_map {
 
 
 	string_map()
-	: trie_root(3, 0)
+	: trie_root(1, 0)
 	{}
 
 	template <typename StringType, typename... Args>
@@ -90,6 +90,8 @@ struct string_map {
 
 private:
 	typedef std::pair<uintptr_t, uintptr_t> pair_type;
+	constexpr static index_char_type terminator_char = 1;
+	constexpr static index_char_type null_char = 2;
 
 	template <typename Iterator>
 	static index_char_type deref_char(Iterator const &iter)
@@ -97,28 +99,39 @@ private:
 		return static_cast<index_char_type>(*iter);
 	}
 
-	/* logical:  1 2 3 4 5...
-	 * physical: r 0 1 2 3...
-	 * encoded:  3 5 7 9 11...
+	/* logical:  0 1 2 3 4 5...
+	 * physical: r 0 1 2 3 4...
+	 * encoded:  1 3 5 7 9 11...
 	 *
 	 * encoded v -> encoded (v + c)
 	 * offset 1 is a virtual string terminator
 	 */
-	static uintptr_t log_offset(uintptr_t v, index_char_type c)
+	static uintptr_t char_offset(uintptr_t v, index_char_type c)
 	{
-		return v + ((uintptr_t(c) + 2) << 1);
+		return v + (uintptr_t(c) + null_char) << 1;
 	}
 
 	/* encoded -> physical */
 	static uintptr_t vec_offset(uintptr_t v)
 	{
-		return (v - 5) >> 1;
+		return (v - 3) >> 1;
+	}
+
+	/* physical -> encoded */
+	static uintptr_t log_offset(uintptr_t v)
+	{
+		return (v << 1) | 1;
 	}
 
 	template <typename Iterator>
 	std::tuple<uintptr_t, uintptr_t, uintptr_t> find_impl(
 		Iterator &first, Iterator const &last
 	) const;
+
+	std::pair<pair_type *, uintptr_t> unroll_key(
+		pair_type &p, uintptr_t pos, size_type count,
+		index_char_type other
+	);
 
 	struct alignas(uintptr_t) value_pair {
 		typedef typename std::allocator_traits<
