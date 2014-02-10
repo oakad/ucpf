@@ -73,6 +73,35 @@ bool sparse_vector<ValueType, Policy>::for_each_impl(
 }
 
 template <typename ValueType, typename Policy>
+size_type sparse_vector<ValueType, Policy>::find_empty_above(
+	size_type pos
+) const
+{
+	std::pair<node_pointer, size_type> tree_loc[height];
+
+	tree_loc_from_pos(tree_loc, pos);
+	auto h_pos(height - 1);
+
+	while (true) {
+		if (tree_loc[h_pos].first) {
+			tree_loc[h_pos].second
+			= tree_loc[h_pos].first->find_empty_above(
+				tree_loc[h_pos].second
+			);
+
+			if (
+				tree_loc[h_pos].second
+				< tree_loc[h_pos].first->size()
+			)
+				return tree_loc_to_pos(tree_loc);
+			else
+				tree_loc_normalize();
+		} else
+			return tree_loc_to_pos(tree_loc);
+	}
+}
+
+template <typename ValueType, typename Policy>
 void sparse_vector<ValueType, Policy>::destroy_node_r(
 	node_pointer p_, size_type h
 )

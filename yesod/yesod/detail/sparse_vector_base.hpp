@@ -149,6 +149,8 @@ template <
 		);
 	}
 
+	size_type find_empty_above(size_type pos) const;
+
 	allocator_type get_allocator() const
 	{
 		return std::get<1>(root_node);

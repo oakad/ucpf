@@ -39,17 +39,29 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 				l_pos = p.first;
 				continue;
 			} else {
+				// relocate group
 			}
 		} else {
 			rv = reinterpret_cast<value_pair *>(p.first);
-			auto c_pos(rv->common_length(first, last));
-			if (((last - first) == c_pos) && (
-				rv->suffix_length == c_pos
-			)) {
-				inserted = false;
-				break;
-			}
+			auto c_len(rv->common_length(first, last));
+			index_char_type n_char(terminator_char);
 
+			if ((last - first) == c_len) {
+				if (rv->suffix_length == c_len) {
+					inserted = false;
+					break;
+				}
+			} else
+				n_char = *(first + c_len);
+
+			auto loc(unroll_key(&p, n_pos, c_len, n_char));
+			rv = value_pair::construct(
+				trie.get_allocator(), first + c_len, last,
+				std::forward<Args>(args)...
+			);
+			loc.first->first = reinterpret_cast<uintptr_t>(rv);
+			loc.first->second = loc.second;
+			break;
 		}
 	} while (first != last);
 
@@ -155,21 +167,21 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 	uintptr_t next_pos(0);
 	while ((count - shrink) > 1) {
 		next_pos = char_offset(1, suffix[shrink]);
-		auto next_p(trie.emplace_at_above(
-			vec_pos(next_pos),
-			reinterpret_cast<uintptr_t>(v_ptr.get()),
+		auto xp(trie.find_empty_above(vec_offset(next_pos)));
+		auto q(trie.emplace_at(
+			vec_offset(xp), reinterpret_cast<uintptr_t>(v_ptr.get()),
 			pos
 		));
-		p->first = log_offset(next_p.second - vec_pos(next_pos));
-		pos = log_offset(next_p.second);
+		p->first = log_offset(xp - vec_offset(next_pos));
+		pos = log_offset(xp);
 		++shrink;
-		p = &next_p.first;
+		p = &q;
 	}
 
 	index_char_type p_char(terminator_char);
 
 	if (shrink != v_ptr->suffix_length)
-		p_char = suffix[shrink++];
+		p_char = suffix[shrink];
 
 	auto min_char(std::min(p_char, other));
 	auto max_char(std::max(p_char, other));
@@ -177,32 +189,26 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 
 	while (true) {
 		next_pos = char_offset(adj_pos, min_char);
-		auto xp(trie.find_empty_above(vec_pos(next_pos)));
+		auto xp(trie.find_empty_above(vec_offset(next_pos)));
 
-		adj_pos = log_offset(xp - vec_pos(next_pos));
-		if (trie.is_empty(vec_pos(char_offset(adj_pos, max_char))))
+		adj_pos = log_offset(xp - vec_offset(next_pos));
+		if (!trie.ptr_at(
+			vec_offset(char_offset(adj_pos, max_char))
+		))
 			break;
 
 		adj_pos += 2;
 	}
-#error !!!
-	std::pair<pair_type *, uintptr_t> rv(nullptr, 0);
-	if (shrink == v_ptr->suffix_length) {
-		auto next_pos(char_offset(1, terminator_char));
-		auto next_p(trie.emplace_at_above(
-			vec_pos(next_pos),
-			reinterpret_cast<uintptr_t>(v_ptr.get()),
-			pos
-		));
-		rv.first = p;
-		rv.second = pos;
-		p->first = log_offset(next_p.second - vec_pos(next_pos));
-		pos = log_offset(next_p.second);
-		++shrink;
-		p = &next_p.first;
-	}
 
-	return rv;
+	trie.emplace_at(
+		char_offset(adj_pos, p_char),
+		reinterpret_cast<uintptr_t>(v_ptr.get()), pos
+	);
+	p->first = adj_pos;
+
+	return std::make_pair(
+		&trie.emplace_at(char_offset(adj_pos, other), 0, 0), pos
+	);
 }
 
 template <typename CharType, typename ValueType, typename Policy>
@@ -325,7 +331,7 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 		);
 		for (auto c(suffix_length - count); c < suffix_length; ++c)
 			char_allocator_traits::destroy(
-				ca, short_suffix[c]
+				ca, &short_suffix[c]
 			);
 		break;
 	}
@@ -335,7 +341,7 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 
 		for (size_type c(0); c < (suffix_length - count); ++c)
 			char_allocator_traits::construct(
-				ca, short_suffix[c],
+				ca, &short_suffix[c],
 				std::move(data[offset + count + c])
 			);
 
@@ -353,7 +359,7 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 		auto next_offset(long_suffix.offset + count);
 		for (; long_suffix.offset < next_offset; ++long_suffix.offset)
 			char_allocator_traits::destroy(
-				ca, long_suffix.data[long_suffix.offset]
+				ca, long_suffix.data + long_suffix.offset
 			);
 		break;
 	}

@@ -108,7 +108,7 @@ private:
 	 */
 	static uintptr_t char_offset(uintptr_t v, index_char_type c)
 	{
-		return v + (uintptr_t(c) + null_char) << 1;
+		return v + ((uintptr_t(c) + null_char) << 1);
 	}
 
 	/* encoded -> physical */
@@ -129,7 +129,7 @@ private:
 	) const;
 
 	std::pair<pair_type *, uintptr_t> unroll_key(
-		pair_type &p, uintptr_t pos, size_type count,
+		pair_type *p, uintptr_t pos, size_type count,
 		index_char_type other
 	);
 
@@ -226,7 +226,7 @@ private:
 	{
 		static bool test(pair_type const &p, size_t pos)
 		{
-			return p.first != 0;
+			return p.second != 0;
 		}
 	};
 

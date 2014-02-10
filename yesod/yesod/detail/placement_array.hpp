@@ -179,6 +179,11 @@ template <
 		return const_iterator(&(*this)[N]);
 	}
 
+	size_type size() const
+	{
+		return items.size();
+	}
+
 	pointer ptr_at(size_type pos)
 	{
 		auto p(&(*this)[pos]);
@@ -268,6 +273,15 @@ template <
 		restore_mode = 1;
 
 		return *p;
+	}
+
+	size_type find_empty_above(size_type pos) const
+	{
+		for (; pos < items.size(); ++pos) {
+			if (!this->test_valid(&(*this)[pos], pos))
+				break;
+		}
+		return pos;
 	}
 
 	bool for_each(
