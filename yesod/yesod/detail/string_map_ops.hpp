@@ -345,10 +345,15 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 				std::move(data[offset + count + c])
 			);
 
-		for (auto c(suffix_length - 1); c >= 0; --c)
+		while (true) {
+			auto c(suffix_length - 1);
 			char_allocator_traits::destroy(
 				ca, &data[offset + c]
 			);
+			if (!c)
+				break;
+			--c;
+		}
 
 		char_allocator_traits::deallocate(
 			ca, data, offset + suffix_length

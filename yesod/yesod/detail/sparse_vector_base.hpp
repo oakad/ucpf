@@ -172,18 +172,33 @@ private:
 		>::type
 	> data_node;
 
+	struct loc_pair {
+		node_pointer ptr;
+		size_type off;
+	};
+
+	bool tree_loc_from_pos(loc_pair *tree_loc, size_type pos) const;
+
+	bool tree_loc_next(loc_pair *tree_loc) const;
+
+	bool tree_loc_next_valid(loc_pair *tree_loc) const;
+
+	size_type tree_loc_to_pos(loc_pair *tree_loc) const;
+
 	size_type height;
 	std::tuple<node_pointer, allocator_type> root_node;
 
 	static size_type node_offset(size_type pos, size_type h)
 	{
-		auto l_pos(pos & ((1UL << Policy::data_node_order) - 1));
+		auto l_pos(pos & (
+			(size_type(1) << Policy::data_node_order) - 1)
+		);
 		if (h == 1)
 			return l_pos;
 
 		pos >>= Policy::data_node_order;
 		return (pos >> (Policy::ptr_node_order * (h - 2)))
-		       & ((1UL << Policy::ptr_node_order) - 2);
+		       & ((size_type(1) << Policy::ptr_node_order) - 2);
 	}
 
 	bool for_each_impl(
