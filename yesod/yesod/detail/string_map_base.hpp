@@ -34,7 +34,7 @@ struct string_map {
 
 
 	string_map()
-	: trie_root(1, 0)
+	: trie_root(1)
 	{}
 
 	template <typename StringType, typename... Args>
@@ -120,7 +120,7 @@ private:
 	/* physical -> encoded */
 	static uintptr_t log_offset(uintptr_t v)
 	{
-		return (v << 1) | 1;
+		return (v << 1) + 3;
 	}
 
 	template <typename Iterator>
@@ -242,7 +242,7 @@ private:
 		typedef pair_valid_pred value_valid_pred;
 	};
 
-	pair_type trie_root;
+	uintptr_t trie_root;
 	sparse_vector<pair_type, trie_vector_policy> trie;
 };
 
