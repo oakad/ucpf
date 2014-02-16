@@ -123,6 +123,12 @@ private:
 		return (v << 1) + 3;
 	}
 
+	/* encoded + physical -> encoded */
+	static uintptr_t adjust_encoded(uintptr_t v, uintptr_t adj)
+	{
+		return v + (adj << 1);
+	}
+
 	template <typename Iterator>
 	std::tuple<uintptr_t, uintptr_t, uintptr_t> find_impl(
 		Iterator &first, Iterator const &last

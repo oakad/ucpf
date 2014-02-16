@@ -133,7 +133,6 @@ template <
 	reference at(size_type pos)
 	{
 		auto node(data_node_alloc_at(pos));
-		printf("at %p\n", node);
 		return node->at(
 			node_offset(pos, 1), std::get<1>(root_node)
 		);

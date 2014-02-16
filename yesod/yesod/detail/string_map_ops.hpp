@@ -49,13 +49,16 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 					inserted = false;
 					break;
 				}
-			} else
-				n_char = *(first + c_len);
+				first = last;
+			} else {
+				first += c_len;
+				n_char = *first;
+				++first;
+			}
 
-			printf("single n_pos %zd, c_len %zd, n_char %d\n", n_pos, c_len, n_char);
 			auto loc(unroll_key(&p, n_pos, c_len, n_char));
 			rv = value_pair::construct(
-				trie.get_allocator(), first + c_len, last,
+				trie.get_allocator(), first, last,
 				std::forward<Args>(args)...
 			);
 			loc.first->first = reinterpret_cast<uintptr_t>(rv);
@@ -137,27 +140,29 @@ auto string_map<CharType, ValueType, Policy>::find_impl(
 	Iterator &first, Iterator const &last
 ) const -> std::tuple<uintptr_t, uintptr_t, uintptr_t>
 {
-	uintptr_t l_pos(trie_root);
+	uintptr_t l_pos(1);
+	uintptr_t adj_pos(trie_root);
 	do {
-		auto n_pos(char_offset(l_pos, deref_char(first)));
+		auto n_pos(char_offset(adj_pos, deref_char(first)));
 		auto p(trie.ptr_at(vec_offset(n_pos)));
 		++first;
 
-		if (!p || !p->first || p->second != l_pos)
+		if (!p || !p->first || (p->second != l_pos))
 			return std::make_tuple(0, 0, 0);
 
 		if (!(p->first & 1))
 			return std::tie(p->first, p->second, n_pos);
 
-		l_pos = p->first;
+		adj_pos = p->first;
+		l_pos = n_pos;
 	} while (first != last);
 
 	/* Check for virtual key terminator (will appear if one key is a
 	 * substring of another).
 	 */
-	auto n_pos(char_offset(l_pos, 1));
+	auto n_pos(char_offset(adj_pos, terminator_char));
 	auto p(trie.ptr_at(vec_offset(n_pos)));
-	if (p && p->first && p->second == l_pos && !(p->first & 1))
+	if (p && p->first && (p->second == l_pos) && !(p->first & 1))
 		return std::tie(p->first, p->second, n_pos);
 
 	return std::make_tuple(0, 0, 0);
@@ -186,12 +191,10 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 	while (count > shrink) {
 		next_pos = char_offset(1, suffix[shrink]);
 		auto xp(trie.find_empty_above(vec_offset(next_pos)));
-		auto q(trie.emplace_at(
-			vec_offset(xp),
-			reinterpret_cast<uintptr_t>(v_ptr.get()),
-			pos
+		auto &q(trie.emplace_at(
+			xp, reinterpret_cast<uintptr_t>(v_ptr.get()), pos
 		));
-		p->first = log_offset(xp - vec_offset(next_pos));
+		p->first = adjust_encoded(1, xp - vec_offset(next_pos));
 		pos = log_offset(xp);
 		++shrink;
 		p = &q;
@@ -205,13 +208,14 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 		next_pos = char_offset(adj_pos, min_char);
 		auto xp(trie.find_empty_above(vec_offset(next_pos)));
 
-		adj_pos = log_offset(xp - vec_offset(next_pos));
+		adj_pos = adjust_encoded(adj_pos, xp - vec_offset(next_pos));
+
 		if (!trie.ptr_at(
 			vec_offset(char_offset(adj_pos, max_char))
 		))
 			break;
 
-		adj_pos += 2;
+		adj_pos  = adjust_encoded(adj_pos, 1);
 	}
 
 	trie.emplace_at(
