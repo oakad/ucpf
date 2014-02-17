@@ -4,6 +4,13 @@
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
+ *
+ * Based on algorithm from:
+ *
+ *      An Efficient Implementation of Trie Structures (Jun-Ichi Aoe,
+ *      Katsushi Morimoto, Takashi Sato) in Software - Practice and Experience,
+ *      Vol. 22(9), 695 - 721 (September 1992)
+ *
  */
 #if !defined(UCPF_YESOD_DETAIL_STRING_MAP_OPS_JAN_06_2014_1145)
 #define UCPF_YESOD_DETAIL_STRING_MAP_OPS_JAN_06_2014_1145
@@ -23,26 +30,18 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 	do {
 		auto n_pos(char_offset(l_pos, deref_char(first)));
 		auto &p(trie.at(vec_offset(n_pos)));
+		auto n_char(deref_char(first));
 		++first;
-		if (!p.second) {
+		if (!p.check) {
 			rv = value_pair::construct(
 				trie.get_allocator(), first, last,
 				std::forward<Args>(args)...
 			);
-			p.first = reinterpret_cast<uintptr_t>(rv);
-			p.second = l_pos;
+			p = pair_type::make(rv, l_pos);
 			break;
-		} else if (p.first & 1) {
-			if (p.second == l_pos) {
-				l_pos = p.first;
-				continue;
-			} else {
-				// relocate group
-			}
-		} else {
-			rv = reinterpret_cast<value_pair *>(p.first);
+		} else if (p.is_leaf()) {
+			rv = p.leaf_ptr();
 			auto c_len(rv->common_length(first, last));
-			index_char_type n_char(terminator_char);
 
 			if ((last - first) == c_len) {
 				if (rv->suffix_length == c_len) {
@@ -50,9 +49,10 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 					break;
 				}
 				first = last;
+				n_char = terminator_char;
 			} else {
 				first += c_len;
-				n_char = *first;
+				n_char = deref_char(first);
 				++first;
 			}
 
@@ -61,9 +61,23 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 				trie.get_allocator(), first, last,
 				std::forward<Args>(args)...
 			);
-			loc.first->first = reinterpret_cast<uintptr_t>(rv);
-			loc.first->second = loc.second;
+			*loc.first = pair_type::make(rv, loc.second);
 			break;
+		} else {
+			if (p.check == l_pos) {
+				l_pos = p.base;
+				continue;
+			} else {
+				auto loc(split_subtree(
+					&p, n_pos, l_pos, n_char
+				));
+				rv = value_pair::construct(
+					trie.get_allocator(), first, last,
+					std::forward<Args>(args)...
+				);
+				*loc.first = pair_type::make(rv, loc.second);
+				break;
+			}
 		}
 	} while (first != last);
 
@@ -79,33 +93,32 @@ std::basic_ostream<
 	> &os
 ) const
 {
-	std::function<
-		bool (size_type, pair_type const &)
-	> f = [&os](size_type pos, pair_type const &p) -> bool {
+	os << "r: " << trie_root << '\n';
+	trie.for_each([&os](size_type pos, pair_type const &p) -> bool {
 		os << log_offset(pos) << " (" << pos << "): ";
-		if (p.first & 1) {
-			os << p.first << " (";
-			if (p.first > 1)
-				os << vec_offset(p.first);
+		if (!p.is_leaf()) {
+			os << p.base << " (";
+			if (p.base > 1)
+				os << vec_offset(p.base);
 			else
 				os << 'r';
 			
 			os << "), ";
-			os << p.second << " (";
-			if (p.second > 1)
-				os << vec_offset(p.second);
+			os << p.check << " (";
+			if (p.check > 1)
+				os << vec_offset(p.check);
 			else
-				os << (p.second ? 'r' : 'n');
+				os << (p.check ? 'r' : 'n');
 
 			os << ")\n";
 		} else {
-			auto vp(reinterpret_cast<value_pair const *>(p.first));
-			os << vp << ", " << p.second << " (";
+			auto vp(reinterpret_cast<value_pair const *>(p.base));
+			os << vp << ", " << p.check << " (";
 
-			if (p.second > 1)
-				os << vec_offset(p.second);
+			if (p.check > 1)
+				os << vec_offset(p.check);
 			else
-				os << (p.second ? 'r' : 'n');
+				os << (p.check ? 'r' : 'n');
 
 			os << ')';
 
@@ -127,10 +140,8 @@ std::basic_ostream<
 			os << '\n';
 		}
 		return true;
-	};
+	});
 
-	os << "r: " << trie_root << '\n';
-	trie.for_each(std::forward<decltype(f)>(f));
 	return os;
 }
 
@@ -147,13 +158,13 @@ auto string_map<CharType, ValueType, Policy>::find_impl(
 		auto p(trie.ptr_at(vec_offset(n_pos)));
 		++first;
 
-		if (!p || !p->first || (p->second != l_pos))
+		if (!p || !p->base || (p->check != l_pos))
 			return std::make_tuple(0, 0, 0);
 
-		if (!(p->first & 1))
-			return std::tie(p->first, p->second, n_pos);
+		if (p->is_leaf())
+			return std::tie(p->base, p->check, n_pos);
 
-		adj_pos = p->first;
+		adj_pos = p->base;
 		l_pos = n_pos;
 	} while (first != last);
 
@@ -162,8 +173,8 @@ auto string_map<CharType, ValueType, Policy>::find_impl(
 	 */
 	auto n_pos(char_offset(adj_pos, terminator_char));
 	auto p(trie.ptr_at(vec_offset(n_pos)));
-	if (p && p->first && (p->second == l_pos) && !(p->first & 1))
-		return std::tie(p->first, p->second, n_pos);
+	if (p && p->base && (p->check == l_pos) && p->is_leaf())
+		return std::tie(p->base, p->check, n_pos);
 
 	return std::make_tuple(0, 0, 0);
 }
@@ -175,8 +186,7 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 {
 	size_type shrink(0);
 	std::unique_ptr<value_pair, std::function<void (value_pair *)>> v_ptr(
-		reinterpret_cast<value_pair *>(p->first),
-		[&shrink, this](value_pair *v) -> void {
+		p->leaf_ptr(), [&shrink, this](value_pair *v) -> void {
 			if (shrink)
 				v->shrink_suffix(trie.get_allocator(), shrink);
 		}
@@ -192,9 +202,9 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 		next_pos = char_offset(1, suffix[shrink]);
 		auto xp(trie.find_empty_above(vec_offset(next_pos)));
 		auto &q(trie.emplace_at(
-			xp, reinterpret_cast<uintptr_t>(v_ptr.get()), pos
+			xp, pair_type::make(v_ptr.get(), pos)
 		));
-		p->first = adjust_encoded(1, xp - vec_offset(next_pos));
+		p->base = adjust_encoded(1, xp - vec_offset(next_pos));
 		pos = log_offset(xp);
 		++shrink;
 		p = &q;
@@ -220,16 +230,50 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 
 	trie.emplace_at(
 		vec_offset(char_offset(adj_pos, k_char)),
-		reinterpret_cast<uintptr_t>(v_ptr.get()), pos
+		pair_type::make(v_ptr.get(), pos)
 	);
-	p->first = adj_pos;
+	p->base = adj_pos;
 	++shrink;
 
 	return std::make_pair(
 		&trie.emplace_at(
-			vec_offset(char_offset(adj_pos, other)), 0, 0
+			vec_offset(char_offset(adj_pos, other)),
+			pair_type::make(uintptr_t(0), uintptr_t(0))
 		), pos
 	);
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+auto string_map<CharType, ValueType, Policy>::split_subtree(
+	pair_type *p, uintptr_t pos, uintptr_t l_pos, index_char_type k_char
+)-> std::pair<pair_type *, uintptr_t>
+{
+	std::vector<std::pair<pair_type *, uintptr_t>> p_set, l_set;
+
+	trie.for_each(
+		[&p_set, &l_set, pos, l_pos](
+			size_type pos_, pair_type const &p_
+		) -> bool {
+			if (p_.check == pos)
+				p_set.push_back(std::make_pair(
+					const_cast<pair_type *>(&p_), pos_
+				));
+			else if (p_.check == l_pos)
+				l_set.push_back(std::make_pair(
+					const_cast<pair_type *>(&p_), pos_
+				));
+
+			return true;
+		}	
+	);
+
+	if ((p_set.size() + 1) > l_set.size()) {
+		p_set.swap(l_set);
+	}
+
+	l_set.clear();
+
+	return std::make_pair(nullptr, 0);
 }
 
 template <typename CharType, typename ValueType, typename Policy>

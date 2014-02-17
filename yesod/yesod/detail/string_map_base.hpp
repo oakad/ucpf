@@ -4,6 +4,13 @@
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
+ *
+ * Based on algorithm from:
+ *
+ *      An Efficient Implementation of Trie Structures (Jun-Ichi Aoe,
+ *      Katsushi Morimoto, Takashi Sato) in Software - Practice and Experience,
+ *      Vol. 22(9), 695 - 721 (September 1992)
+ *
  */
 #if !defined(UCPF_YESOD_DETAIL_STRING_MAP_BASE_JAN_06_2014_1145)
 #define UCPF_YESOD_DETAIL_STRING_MAP_BASE_JAN_06_2014_1145
@@ -89,7 +96,35 @@ struct string_map {
 	) const;
 
 private:
-	typedef std::pair<uintptr_t, uintptr_t> pair_type;
+	struct alignas(uintptr_t) value_pair;
+
+	struct pair_type {
+		uintptr_t base;
+		uintptr_t check;
+
+		bool is_leaf() const
+		{
+			return !(base & 1);
+		}
+
+		value_pair* leaf_ptr() const
+		{
+			return reinterpret_cast<value_pair *>(base);
+		}
+
+		static pair_type make(uintptr_t base_, uintptr_t check_)
+		{
+			return pair_type{base_, check_};
+		}
+
+		static pair_type make(value_pair *base_, uintptr_t check_)
+		{
+			return pair_type{
+				reinterpret_cast<uintptr_t>(base_), check_
+			};
+		}
+	};
+
 	constexpr static index_char_type terminator_char = 1;
 	constexpr static index_char_type null_char = 2;
 
@@ -137,6 +172,11 @@ private:
 	std::pair<pair_type *, uintptr_t> unroll_key(
 		pair_type *p, uintptr_t pos, size_type count,
 		index_char_type other
+	);
+
+	std::pair<pair_type *, uintptr_t> split_subtree(
+		pair_type *p, uintptr_t pos, uintptr_t l_pos,
+		index_char_type k_char
 	);
 
 	struct alignas(uintptr_t) value_pair {
@@ -230,9 +270,9 @@ private:
 
 	struct pair_valid_pred 
 	{
-		static bool test(pair_type const &p, size_t pos)
+		static bool test(pair_type const &p)
 		{
-			return p.second != 0;
+			return p.check != 0;
 		}
 	};
 
