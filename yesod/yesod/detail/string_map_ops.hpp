@@ -24,11 +24,12 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 ) -> std::pair<reference, bool>
 {
 	value_pair *rv(nullptr);
-	uintptr_t l_pos(trie_root);
+	uintptr_t l_pos(1);
+	uintptr_t adj_pos(trie_root);
 	bool inserted(true);
 
 	do {
-		auto n_pos(char_offset(l_pos, deref_char(first)));
+		auto n_pos(char_offset(adj_pos, deref_char(first)));
 		auto &p(trie.at(vec_offset(n_pos)));
 		auto n_char(deref_char(first));
 		++first;
@@ -65,7 +66,8 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 			break;
 		} else {
 			if (p.check == l_pos) {
-				l_pos = p.base;
+				adj_pos = p.base;
+				l_pos = n_pos;
 				continue;
 			} else {
 				auto loc(split_subtree(
@@ -251,10 +253,10 @@ auto string_map<CharType, ValueType, Policy>::split_subtree(
 	std::vector<std::pair<pair_type *, uintptr_t>> p_set, l_set;
 
 	trie.for_each(
-		[&p_set, &l_set, pos, l_pos](
+		[&p_set, &l_set, p, l_pos](
 			size_type pos_, pair_type const &p_
 		) -> bool {
-			if (p_.check == pos)
+			if (p_.check == p->check)
 				p_set.push_back(std::make_pair(
 					const_cast<pair_type *>(&p_), pos_
 				));
@@ -267,13 +269,28 @@ auto string_map<CharType, ValueType, Policy>::split_subtree(
 		}	
 	);
 
-	if ((p_set.size() + 1) > l_set.size()) {
-		p_set.swap(l_set);
-	}
+	uintptr_t adj_pos(1);
+	if (p_set.size() < (l_set.size() + 1)) {
+		advance_branches(p->check, p_set, 0);
+		adj_pos =  l_pos > 1 ? trie[vec_offset(l_pos)].base : trie_root;
+	} else
+		adj_pos = advance_branches(l_pos, l_set, k_char);
 
-	l_set.clear();
+	return std::make_pair(
+		trie.ptr_at(vec_offset(char_offset(adj_pos, k_char))), l_pos
+	);
+}
 
-	return std::make_pair(nullptr, 0);
+template <typename CharType, typename ValueType, typename Policy>
+auto string_map<CharType, ValueType, Policy>::advance_branches(
+	uintptr_t pos,
+	std::vector<std::pair<pair_type *, uintptr_t>> &b_set,
+	index_char_type k_char
+) -> uintptr_t
+{
+	auto adj_orig(pos > 1 ? trie[vec_offset(pos)].base : trie_root);
+
+	
 }
 
 template <typename CharType, typename ValueType, typename Policy>

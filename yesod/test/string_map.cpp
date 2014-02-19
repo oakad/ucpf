@@ -36,10 +36,10 @@ BOOST_AUTO_TEST_CASE(string_map_0)
 
 	m0.emplace_at("bachelor", 111);
 	m0.emplace_at("jar", 222);
+	m0.emplace_at("badge", 333);
 	m0.dump(std::cout);
 
-	m0.emplace_at("badge", 333);
-
+	m0.emplace_at("baby", 444);
 	printf("----\n");
 	m0.dump(std::cout);
 
@@ -54,6 +54,10 @@ BOOST_AUTO_TEST_CASE(string_map_0)
 	auto r2(m0.find("badge"));
 	BOOST_CHECK(r2 != nullptr);
 	BOOST_CHECK_EQUAL(r2->a, 333);
+
+	auto r3(m0.find("baby"));
+	BOOST_CHECK(r3 != nullptr);
+	BOOST_CHECK_EQUAL(r3->a, 444);
 
 	BOOST_CHECK(false);
 }

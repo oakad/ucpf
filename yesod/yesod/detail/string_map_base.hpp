@@ -179,6 +179,12 @@ private:
 		index_char_type k_char
 	);
 
+	uintptr_t advance_branches(
+		uintptr_t pos,
+		std::vector<std::pair<pair_type *, uintptr_t>> &b_set,
+		index_char_type k_char
+	);
+
 	struct alignas(uintptr_t) value_pair {
 		typedef typename std::allocator_traits<
 			typename Policy::allocator_type
