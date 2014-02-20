@@ -99,7 +99,12 @@ template <
 		return !height;
 	}
 
-	bool for_each(
+	bool for_each_above(
+		size_type pos, std::function<bool (size_type, reference)> &&f
+	);
+
+	bool for_each_above(
+		size_type pos,
 		std::function<bool (size_type, const_reference)> &&f
 	) const;
 
@@ -180,7 +185,7 @@ private:
 
 	bool tree_loc_next(loc_pair *tree_loc) const;
 
-	bool tree_loc_next_valid(loc_pair *tree_loc) const;
+	bool tree_loc_next_leaf(loc_pair *tree_loc) const;
 
 	size_type tree_loc_to_pos(loc_pair *tree_loc) const;
 
@@ -199,11 +204,6 @@ private:
 		return (pos >> (Policy::ptr_node_order * (h - 2)))
 		       & ((size_type(1) << Policy::ptr_node_order) - 2);
 	}
-
-	bool for_each_impl(
-		ptr_node const *p, size_type h, size_type &offset,
-		std::function<bool (size_type, const_reference)> &&f
-	) const;
 
 	void destroy_node_r(node_pointer p_, size_type h);
 	data_node *data_node_at(size_type pos);

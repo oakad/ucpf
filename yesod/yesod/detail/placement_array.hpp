@@ -284,14 +284,30 @@ template <
 		return pos;
 	}
 
-	bool for_each(
-		size_type offset,
-		std::function<bool (size_type, const_reference)> &&f
+	bool for_each_above(
+		size_type pos,
+		std::function<bool (size_type, reference)> &&f,
+		size_type base_offset = 0
+	)
+	{
+		for (; pos < items.size(); ++pos) {
+			if (this->test_valid(&(*this)[pos], pos)) {
+				if (!f(pos + base_offset, (*this)[pos]))
+					return false;
+			}
+		}
+		return true;
+	}
+
+	bool for_each_above(
+		size_type pos,
+		std::function<bool (size_type, const_reference)> &&f,
+		size_type base_offset = 0
 	) const
 	{
-		for (size_type pos(0); pos < items.size(); ++pos) {
+		for (; pos < items.size(); ++pos) {
 			if (this->test_valid(&(*this)[pos], pos)) {
-				if (!f(pos + offset, (*this)[pos]))
+				if (!f(pos + base_offset, (*this)[pos]))
 					return false;
 			}
 		}

@@ -11,65 +11,59 @@
 namespace ucpf { namespace yesod {
 
 template <typename ValueType, typename Policy>
-bool sparse_vector<ValueType, Policy>::for_each(
-	std::function<bool (size_type, const_reference)> &&f
-) const
+bool sparse_vector<ValueType, Policy>::for_each_above(
+	size_type pos, std::function<bool (size_type, reference)> &&f
+)
 {
-	if (!height)
+	loc_pair tree_loc[height];
+	if (tree_loc_from_pos(tree_loc, pos))
 		return true;
 
-	if (height == 1) {
-		auto n(reinterpret_cast<data_node const *>(
-			std::get<0>(root_node)
-		));
-		return n->for_each(0, std::forward<decltype(f)>(f));
+	while (true) {
+		if (tree_loc[height - 1].ptr) {
+			auto node(reinterpret_cast<data_node *>(
+				tree_loc[height - 1].ptr
+			));
+			if (!node->for_each_above(
+				tree_loc[height - 1].off,
+				std::forward<decltype(f)>(f),
+				pos - tree_loc[height - 1].off
+			))
+				return false;
+		}
+		if (tree_loc_next_leaf(tree_loc))
+			return true;
+		else
+			pos = tree_loc_to_pos(tree_loc);
 	}
-
-	size_type offset(0);
-
-	return for_each_impl(
-		reinterpret_cast<ptr_node const *>(std::get<0>(root_node)),
-		0, offset, std::forward<decltype(f)>(f)
-	);
 }
 
 template <typename ValueType, typename Policy>
-bool sparse_vector<ValueType, Policy>::for_each_impl(
-	ptr_node const *p, size_type h, size_type &offset,
-	std::function<bool (size_type, const_reference)> &&f
+bool sparse_vector<ValueType, Policy>::for_each_above(
+	size_type pos, std::function<bool (size_type, const_reference)> &&f
 ) const
 {
-	if ((height - h) == 2) {
-		for (auto q: *p) {
-			if (q) {
-				auto dq(reinterpret_cast<data_node const *>(q));
-				if (!dq->for_each(
-					offset, std::forward<decltype(f)>(f)
-				))
-					return false;
-			}
-		}
-		offset += size_type(1) << (
-			Policy::data_node_order + Policy::ptr_node_order
-		);
+	loc_pair tree_loc[height];
+	if (tree_loc_from_pos(tree_loc, pos))
 		return true;
-	}
 
-	for (auto q: *p) {
-		if (q) {
-			if (!for_each_impl(
-				reinterpret_cast<ptr_node const *>(q),
-				++h, offset, std::forward<decltype(f)>(f)
+	while (true) {
+		if (tree_loc[height - 1].ptr) {
+			auto node(reinterpret_cast<data_node const *>(
+				tree_loc[height - 1].ptr
+			));
+			if (!node->for_each_above(
+				tree_loc[height - 1].off,
+				std::forward<decltype(f)>(f),
+				pos - tree_loc[height - 1].off
 			))
 				return false;
-		} else {
-			offset += size_type(1) << (
-				Policy::data_node_order
-				+ (Policy::ptr_node_order * (height - h - 1))
-			);
 		}
+		if (tree_loc_next_leaf(tree_loc))
+			return true;
+		else
+			pos = tree_loc_to_pos(tree_loc);
 	}
-	return true;
 }
 
 template <typename ValueType, typename Policy>
@@ -194,6 +188,57 @@ bool sparse_vector<ValueType, Policy>::tree_loc_next(loc_pair *tree_loc) const
 			tree_loc[pos] = loc_pair{nullptr, 0};
 	}
 	return true;
+}
+
+template <typename ValueType, typename Policy>
+bool sparse_vector<ValueType, Policy>::tree_loc_next_leaf(
+	loc_pair *tree_loc
+) const
+{
+	constexpr size_type ptr_node_sz(size_type(1) << Policy::ptr_node_order);
+
+	tree_loc[height - 1] = loc_pair{nullptr, 0};
+
+	if (height < 2)
+		return true;
+
+	auto h_pos(height - 2);
+
+	while (true) {
+		if (!tree_loc[h_pos].ptr) {
+			tree_loc[h_pos].off = 0;
+			if (h_pos) {
+				--h_pos;
+				continue;
+			} else
+				return true;
+		}
+
+		auto node(reinterpret_cast<ptr_node *>(tree_loc[h_pos].ptr));
+		++tree_loc[h_pos].off;
+		auto n_pos(node->size());
+		if (node->for_each_above(
+			tree_loc[h_pos].off,
+			[&n_pos](size_type pos, node_pointer p) {
+				if (p) {
+					n_pos = pos;
+					return false;
+				} else
+					return true;
+			}
+		)) {
+			if (h_pos) {
+				--h_pos;
+				continue;
+			} else
+				return true;
+		}
+
+		++h_pos;
+		tree_loc[h_pos] = loc_pair{&node[n_pos], 0};
+		if ((h_pos + 1) == height)
+			return false;
+	}
 }
 
 template <typename ValueType, typename Policy>

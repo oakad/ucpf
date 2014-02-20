@@ -70,9 +70,7 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 				l_pos = n_pos;
 				continue;
 			} else {
-				auto loc(split_subtree(
-					&p, n_pos, l_pos, n_char
-				));
+				auto loc(split_subtree(p.check, l_pos, n_char));
 				rv = value_pair::construct(
 					trie.get_allocator(), first, last,
 					std::forward<Args>(args)...
@@ -96,53 +94,57 @@ std::basic_ostream<
 ) const
 {
 	os << "r: " << trie_root << '\n';
-	trie.for_each([&os](size_type pos, pair_type const &p) -> bool {
-		os << log_offset(pos) << " (" << pos << "): ";
-		if (!p.is_leaf()) {
-			os << p.base << " (";
-			if (p.base > 1)
-				os << vec_offset(p.base);
-			else
-				os << 'r';
-			
-			os << "), ";
-			os << p.check << " (";
-			if (p.check > 1)
-				os << vec_offset(p.check);
-			else
-				os << (p.check ? 'r' : 'n');
+	trie.for_each_above(
+		0, [&os](size_type pos, pair_type const &p) -> bool {
+			os << log_offset(pos) << " (" << pos << "): ";
+			if (!p.is_leaf()) {
+				os << p.base << " (";
+				if (p.base > 1)
+					os << vec_offset(p.base);
+				else
+					os << 'r';
 
-			os << ")\n";
-		} else {
-			auto vp(reinterpret_cast<value_pair const *>(p.base));
-			os << vp << ", " << p.check << " (";
+				os << "), ";
+				os << p.check << " (";
+				if (p.check > 1)
+					os << vec_offset(p.check);
+				else
+					os << (p.check ? 'r' : 'n');
 
-			if (p.check > 1)
-				os << vec_offset(p.check);
-			else
-				os << (p.check ? 'r' : 'n');
+				os << ")\n";
+			} else {
+				auto vp(reinterpret_cast<value_pair const *>(
+					p.base
+				));
+				os << vp << ", " << p.check << " (";
 
-			os << ')';
+				if (p.check > 1)
+					os << vec_offset(p.check);
+				else
+					os << (p.check ? 'r' : 'n');
 
-			if (vp) {
-				os << " -> \"";
-				auto sp(vp->suffix());
-				for (
-					size_type c(0); c < vp->suffix_length;
-					++c
-				) {
-					if (sp[c])
-						os << sp[c];
-					else
-						os << "\\0";
+				os << ')';
+
+				if (vp) {
+					os << " -> \"";
+					auto sp(vp->suffix());
+					for (
+						size_type c(0);
+						c < vp->suffix_length;
+						++c
+					) {
+						if (sp[c])
+							os << sp[c];
+						else
+							os << "\\0";
+					}
+					os << "\" <" << vp->value << '>';
 				}
-				os << "\" <" << vp->value << '>';
-				
+				os << '\n';
 			}
-			os << '\n';
+			return true;
 		}
-		return true;
-	});
+	);
 
 	return os;
 }
@@ -247,34 +249,37 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 
 template <typename CharType, typename ValueType, typename Policy>
 auto string_map<CharType, ValueType, Policy>::split_subtree(
-	pair_type *p, uintptr_t pos, uintptr_t l_pos, index_char_type k_char
+	uintptr_t r_pos, uintptr_t l_pos, index_char_type k_char
 )-> std::pair<pair_type *, uintptr_t>
 {
 	std::vector<std::pair<pair_type *, uintptr_t>> p_set, l_set;
+	uintptr_t adj_pos(l_pos > 1 ? trie[vec_offset(l_pos)].base : trie_root);
 
-	trie.for_each(
-		[&p_set, &l_set, p, l_pos](
-			size_type pos_, pair_type const &p_
+	trie.for_each_above(
+		std::min(
+			r_pos > 1 ? trie[vec_offset(r_pos)].base : trie_root,
+			adj_pos
+		), [&p_set, &l_set, r_pos, l_pos](
+			size_type pos, pair_type const &p
 		) -> bool {
-			if (p_.check == p->check)
+			if (p.check == r_pos)
 				p_set.push_back(std::make_pair(
-					const_cast<pair_type *>(&p_), pos_
+					const_cast<pair_type *>(&p), pos
 				));
-			else if (p_.check == l_pos)
+			else if (p.check == l_pos)
 				l_set.push_back(std::make_pair(
-					const_cast<pair_type *>(&p_), pos_
+					const_cast<pair_type *>(&p), pos
 				));
 
 			return true;
 		}	
 	);
 
-	uintptr_t adj_pos(1);
-	if (p_set.size() < (l_set.size() + 1)) {
-		advance_branches(p->check, p_set, 0);
-		adj_pos =  l_pos > 1 ? trie[vec_offset(l_pos)].base : trie_root;
-	} else
-		adj_pos = advance_branches(l_pos, l_set, k_char);
+	
+	if (p_set.size() < (l_set.size() + 1))
+		advance_edges(r_pos, p_set, 0);
+	else
+		adj_pos = advance_edges(l_pos, l_set, k_char);
 
 	return std::make_pair(
 		trie.ptr_at(vec_offset(char_offset(adj_pos, k_char))), l_pos
@@ -282,15 +287,90 @@ auto string_map<CharType, ValueType, Policy>::split_subtree(
 }
 
 template <typename CharType, typename ValueType, typename Policy>
-auto string_map<CharType, ValueType, Policy>::advance_branches(
+auto string_map<CharType, ValueType, Policy>::advance_edges(
 	uintptr_t pos,
 	std::vector<std::pair<pair_type *, uintptr_t>> &b_set,
 	index_char_type k_char
 ) -> uintptr_t
 {
 	auto adj_orig(pos > 1 ? trie[vec_offset(pos)].base : trie_root);
+	auto adj(adj_orig);
+	bool fit(true);
 
-	
+	do {
+		fit = true;
+		adj = adjust_encoded(adj, 1);
+		auto iter(b_set.rbegin());
+		auto n_pos(char_offset(
+			adj, offset_to_char(iter->second, adj_orig)
+		));
+		auto xp(trie.find_empty_above(vec_offset(n_pos)));
+		adj = adjust_encoded(adj, xp - vec_offset(n_pos));
+
+		for (++iter; iter != b_set.rend(); ++iter) {
+			n_pos = char_offset(
+				adj, offset_to_char(iter->second, adj_orig)
+			);
+			auto p(trie.ptr_at(vec_offset(n_pos)));
+			if (p && (p->check != pos)) {
+				fit = false;
+				break;
+			}
+		}
+
+		if (k_char && fit) {
+			auto n_pos(char_offset(adj, k_char));
+			auto p(trie.ptr_at(vec_offset(n_pos)));
+			if (p && (p->check != pos))
+				fit = false;
+		}
+	} while (!fit);
+
+	/* Touch all target cells to avoid exceptions down the line. */
+	for (auto iter(b_set.rbegin()); iter != b_set.rend(); ++iter) {
+		auto n_pos(char_offset(
+			adj, offset_to_char(iter->second, adj_orig)
+		));
+		auto p(trie.ptr_at(vec_offset(n_pos)));
+		if (!p)
+			trie.emplace_at(vec_offset(n_pos), pair_type::make(
+				uintptr_t(0), uintptr_t(0)
+			));
+	}
+
+	for (auto iter(b_set.rbegin()); iter != b_set.rend(); ++iter) {
+		auto n_pos(char_offset(
+			adj, offset_to_char(iter->second, adj_orig)
+		));
+		move_edge(iter->first, log_offset(iter->second), n_pos);
+	}
+
+	if (pos > 1)
+		trie[vec_offset(pos)].base = adj;
+	else
+		trie_root = adj;
+
+	return adj;
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+void string_map<CharType, ValueType, Policy>::move_edge(
+	pair_type *p, uintptr_t pos, uintptr_t n_pos
+)
+{
+	trie.for_each_above(
+		p->base > 1 ? vec_offset(p->base) : 0,
+		[pos, n_pos](size_type pos_, pair_type &p_) -> bool {
+			if (p_.check == pos)
+				p_.check = n_pos;
+
+			return true;
+		}
+	);
+
+	trie.emplace_at(vec_offset(n_pos), *p);
+	p->base = 0;
+	p->check = 0;
 }
 
 template <typename CharType, typename ValueType, typename Policy>

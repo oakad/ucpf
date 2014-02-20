@@ -164,6 +164,14 @@ private:
 		return v + (adj << 1);
 	}
 
+	/* physical - encoded -> char */
+	static index_char_type offset_to_char(uintptr_t v, uintptr_t adj)
+	{
+		return index_char_type(
+			((log_offset(v) - adj) >> 1) - null_char
+		);
+	}
+
 	template <typename Iterator>
 	std::tuple<uintptr_t, uintptr_t, uintptr_t> find_impl(
 		Iterator &first, Iterator const &last
@@ -175,15 +183,16 @@ private:
 	);
 
 	std::pair<pair_type *, uintptr_t> split_subtree(
-		pair_type *p, uintptr_t pos, uintptr_t l_pos,
-		index_char_type k_char
+		uintptr_t r_pos, uintptr_t l_pos, index_char_type k_char
 	);
 
-	uintptr_t advance_branches(
+	uintptr_t advance_edges(
 		uintptr_t pos,
 		std::vector<std::pair<pair_type *, uintptr_t>> &b_set,
 		index_char_type k_char
 	);
+
+	void move_edge(pair_type *p, uintptr_t pos, uintptr_t n_pos);
 
 	struct alignas(uintptr_t) value_pair {
 		typedef typename std::allocator_traits<
