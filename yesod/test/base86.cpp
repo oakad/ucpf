@@ -30,4 +30,25 @@ BOOST_AUTO_TEST_CASE(base85_0)
 	BOOST_CHECK(0 == std::strcmp(out, in));
 }
 
+BOOST_AUTO_TEST_CASE(base85_1)
+{
+	static std::random_device src;
+	std::mt19937 gen(src());
+	std::uniform_int_distribution<uint32_t> dis;
+	constexpr static int count = 10000;
+	std::array<char, 6> buf;
+	char *p;
+	buf[5] = 0;
+
+	for (int c(0); c < count; ++c) {
+		uint32_t d_r(dis(gen));
+		p = &buf.front();
+		base86::encode(p, d_r);
+		uint32_t d_d(0);
+		p = &buf.front();
+		base86::decode(d_d, p);
+		BOOST_CHECK_EQUAL(d_r, d_d);
+	}
+}
+
 }}
