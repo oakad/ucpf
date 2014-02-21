@@ -16,6 +16,7 @@
 #define UCPF_YESOD_DETAIL_STRING_MAP_BASE_JAN_06_2014_1145
 
 #include <yesod/sparse_vector.hpp>
+#include <forward_list>
 
 namespace ucpf { namespace yesod {
 
@@ -125,6 +126,10 @@ private:
 		}
 	};
 
+	typedef std::tuple<
+		pair_type *, uintptr_t, std::forward_list<pair_type *>
+	> index_entry_type;
+
 	constexpr static index_char_type terminator_char = 1;
 	constexpr static index_char_type null_char = 2;
 
@@ -187,12 +192,9 @@ private:
 	);
 
 	uintptr_t advance_edges(
-		uintptr_t pos,
-		std::vector<std::pair<pair_type *, uintptr_t>> &b_set,
+		uintptr_t pos, std::vector<index_entry_type> &b_set,
 		index_char_type k_char
 	);
-
-	void move_edge(pair_type *p, uintptr_t pos, uintptr_t n_pos);
 
 	struct alignas(uintptr_t) value_pair {
 		typedef typename std::allocator_traits<

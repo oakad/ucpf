@@ -247,49 +247,54 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 	);
 }
 
+/* Optimizations:
+ * 1. Find target set of empty cells using a more advanced algorithm (adapt
+ *    a common string search algorithm for the task).
+ */
 template <typename CharType, typename ValueType, typename Policy>
 auto string_map<CharType, ValueType, Policy>::split_subtree(
 	uintptr_t r_pos, uintptr_t l_pos, index_char_type k_char
 )-> std::pair<pair_type *, uintptr_t>
 {
-	std::vector<std::pair<pair_type *, uintptr_t>> p_set, l_set;
+	std::vector<index_entry_type> r_set, l_set;
 	uintptr_t adj_pos(l_pos > 1 ? trie[vec_offset(l_pos)].base : trie_root);
 
 	trie.for_each_above(
 		std::min(
 			r_pos > 1 ? trie[vec_offset(r_pos)].base : trie_root,
 			adj_pos
-		), [&p_set, &l_set, r_pos, l_pos](
+		), [&r_set, &l_set, r_pos, l_pos](
 			size_type pos, pair_type const &p
 		) -> bool {
 			if (p.check == r_pos)
-				p_set.push_back(std::make_pair(
-					const_cast<pair_type *>(&p), pos
+				r_set.push_back(std::make_tuple(
+					const_cast<pair_type *>(&p), pos,
+					std::forward_list<pair_type *>()
 				));
 			else if (p.check == l_pos)
-				l_set.push_back(std::make_pair(
-					const_cast<pair_type *>(&p), pos
+				l_set.push_back(std::make_tuple(
+					const_cast<pair_type *>(&p), pos,
+					std::forward_list<pair_type *>()
 				));
 
 			return true;
 		}	
 	);
 
-	
-	if (p_set.size() < (l_set.size() + 1))
-		advance_edges(r_pos, p_set, 0);
+	if (r_set.size() < (l_set.size() + 1))
+		advance_edges(r_pos, r_set, 0);
 	else
 		adj_pos = advance_edges(l_pos, l_set, k_char);
 
 	return std::make_pair(
-		trie.ptr_at(vec_offset(char_offset(adj_pos, k_char))), l_pos
+		&trie[vec_offset(char_offset(adj_pos, k_char))], l_pos
 	);
 }
 
 template <typename CharType, typename ValueType, typename Policy>
 auto string_map<CharType, ValueType, Policy>::advance_edges(
 	uintptr_t pos,
-	std::vector<std::pair<pair_type *, uintptr_t>> &b_set,
+	std::vector<index_entry_type> &b_set,
 	index_char_type k_char
 ) -> uintptr_t
 {
@@ -302,15 +307,15 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 		adj = adjust_encoded(adj, 1);
 		auto iter(b_set.rbegin());
 		auto n_pos(char_offset(
-			adj, offset_to_char(iter->second, adj_orig)
+			adj, offset_to_char(std::get<1>(*iter), adj_orig)
 		));
 		auto xp(trie.find_empty_above(vec_offset(n_pos)));
 		adj = adjust_encoded(adj, xp - vec_offset(n_pos));
 
 		for (++iter; iter != b_set.rend(); ++iter) {
-			n_pos = char_offset(
-				adj, offset_to_char(iter->second, adj_orig)
-			);
+			n_pos = char_offset(adj, offset_to_char(
+				std::get<1>(*iter), adj_orig
+			));
 			auto p(trie.ptr_at(vec_offset(n_pos)));
 			if (p && (p->check != pos)) {
 				fit = false;
@@ -326,23 +331,57 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 		}
 	} while (!fit);
 
+	uintptr_t min_base(0);
 	/* Touch all target cells to avoid exceptions down the line. */
 	for (auto iter(b_set.rbegin()); iter != b_set.rend(); ++iter) {
 		auto n_pos(char_offset(
-			adj, offset_to_char(iter->second, adj_orig)
+			adj, offset_to_char(std::get<1>(*iter), adj_orig)
 		));
 		auto p(trie.ptr_at(vec_offset(n_pos)));
 		if (!p)
 			trie.emplace_at(vec_offset(n_pos), pair_type::make(
 				uintptr_t(0), uintptr_t(0)
 			));
+
+		if (!min_base || (min_base > std::get<0>(*iter)->base))
+			min_base = std::get<0>(*iter)->base;
 	}
+
+	trie.for_each_above(
+		min_base > 1 ? vec_offset(min_base) : 0,
+		[&b_set](size_type pos, pair_type &p) -> bool {
+			auto iter(std::lower_bound(
+				b_set.begin(), b_set.end(), p.check,
+				[](
+					index_entry_type const &idx,
+					uintptr_t q
+				) -> bool {
+					return q > log_offset(
+						std::get<1>(idx)
+					);
+				}
+			));
+
+			if (
+				(iter != b_set.end())
+				&& (log_offset(std::get<1>(*iter)) == p.check)
+			)
+				std::get<2>(*iter).push_front(&p);
+
+			return true;
+		}
+	);
 
 	for (auto iter(b_set.rbegin()); iter != b_set.rend(); ++iter) {
 		auto n_pos(char_offset(
-			adj, offset_to_char(iter->second, adj_orig)
+			adj, offset_to_char(std::get<1>(*iter), adj_orig)
 		));
-		move_edge(iter->first, log_offset(iter->second), n_pos);
+
+		for (auto cp: std::get<2>(*iter))
+			cp->check = n_pos;
+
+		trie.emplace_at(vec_offset(n_pos), *std::get<0>(*iter));
+		*std::get<0>(*iter) = pair_type::make(uintptr_t(0), 0);
 	}
 
 	if (pos > 1)
@@ -351,26 +390,6 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 		trie_root = adj;
 
 	return adj;
-}
-
-template <typename CharType, typename ValueType, typename Policy>
-void string_map<CharType, ValueType, Policy>::move_edge(
-	pair_type *p, uintptr_t pos, uintptr_t n_pos
-)
-{
-	trie.for_each_above(
-		p->base > 1 ? vec_offset(p->base) : 0,
-		[pos, n_pos](size_type pos_, pair_type &p_) -> bool {
-			if (p_.check == pos)
-				p_.check = n_pos;
-
-			return true;
-		}
-	);
-
-	trie.emplace_at(vec_offset(n_pos), *p);
-	p->base = 0;
-	p->check = 0;
 }
 
 template <typename CharType, typename ValueType, typename Policy>

@@ -58,8 +58,6 @@ BOOST_AUTO_TEST_CASE(string_map_0)
 	auto r3(m0.find("baby"));
 	BOOST_CHECK(r3 != nullptr);
 	BOOST_CHECK_EQUAL(r3->a, 444);
-
-	BOOST_CHECK(false);
 }
 
 }}
