@@ -247,10 +247,6 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 	);
 }
 
-/* Optimizations:
- * 1. Find target set of empty cells using a more advanced algorithm (adapt
- *    a common string search algorithm for the task).
- */
 template <typename CharType, typename ValueType, typename Policy>
 auto string_map<CharType, ValueType, Policy>::split_subtree(
 	uintptr_t r_pos, uintptr_t l_pos, index_char_type k_char
@@ -305,18 +301,37 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 	do {
 		fit = true;
 		adj = adjust_encoded(adj, 1);
-		auto iter(b_set.rbegin());
+		auto iter(b_set.begin());
 		auto n_pos(char_offset(
 			adj, offset_to_char(std::get<1>(*iter), adj_orig)
 		));
-		auto xp(trie.find_empty_above(vec_offset(n_pos)));
+		auto xp(vec_offset(n_pos));
+		auto p(trie.ptr_at(xp));
+
+		if (p && (p->check != pos)) {
+			if (trie.for_each_above(
+				xp + 1, [&xp, pos](
+					size_type t_pos, pair_type const &t_p
+				) -> bool {
+					if ((t_pos - xp) > 1) {
+						++xp;
+						return false;
+					}
+
+					xp = t_pos;
+
+					return t_p.check != pos;
+				}
+			))
+				++xp;
+		}
 		adj = adjust_encoded(adj, xp - vec_offset(n_pos));
 
-		for (++iter; iter != b_set.rend(); ++iter) {
+		for (++iter; iter != b_set.end(); ++iter) {
 			n_pos = char_offset(adj, offset_to_char(
 				std::get<1>(*iter), adj_orig
 			));
-			auto p(trie.ptr_at(vec_offset(n_pos)));
+			p = trie.ptr_at(vec_offset(n_pos));
 			if (p && (p->check != pos)) {
 				fit = false;
 				break;
@@ -324,8 +339,8 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 		}
 
 		if (k_char && fit) {
-			auto n_pos(char_offset(adj, k_char));
-			auto p(trie.ptr_at(vec_offset(n_pos)));
+			n_pos = char_offset(adj, k_char);
+			p = trie.ptr_at(vec_offset(n_pos));
 			if (p && (p->check != pos))
 				fit = false;
 		}
