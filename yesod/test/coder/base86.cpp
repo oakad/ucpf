@@ -9,9 +9,9 @@
 #define BOOST_TEST_MODULE yesod
 #include <boost/test/included/unit_test.hpp>
 
-#include <yesod/base86.hpp>
+#include <yesod/coder/base86.hpp>
 
-namespace ucpf { namespace yesod {
+namespace ucpf { namespace yesod { namespace coder {
 
 BOOST_AUTO_TEST_CASE(base85_0)
 {
@@ -56,4 +56,4 @@ BOOST_AUTO_TEST_CASE(base85_1)
 	}
 }
 
-}}
+}}}

@@ -5,12 +5,12 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_YESOD_BASE86_JAN_03_2014_1840)
-#define UCPF_YESOD_BASE86_JAN_03_2014_1840
+#if !defined(UCPF_YESOD_CODER_BASE86_JAN_03_2014_1840)
+#define UCPF_YESOD_CODER_BASE86_JAN_03_2014_1840
 
 #include <array>
 
-namespace ucpf { namespace yesod {
+namespace ucpf { namespace yesod { namespace coder {
 
 struct base86 {
 	static constexpr std::array<uint8_t, 256> enc_tab_r = {{
@@ -126,6 +126,6 @@ constexpr std::array<uint8_t, 256> base86::enc_tab_r;
 constexpr std::array<uint8_t, 96> base86::dec_tab;
 constexpr std::array<uint8_t, 81> base86::ternary_exp_tab;
 
-}}
+}}}
 
 #endif

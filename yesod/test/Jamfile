@@ -8,7 +8,7 @@ alias test_case : : : : <include>..
                         <toolset>gcc:<cxxflags>-fmax-errors=4 ;
 
 run array_element_count.cpp : : test_case ;
-run base86.cpp : : test_case ;
+run bellard_pi_digit.cpp : : test_case ;
 run compressed_index_map.cpp : : test_case ;
 run float.cpp : : test_case ;
 run is_sequence.cpp : : test_case ;
