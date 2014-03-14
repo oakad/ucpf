@@ -9,14 +9,17 @@
 #define BOOST_TEST_MODULE yesod
 #include <boost/test/included/unit_test.hpp>
 
-#include <yesod/detail/bellard_pi_digit.hpp>
+#include <yesod/coder/detail/pi_word.hpp>
 
-namespace ucpf { namespace yesod { namespace detail {
+namespace ucpf { namespace yesod { namespace coder { namespace detail {
+namespace test {
 
-BOOST_AUTO_TEST_CASE(bellard_pi_digit_0)
+};
+
+BOOST_AUTO_TEST_CASE(pi_word_0)
 {
 	uint32_t xd(bellard_pi_digit(0));
 	BOOST_CHECK_EQUAL(xd, 0x243f6a88);
 }
 
-}}}
+}}}}
