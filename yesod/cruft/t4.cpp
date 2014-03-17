@@ -9,7 +9,7 @@ int main()
 {
 	std::array<uint32_t, 16> v_bell;
 	std::array<uint32_t, 16> v_bbp;
-	uint32_t base(12484), cnt;
+	uint32_t base(31244), cnt;
 
 	auto t1(std::chrono::high_resolution_clock::now());
 	cnt = base;

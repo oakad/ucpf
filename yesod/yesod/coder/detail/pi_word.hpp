@@ -15,7 +15,7 @@
 
 namespace ucpf { namespace yesod { namespace coder { namespace detail {
 
-uint32_t bbp_pi_word(uint32_t d)
+static inline uint32_t bbp_pi_word(uint32_t d)
 {
 	d <<= 3;
 	auto exp_m16([](uint32_t exp, uint32_t mod) -> uint32_t {
@@ -24,7 +24,7 @@ uint32_t bbp_pi_word(uint32_t d)
 		auto p1(exp), p2(uint32_t(1) << exp2);
 		uint64_t r(1);
 
-		for (auto c(0); c <= exp2; ++c) {
+		for (uint32_t c(0); c <= exp2; ++c) {
 			if (p1 >= p2) {
 				r <<= 4;
 				r %= mod;
@@ -41,8 +41,9 @@ uint32_t bbp_pi_word(uint32_t d)
 
 	auto sigma([d, exp_m16](int j) -> double {
 		double s(0);
+		uint32_t c(0);
 
-		for (uint32_t c(0); c < d; ++c) {
+		for (; c < d; ++c) {
 			auto mod((c << 3) + j);
 			auto p(d - c);
 			double t(exp_m16(p, mod));
@@ -50,7 +51,7 @@ uint32_t bbp_pi_word(uint32_t d)
 			s = std::modf(s, &t);
 		}
 
-		for (uint32_t c(d); c < (d + 128); ++c) {
+		while (true) {
 			auto mod((c << 3) + j);
 			double t(ldexp(1.0, -4 * (c - d)));
 			t /= mod;
@@ -59,6 +60,7 @@ uint32_t bbp_pi_word(uint32_t d)
 
 			s += t;
 			s = std::modf(s, &t);
+			++c;
 		}
 
 		return s;
@@ -72,7 +74,7 @@ uint32_t bbp_pi_word(uint32_t d)
 	return static_cast<uint32_t>(std::lrint(dgt));
 }
 
-uint32_t bellard_pi_word(uint32_t d)
+static inline uint32_t bellard_pi_word(uint32_t d)
 {
 	static_assert(
 		std::numeric_limits<long double>::digits
@@ -94,7 +96,7 @@ uint32_t bellard_pi_word(uint32_t d)
 		auto p1(exp), p2(uint32_t(1) << exp2);
 		uint64_t r(1);
 
-		for (auto c(0); c <= exp2; ++c) {
+		for (uint32_t c(0); c <= exp2; ++c) {
 			if (p1 >= p2) {
 				r <<= 10;
 				r %= mod;
@@ -111,8 +113,9 @@ uint32_t bellard_pi_word(uint32_t d)
 
 	auto sigma([d, exp_m1024](int j, int k) -> long double {
 		long double s(0);
+		uint32_t c(0);
 
-		for (uint32_t c(0); c < d; ++c) {
+		for (; c < d; ++c) {
 			auto mod((k * c) + j);
 			auto p(d - c);
 			long double t(exp_m1024(p, mod));
@@ -122,7 +125,7 @@ uint32_t bellard_pi_word(uint32_t d)
 			s = std::modf(s, &t);
 		}
 
-		for (uint32_t c(d); c < (d + 128); ++c) {
+		while (true) {
 			auto mod((k * c) + j);
 			long double t(ldexp(1.0L, -10 * (c - d)));
 			t /= mod;
@@ -131,6 +134,7 @@ uint32_t bellard_pi_word(uint32_t d)
 
 			s += c & 1 ? -t : t;
 			s = std::modf(s, &t);
+			++c;
 		}
 
 		return s;
