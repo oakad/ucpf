@@ -12,39 +12,32 @@
 
 namespace ucpf { namespace yesod {
 
-template<typename ValueType>
+template <typename ValueType>
 struct counted_ptr;
 
-template<typename ValueType, typename AllocType, typename... arg_type>
+template <typename ValueType, typename Alloc, typename... Args>
 counted_ptr<ValueType> allocate_counted(
-	AllocType a,
+	Alloc const &a,
 	typename counted_ptr<ValueType>::extra_size_t extra_size,
-	arg_type&&... args
+	Args&&... args
 );
 
-template<typename ValueType, typename AllocType, typename... arg_type>
-counted_ptr<ValueType> allocate_counted(AllocType a, arg_type&&... args);
+template <typename ValueType, typename Alloc, typename... Args>
+counted_ptr<ValueType> allocate_counted(Alloc const &a, Args&&... args);
 
-template<typename ValueType, typename... arg_type>
+template <typename ValueType, typename... Args>
 counted_ptr<ValueType> make_counted(
 	typename counted_ptr<ValueType>::extra_size_t extra_size,
-	arg_type&&... args
+	Args&&... args
 );
 
-template<typename ValueType, typename... arg_type>
-counted_ptr<ValueType> make_counted(arg_type&&... args);
+template <typename ValueType, typename... Args>
+counted_ptr<ValueType> make_counted(Args&&... args);
 
-template<typename ValueType1, typename ValueType2>
-counted_ptr<ValueType1> static_pointer_cast(counted_ptr<ValueType2> const &p);
+template <typename ValueType0, typename ValueType1>
+counted_ptr<ValueType0> const_pointer_cast(counted_ptr<ValueType1> const &p);
 
-template<typename ValueType1, typename ValueType2>
-counted_ptr<ValueType1> const_pointer_cast(counted_ptr<ValueType2> const &p);
-
-template<typename ValueType1, typename ValueType2>
-counted_ptr<ValueType1>
-dynamic_pointer_cast(counted_ptr<ValueType2> const &p);
-
-template<typename ValueType>
+template <typename ValueType>
 struct counted_ptr {
 	typedef ValueType type;
 
@@ -58,477 +51,377 @@ struct counted_ptr {
 
 	~counted_ptr()
 	{
-		if (val)
-			detail::ref_count_val<
+		auto s_ptr(ptr.exchange(nullptr));
+		if (s_ptr)
+			detail::counted_ptr_val<
 				ValueType
-			>::get_this(val)->release();
+			>::get_this(ptr)->release();
 	}
 
 	counted_ptr()
-	: val(0)
+	: ptr(nullptr)
 	{}
 
 	counted_ptr(counted_ptr const &p)
-	: val(p.val)
+	: ptr(p.ptr)
 	{
-		if (val)
-			detail::ref_count_val<ValueType>::get_this(val)
-			->add_ref_copy();
-	}
-
-	template<typename ValueType1>
-	counted_ptr(counted_ptr<ValueType1> const &p)
-	: val(p.val)
-	{
-		if (val)
-			detail::ref_count_val<ValueType>::get_this(val)
-			->add_ref_copy();
+		if (ptr)
+			detail::counted_ptr_val<
+				ValueType
+			>::get_this(ptr)->add_ref_copy();
 	}
 
 	counted_ptr(counted_ptr &&p)
-	: val(p.val)
-	{
-		p.val = 0;
-	}
-
-	template<typename ValueType1>
-	counted_ptr(counted_ptr<ValueType1> &&p)
-	: val(p.val)
-	{
-		p.val = 0;
-	}
+	: ptr(p.ptr.exchange(nullptr))
+	{}
 
 	counted_ptr &operator=(counted_ptr const &p)
 	{
-		if (p.val != val) {
-			if (p.val)
-				detail::ref_count_val<
+		auto r_ptr(p.ptr.load());
+		auto s_ptr(ptr.exchange(r_ptr));
+
+		if (s_ptr != r_ptr) {
+			if (r_ptr)
+				detail::counted_ptr_val<
 					ValueType
-				>::get_this(p.val)->add_ref_copy();
+				>::get_this(r_ptr)->add_ref_copy();
 
-			if (val)
-				detail::ref_count_val<ValueType>::get_this(val)
-				->release();
-
-			val = p.val;
-		}
-		return *this;
-	}
-
-	template<typename ValueType1>
-	counted_ptr &operator=(counted_ptr<ValueType1> const &p)
-	{
-		if (p.val != val) {
-			if (p.val)
-				detail::ref_count_val<
-					ValueType1
-				>::get_this(p.val)->add_ref_copy();
-
-			if (val)
-				detail::ref_count_val<
+			if (s_ptr)
+				detail::counted_ptr_val<
 					ValueType
-				>::get_this(val)->release();
-
-			val = p.val;
+				>::get_this(s_ptr)->release();
 		}
 		return *this;
 	}
 
 	counted_ptr &operator=(counted_ptr &&p)
 	{
-		counted_ptr(std::move(p)).swap(*this);
-		return *this;
-	}
+		auto r_ptr(p.ptr.exchange(nullptr));
+		auto s_ptr(ptr.exchange(r_ptr));
+		if (s_ptr && (s_ptr != r_ptr))
+			detail::counted_ptr_val<
+				ValueType
+			>::get_this(s_ptr)->release();
 
-	template<class ValueType1>
-	counted_ptr &operator=(counted_ptr<ValueType1> &&p)
-	{
-		counted_ptr(std::move(p)).swap(*this);
 		return *this;
 	}
 
 	void reset()
 	{
-		counted_ptr().swap(*this);
-	}
-
-	typename std::add_lvalue_reference<ValueType>::type operator*() const
-	{
-		return *val;
-	}
-
-	ValueType *operator->() const
-	{
-		return val;
+		auto s_ptr(ptr.exchange(nullptr));
+		if (s_ptr)
+			detail::counted_ptr_val<
+				ValueType
+			>::get_this(s_ptr)->release();
 	}
 
 	ValueType *get() const
 	{
-		return val;
+		return ptr.load();
 	}
 
-	detail::ref_count<ValueType> const *get_this() const
+	typename std::add_lptrue_reference<ValueType>::type operator*() const
 	{
-		if (val)
-			return detail::ref_count_val<ValueType>::get_this(val);
-		else
-			return 0;
+		return *get();
 	}
 
-	template<typename ValueType1>
-	ValueType1 *get_extra()
+	ValueType *operator->() const
 	{
-		if (val)
-			return static_cast<ValueType1 *>(
-				detail::ref_count_val<ValueType>::get_this(val)
-				->get_extra()
-			);
-		else
-			return nullptr;
+		return get();
 	}
 
-	template<typename ValueType1>
-	ValueType1 *get_extra() const
+	int8_t *get_extra() const
 	{
-		if (val)
-			return static_cast<ValueType1 *>(
-				detail::ref_count_val<ValueType>::get_this(val)
-				->get_extra()
-			);
-		else
-			return nullptr;
+		return detail::counted_ptr_val<
+			ValueType
+		>::get_this(ptr)->get_extra();
 	}
 
-	template<typename ValueType1>
-	ValueType1 *get_extra(size_t &sz)
+	int8_t *get_extra(size_t &sz) const
 	{
-		if (val)
-			return static_cast<ValueType1 *>(
-				detail::ref_count_val<ValueType>::get_this(val)
-				->get_extra(sz)
-			);
-		else
-			return nullptr;
-	}
-
-	template<typename ValueType1>
-	ValueType1 *get_extra(size_t &sz) const
-	{
-		if (val)
-			return static_cast<ValueType1 *>(
-				detail::ref_count_val<ValueType>::get_this(val)
-				->get_extra(sz)
-			);
-		else
-			return nullptr;
+		return detail::counted_ptr_val<
+			ValueType
+		>::get_this(ptr)->get_extra(sz);
 	}
 
 private:
-	typedef ValueType* counted_ptr::*__unspecified_bool_type;
+	typedef ValueType *counted_ptr::*__unspecified_bool_type;
 
 public:
 	operator __unspecified_bool_type() const
 	{
-		if (val)
-			return &counted_ptr::val;
+		if (ptr)
+			return &counted_ptr::ptr;
 		else
 			return 0;
 	}
 
 	bool unique() const
 	{
-		if (val)
-			return detail::ref_count_val<ValueType>::get_this(val)
-			       ->unique();
+		return use_count() == 1ul;
+	}
+
+	unsigned long use_count() const
+	{
+		if (ptr)
+			return detail::counted_ptr_val<
+				ValueType
+			>::get_this(ptr)->get_use_count();
 		else
 			return 0;
 	}
 
-	long use_count() const
+	void swap(counted_ptr<ValueType> &p)
 	{
-		if (val)
-			return detail::ref_count_val<ValueType>::get_this(val)
-			       ->get_use_count();
+		auto s_ptr(ptr.exchange(p.ptr.load()));
+		p.ptr.exchange(s_ptr);
+	}
+
+	template <typename Alloc>
+	Alloc get_allocator() const
+	{
+		if (ptr)
+			return detail::counted_ptr_val<
+				ValueType
+			>::get_this(ptr)->get_allocator<Alloc>();
 		else
-			return 0;
+			return Alloc();
 	}
 
-	void swap(counted_ptr<ValueType> &other)
-	{
-		std::swap(val, other.val);
-	}
-
-	template<typename AllocType>
-	AllocType *get_allocator() const
-	{
-		return static_cast<AllocType *>(
-			this->get_allocator(typeid(AllocType))
-		);
-	}
-
-	template<typename ValueType1, typename AllocType,
-		 typename... arg_type>
+	template <typename ValueType1, typename Alloc, typename... Args>
 	friend counted_ptr<ValueType1> allocate_counted(
-		AllocType a,
+		Alloc const &a,
 		typename counted_ptr<ValueType1>::extra_size_t extra_size,
-		arg_type&&... args
+		Args&&... args
 	);
 
-	template<typename ValueType1, typename AllocType,
-		 typename... arg_type>
+	template <typename ValueType1, typename Alloc, typename... Args>
 	friend counted_ptr<ValueType1> allocate_counted(
-		AllocType a, arg_type&&... args
+		Alloc const &a, Args&&... args
 	);
 
-	template<typename ValueType1, typename... arg_type>
+	template <typename ValueType1, typename... Args>
 	friend counted_ptr<ValueType1> make_counted(
 		typename counted_ptr<ValueType1>::extra_size_t extra_size,
-		arg_type&&... args
+		Args&&... args
 	);
 
-	template<typename ValueType1, typename... arg_type>
-	friend counted_ptr<ValueType1> make_counted(arg_type&&... args);
+	template <typename ValueType1, typename... Args>
+	friend counted_ptr<ValueType1> make_counted(Args&&... args);
 
-	template<typename ValueType1, typename ValueType2>
-	friend counted_ptr<ValueType1> static_pointer_cast(
-		counted_ptr<ValueType2> const &p
+	template <typename ValueType0, typename ValueType1>
+	friend counted_ptr<ValueType0> static_pointer_cast(
+		counted_ptr<ValueType1> const &p
 	);
 
-	template<typename ValueType1, typename ValueType2>
-	friend counted_ptr<ValueType1> const_pointer_cast(
-		counted_ptr<ValueType2> const &p
+	template <typename ValueType0, typename ValueType1>
+	friend counted_ptr<ValueType0> const_pointer_cast(
+		counted_ptr<ValueType1> const &p
 	);
 
-	template<typename ValueType1, typename ValueType2>
-	friend counted_ptr<ValueType1> dynamic_pointer_cast(
-		counted_ptr<ValueType2> const &p
+	template <typename ValueType0, typename ValueType1>
+	friend counted_ptr<ValueType0> dynamic_pointer_cast(
+		counted_ptr<ValueType1> const &p
 	);
 
 private:
-	template<typename ValueType1> friend struct counted_ptr;
+	template <typename ValueType1>
+	friend struct counted_ptr;
 
 	explicit counted_ptr(
-		detail::ref_count<ValueType> *r, bool increment = false
-	) : val(r->get_ptr())
+		ValueType *ptr_, bool inc
+	) : ptr(ptr_)
 	{
-		if (increment && val) {
-			detail::ref_count_val<ValueType>::get_this(val)
-			->add_ref_copy();
+		if (inc && ptr) {
+			detail::counted_ptr_val<
+				ValueType
+			>::get_this(ptr)->add_ref_copy();
 		}
 	}
 
-	void *get_allocator(std::type_info const &ti) const
-	{
-		if (val)
-			return detail::ref_count_val<ValueType>::get_this(val)
-			       ->get_allocator(ti);
-		else
-			return 0;
-	}
-
-	ValueType *val;
+	std::atomic<ValueType *> ptr;
 };
 
-template<typename ValueType, typename AllocType, typename... arg_type>
+template <typename ValueType, typename Alloc, typename... Args>
 counted_ptr<ValueType> allocate_counted(
-	AllocType a,
+	Alloc const &a,
 	typename counted_ptr<ValueType>::extra_size_t extra_size,
-	arg_type&&... args
+	Args&&... args
 )
 {
 	return counted_ptr<ValueType>(
-		detail::ref_count_a_e<ValueType, AllocType>::create(
-			std::forward<AllocType>(a),
-			extra_size.size,
-			std::forward<arg_type>(args)...
-		)
+		detail::counted_ptr_val<ValueType>::construct(
+			a, extra_size.size, std::forward<Args>(args)...
+		), false
 	);
 }
 
-template<typename ValueType, typename AllocType, typename... arg_type>
-counted_ptr<ValueType> allocate_counted(AllocType a, arg_type&&... args)
+template <typename ValueType, typename Alloc, typename... Args>
+counted_ptr<ValueType> allocate_counted(Alloc const &a, Args&&... args)
 {
 	return counted_ptr<ValueType>(
-		detail::ref_count_a<ValueType, AllocType>::create(
-			std::forward<AllocType>(a),
-			std::forward<arg_type>(args)...
-		)
+		detail::counted_ptr_val<ValueType>::construct(
+			a, 0, std::forward<Args>(args)...
+		), false
 	);
 }
 
-template<typename ValueType, typename... arg_type>
+template <typename ValueType, typename... Args>
 counted_ptr<ValueType> make_counted(
 	typename counted_ptr<ValueType>::extra_size_t extra_size,
-	arg_type&&... args
+	Args&&... args
 )
 {
+	std::allocator<void> a;
+
 	return counted_ptr<ValueType>(
-		detail::ref_count_e<ValueType>::create(
-			extra_size.size,
-			std::forward<arg_type>(args)...
-		)
+		detail::counted_ptr_val<ValueType>::construct(
+			a, extra_size.size, std::forward<Args>(args)...
+		), false
 	);
 }
 
-template<typename ValueType, typename... arg_type>
-counted_ptr<ValueType> make_counted(arg_type&&... args)
+template <typename ValueType, typename... Args>
+counted_ptr<ValueType> make_counted(Args&&... args)
 {
+	std::allocator<void> a;
+
 	return counted_ptr<ValueType>(
-		detail::ref_count_p<ValueType>::create(
-			std::forward<arg_type>(args)...
-		)
+		detail::counted_ptr_val<ValueType>::construct(
+			a, 0, std::forward<Args>(args)...
+		), false
 	);
 }
 
-template<typename ValueType1, typename ValueType2>
-bool operator==(counted_ptr<ValueType1> const &a,
-		counted_ptr<ValueType2> const &b)
+template <typename ValueType0, typename ValueType1>
+bool operator==(
+	counted_ptr<ValueType0> const &a, counted_ptr<ValueType1> const &b
+)
 {
 	return a.get() == b.get();
 }
 
-template<typename ValueType>
+template <typename ValueType>
 bool operator==(counted_ptr<ValueType> const &a, std::nullptr_t)
 {
 	return !a;
 }
 
-template<typename ValueType>
+template <typename ValueType>
 bool operator==(std::nullptr_t, counted_ptr<ValueType> const &a)
 {
 	return !a;
 }
 
-template<typename ValueType1, typename ValueType2>
-bool operator!=(counted_ptr<ValueType1> const &a,
-		counted_ptr<ValueType2> const &b)
+template <typename ValueType0, typename ValueType1>
+bool operator!=(
+	counted_ptr<ValueType0> const &a, counted_ptr<ValueType1> const &b
+)
 {
 	return a.get() != b.get();
 }
 
-template<typename ValueType>
+template <typename ValueType>
 bool operator!=(counted_ptr<ValueType> const &a, std::nullptr_t)
 {
 	return bool(a);
 }
 
-template<typename ValueType>
+template <typename ValueType>
 bool operator!=(std::nullptr_t, counted_ptr<ValueType> const &a)
 {
 	return bool(a);
 }
 
-template<typename ValueType1, typename ValueType2>
-bool operator<(counted_ptr<ValueType1> const &a,
-	       counted_ptr<ValueType2> const &b)
+template <typename ValueType0, typename ValueType1>
+bool operator<(
+	counted_ptr<ValueType0> const &a, counted_ptr<ValueType1> const &b
+)
 {
-	typedef typename std::common_type<ValueType1 *, ValueType2 *>::type
-	c_type;
+	typedef typename std::common_type<
+		ValueType0 *, ValueType1 *
+	>::type c_type;
 	return std::less<c_type>()(a.get(), b.get());
 }
 
-template<typename ValueType>
+template <typename ValueType>
 bool operator<(counted_ptr<ValueType> const &a, std::nullptr_t)
 {
 	return std::less<ValueType *>()(a.get(), nullptr);
 }
 
-template<typename ValueType>
+template <typename ValueType>
 bool operator<(std::nullptr_t, counted_ptr<ValueType> const &a)
 {
 	return std::less<ValueType *>()(nullptr, a.get());
 }
 
-template<typename ValueType1, typename ValueType2>
-bool operator<=(counted_ptr<ValueType1> const &a,
-		counted_ptr<ValueType2> const &b)
+template <typename ValueType0, typename ValueType1>
+bool operator<=(
+	counted_ptr<ValueType0> const &a, counted_ptr<ValueType1> const &b
+)
 {
 	return !(b < a);
 }
 
-template<typename ValueType>
+template <typename ValueType>
 bool operator<=(counted_ptr<ValueType> const &a, std::nullptr_t)
 {
 	return !(nullptr < a);
 }
 
-template<typename ValueType>
+template <typename ValueType>
 bool operator<=(std::nullptr_t, counted_ptr<ValueType> const &a)
 {
 	return !(a < nullptr);
 }
 
-template<typename ValueType1, typename ValueType2>
-bool operator>(counted_ptr<ValueType1> const &a,
-	       counted_ptr<ValueType2> const &b)
+template <typename ValueType0, typename ValueType1>
+bool operator>(
+	counted_ptr<ValueType0> const &a, counted_ptr<ValueType1> const &b
+)
 {
 	return b < a;
 }
 
-template<typename ValueType>
+template <typename ValueType>
 bool operator>(counted_ptr<ValueType> const &a, std::nullptr_t)
 {
 	return std::less<ValueType *>()(nullptr, a.get());
 }
 
-template<typename ValueType>
+template <typename ValueType>
 bool operator>(std::nullptr_t, counted_ptr<ValueType> const &a)
 {
 	return std::less<ValueType *>()(a.get(), nullptr);
 }
 
-template<typename ValueType1, typename ValueType2>
-bool operator>=(counted_ptr<ValueType1> const &a,
-		counted_ptr<ValueType2> const &b)
+template <typename ValueType0, typename ValueType1>
+bool operator>=(
+	counted_ptr<ValueType0> const &a, counted_ptr<ValueType1> const &b
+)
 {
 	return !(a < b);
 }
 
-template<typename ValueType>
+template <typename ValueType>
 bool operator>=(counted_ptr<ValueType> const &a, std::nullptr_t)
 {
 	return !(a < nullptr);
 }
 
-template<typename ValueType>
+template <typename ValueType>
 bool operator>=(std::nullptr_t, counted_ptr<ValueType> const &a)
 {
 	return !(nullptr < a);
 }
 
-template<typename ValueType1, typename ValueType2>
-counted_ptr<ValueType1> static_pointer_cast(counted_ptr<ValueType2> const &p)
+template <typename ValueType0, typename ValueType1>
+counted_ptr<ValueType0> const_pointer_cast(counted_ptr<ValueType1> const &p)
 {
-	if (p.val)
-		return counted_ptr<ValueType1>(
-			detail::ref_count_val<ValueType1>::get_this(
-				static_cast<ValueType1 *>(p.val)
-			), true
-		);
-	else
-		return counted_ptr<ValueType1>();
-}
-
-template<typename ValueType1, typename ValueType2>
-counted_ptr<ValueType1> const_pointer_cast(counted_ptr<ValueType2> const &p)
-{
-	if (p.val)
-		return counted_ptr<ValueType1>(
-			detail::ref_count_val<ValueType1>::get_this(
-				const_cast<ValueType1 *>(p.val)
-			), true
-		);
-	else
-		return counted_ptr<ValueType1>();
-}
-
-template<typename ValueType1, typename ValueType2>
-counted_ptr<ValueType1> dynamic_pointer_cast(counted_ptr<ValueType2> const &p)
-{
-	if (dynamic_cast<ValueType1 *>(p.val))
-		return static_pointer_cast(p);
-	else
-		return counted_ptr<ValueType1>();
+	return counted_ptr<ValueType0>(
+		const_cast<ValueType0>(p.ptr.load()), true
+	);
 }
 
 }}
