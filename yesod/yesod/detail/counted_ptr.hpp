@@ -9,10 +9,7 @@
 #if !defined(UCPF_YESOD_DETAIL_COUNTED_PTR_OCT_31_2013_1800)
 #define UCPF_YESOD_DETAIL_COUNTED_PTR_OCT_31_2013_1800
 
-#include <tuple>
 #include <atomic>
-#include <cstddef>
-#include <typeinfo>
 
 namespace ucpf { namespace yesod { namespace detail {
 
@@ -29,21 +26,21 @@ struct counted_ptr_alloc_base {
 	{}
 
 	virtual void destroy_a(void *p) = 0;
-	virtual void destroy_t(void *p) = 0;
+	virtual void destroy_b(void *p) = 0;
 };
 
-template <typename StorageType, typename Alloc>
-struct counted_ptr_alloc_wrap : counted_ptr_alloc_base, Alloc {
-	typedef counted_ptr_alloc_wrap           alloc_wrap_type;
-	typedef StorageType                      storage_type;
-	typedef typename StorageType::value_type value_type;
+template <typename ContainerType, typename Alloc>
+struct counted_ptr_alloc_wrapper : counted_ptr_alloc_base, Alloc {
+	typedef counted_ptr_alloc_wrapper          alloc_wrapper_type;
+	typedef ContainerType                      container_type;
+	typedef typename ContainerType::value_type value_type;
 
 	typedef typename std::allocator_traits<Alloc>::template rebind_alloc<
-		alloc_wrap_type
+		alloc_wrapper_type
 	> allocator_type;
 
 	typedef typename std::allocator_traits<Alloc>::template rebind_traits<
-		alloc_wrap_type
+		alloc_wrapper_type
 	> allocator_traits;
 
 	typedef typename std::allocator_traits<Alloc>::template rebind_alloc<
@@ -55,14 +52,6 @@ struct counted_ptr_alloc_wrap : counted_ptr_alloc_base, Alloc {
 	> value_allocator_traits;
 
 	typedef typename std::allocator_traits<Alloc>::template rebind_alloc<
-		storage_type
-	> storage_allocator_type;
-
-	typedef typename std::allocator_traits<Alloc>::template rebind_traits<
-		storage_type
-	> storage_allocator_traits;
-
-	typedef typename std::allocator_traits<Alloc>::template rebind_alloc<
 		uint8_t
 	> byte_allocator_type;
 
@@ -70,79 +59,86 @@ struct counted_ptr_alloc_wrap : counted_ptr_alloc_base, Alloc {
 		uint8_t
 	> byte_allocator_traits;
 
-	counted_ptr_alloc_wrap(Alloc const &a_)
+	counted_ptr_alloc_wrapper(Alloc const &a_)
 	: Alloc(a_)
 	{}
 
-	virtual ~counted_ptr_alloc_wrap()
+	virtual ~counted_ptr_alloc_wrapper()
 	{}
 
 	virtual void destroy_a(void *p)
 	{
-		auto x_p(reinterpet_cast<storage_type *>(p));
+		auto x_p(reinterpret_cast<container_type *>(p));
 		auto x_value(x_p->get_ptr());
 		auto sz(x_p->get_alloc_size(x_p));
 
 		value_allocator_type value_alloc(*this);
 		allocator_type self_alloc(*this);
-		storage_allocator_type storage_alloc(*this);
 		byte_allocator_type byte_alloc(*this);
 
 		value_allocator_traits::destroy(value_alloc, x_value);
 		allocator_traits::destroy(self_alloc, this);
-		storage_allocator_traits::destroy(storage_alloc, x_p);
 
 		byte_allocator_traits::deallocate(
-			byte_alloc, reinterpet_cast<uint8_t *>(p), sz
+			byte_alloc, reinterpret_cast<uint8_t *>(p), sz
 		);
 	}
 
-	virtual void destroy_t(void *p, size_t sz)
+	virtual void destroy_b(void *p)
 	{
-		auto x_p(reinterpet_cast<storage_type *>(p));
+		auto x_p(reinterpret_cast<container_type *>(p));
 		auto x_value(x_p->get_ptr());
 		auto sz(x_p->get_alloc_size(x_p));
 
 		value_allocator_type value_alloc(*this);
-		storage_allocator_type storage_alloc(*this);
 		byte_allocator_type byte_alloc(*this);
 
 		value_allocator_traits::destroy(value_alloc, x_value);
-		storage_allocator_traits::destroy(storage_alloc, x_p);
 
 		byte_allocator_traits::deallocate(
-			byte_alloc, reinterpet_cast<uint8_t *>(p), sz
+			byte_alloc, reinterpret_cast<uint8_t *>(p), sz
 		);
 	}
 };
 
 struct counted_ptr_extra_a {
-	static constexpr size_t h_size = sizeof(std::aligned_storage<
-		sizeof(counted_ptr_extra_a),
-		std::alignment_of<counted_ptr_extra_a>::value
-	>);
+	static size_t const h_size;
+	static constexpr bool has_alloc = true;
+
 	size_t t_size;
 	counted_ptr_alloc_base *a_ref;
 };
+
+size_t const counted_ptr_extra_a::h_size = sizeof(std::aligned_storage<
+	sizeof(counted_ptr_extra_a),
+	std::alignment_of<counted_ptr_extra_a>::value
+>);
 
 struct counted_ptr_extra_ae {
-	static constexpr size_t h_size = sizeof(std::aligned_storage<
-		sizeof(counted_ptr_extra_ae),
-		std::alignment_of<counted_ptr_extra_ae>::value
-	>);
+	static size_t const h_size;
+	static constexpr bool has_alloc = true;
+
 	size_t t_size;
 	size_t e_offset;
 	counted_ptr_alloc_base *a_ref;
 };
 
+size_t const counted_ptr_extra_ae::h_size = sizeof(std::aligned_storage<
+	sizeof(counted_ptr_extra_ae),
+	std::alignment_of<counted_ptr_extra_ae>::value
+>);
+
 struct counted_ptr_extra_b {
-	static constexpr size_t h_size = sizeof(std::aligned_storage<
-		sizeof(counted_ptr_extra_b),
-		std::alignment_of<counted_ptr_extra_b>::value
-	>);
+	static size_t const h_size;
+	static constexpr bool has_alloc = false;
+
 	size_t t_size;
-	size_t e_offset;
 };
+
+size_t const counted_ptr_extra_b::h_size = sizeof(std::aligned_storage<
+	sizeof(counted_ptr_extra_b),
+	std::alignment_of<counted_ptr_extra_b>::value
+>);
 
 template <typename ValueType>
 struct counted_ptr_val {
@@ -151,80 +147,27 @@ struct counted_ptr_val {
 	counted_ptr_val(counted_ptr_val const &) = delete;
 	counted_ptr_val &operator=(counted_ptr_val const &) = delete;
 
-	static counted_ptr_val *get_this(ValueType *ptr)
-	{
-		return ptr.load() - offsetof(counted_ptr_val, val);
-	}
-
 	template <typename Alloc, typename... Args>
 	static counted_ptr_val *construct(
 		Alloc const &a, size_t extra, Args&&... args
-	)
+	);
+
+	static void destroy(counted_ptr_val *p)
 	{
-		typedef counted_ptr_alloc_wrap<
-			counted_ptr_val, Alloc
-		> aw_t;
-
-		auto a_size(sizeof counted_ptr_val);
-		counted_ptr_disp *disp(nullptr);
-
-		if (!std::is_same<Alloc, std::allocator<void>>::value) {
-			a_size += sizeof(std::aligned_storage<
-				sizeof(Alloc),
-				std::alignment_of<Alloc>::value
-			>);
-
-			if (extra) {
-				a_size += counted_ptr_extra_ae::h_size;
-				a_size += extra;
-				disp = &counted_ptr_disp_ea;
-			} else {
-				a_size += counted_ptr_extra_a::h_size;
-				disp = &counted_ptr_disp_a;
-			}
-		} else {
-			if (extra) {
-				a_size += counted_ptr_extra_b::h_size;
-				a_size += extra;
-				disp = &counted_ptr_disp_b;
-			}
-		}
-
-		aw_t::byte_allocator_type byte_alloc(a);
-		int restore_mode(0);
-
-		std::unique_ptr<
-			counted_ptr_val, std::function<void (counted_ptr_val *)>
-		> r_ptr(
-			reinterpet_cast<counted_ptr_val *>(
-				aw_t::byte_allocator_traits::allocate(
-					byte_alloc, a_size
-				)
-			), [](counted_ptr_val *p) -> void {
-			}
-		);
-	}
-
-	static void destroy(counted_ptr_val *v_ptr)
-	{
-		if (extra_disp)
-			extra_disp->destroy(extra_storage);
+		if (p->extra_disp)
+			p->extra_disp->destroy(p);
 		else {
-			counted_ptr_alloc_wrap<
+			counted_ptr_alloc_wrapper<
 				counted_ptr_val, std::allocator<void>
 			> aw(std::allocator<void>());
 
-			aw.destroy_t(v_ptr);
+			aw.destroy_t(p);
 		}
 	}
 
-	counted_ptr_val()
-	: use_count(1)
-	{}
-
-	ValueType *get_ptr() const
+	ValueType *get_val_ptr() const
 	{
-		return reinterpet_cast<ValueType *>(&val);
+		return reinterpret_cast<ValueType *>(&val);
 	}
 
 	void release()
@@ -253,48 +196,54 @@ struct counted_ptr_val {
 	}
 
 private:
-	typedef counted_ptr_val storage_type;
+	typedef counted_ptr_val container_type;
 
-	static void destroy_a(storage_type *p)
+	template <typename Extra>
+	static void get_alloc_size(container_type *p)
 	{
-		auto x_a(reinterpet_cast<counted_ptr_extra_a *>(
+		auto x_p(reinterpret_cast<Extra *>(
 			p->extra_storage
 		));
-		x_a->a_ref->destroy_a(p);
+		return x_p->t_size;
 	}
 
-	static void destroy_ae(storage_type *p)
+	template <typename Extra>
+	static void destroy(container_type *p)
 	{
-		auto x_a(reinterpet_cast<counted_ptr_extra_ae *>(
-			p->extra_storage
-		));
-		x_a->a_ref->destroy_a(p);
-	}
-
-	static void destroy_b(storage_type *p)
-	{
-		auto x_a(reinterpet_cast<counted_ptr_extra_ae *>(
+		auto x_p(reinterpret_cast<Extra *>(
 			p->extra_storage
 		));
 
-		counted_ptr_alloc_wrap<
-			counted_ptr_val, std::allocator<void>
-		> aw(std::allocator<void>());
+		if (Extra::has_alloc)
+			x_p->a_ref->destroy_a(p);
+		else {
+			counted_ptr_alloc_wrapper<
+				counted_ptr_val, std::allocator<void>
+			> aw(std::allocator<void>());
 
-		aw.destroy_t(v_ptr);
+			aw.destroy_t(p);
+		}
 	}
 
-	static constexpr counted_ptr_disp<ValueType> counted_ptr_disp_a = {
-		.destroy = &destroy_a
+	static constexpr counted_ptr_disp<ValueType> disp_a = {
+		.get_alloc_size = &get_alloc_size<counted_ptr_extra_a>,
+		.destroy = &destroy<counted_ptr_extra_a>
 	};
 
-	static constexpr counted_ptr_disp<ValueType> counted_ptr_disp_ae = {
-		.destroy = &destroy_ae
+	static constexpr counted_ptr_disp<ValueType> disp_ae = {
+		.get_alloc_size = &get_alloc_size<counted_ptr_extra_ae>,
+		.destroy = &destroy<counted_ptr_extra_ae>
 	};
 
-	static constexpr counted_ptr_disp<ValueType> counted_ptr_disp_b = {
-		.destroy = &destroy_b
+	static constexpr counted_ptr_disp<ValueType> disp_b = {
+		.get_alloc_size = &get_alloc_size<counted_ptr_extra_b>,
+		.destroy = &destroy<counted_ptr_extra_b>
 	};
+
+	template <typename Alloc>
+	static void construct_alloc(
+		Alloc const &a, container_type *p, size_t a_size
+	);
 
 	std::aligned_storage<
 		sizeof(ValueType),
@@ -304,6 +253,157 @@ private:
 	counted_ptr_disp<ValueType> *extra_disp;
 	uint8_t extra_storage[];
 };
+
+template <typename ValueType>
+template <typename Alloc, typename... Args>
+auto counted_ptr_val<ValueType>::construct(
+	Alloc const &a, size_t extra, Args&&... args
+) -> container_type *
+{
+	typedef counted_ptr_alloc_wrapper<counted_ptr_val, Alloc> aw_t;
+	typedef std::aligned_storage<
+		sizeof(aw_t), std::alignment_of<aw_t>::value
+	> aw_st;
+
+	auto a_size(sizeof(counted_ptr_val));
+	counted_ptr_disp<ValueType> *disp(nullptr);
+	bool custom_alloc(!std::is_same<
+		typename std::allocator_traits<
+			Alloc
+		>::template rebind_alloc<void>::type,
+		std::allocator<void>
+	>::value);
+
+	if (custom_alloc) {
+		a_size += sizeof(aw_st);
+
+		if (extra) {
+			a_size += counted_ptr_extra_ae::h_size;
+			a_size += extra;
+			disp = &disp_ae;
+		} else {
+			a_size += counted_ptr_extra_a::h_size;
+			disp = &disp_a;
+		}
+	} else {
+		if (extra) {
+			a_size += counted_ptr_extra_b::h_size;
+			a_size += extra;
+			disp = &disp_b;
+		}
+	}
+
+	typename aw_t::byte_allocator_type byte_alloc(a);
+	auto p(reinterpret_cast<counted_ptr_val *>(
+		aw_t::byte_allocator_traits::allocate(byte_alloc, a_size)
+	));
+
+	p->use_count = 1;
+	p->extra_disp = disp;
+
+	construct_alloc(a, p, a_size);
+
+	std::unique_ptr<
+		container_type, std::function<void (container_type *p)>
+	> up(p, [&a, a_size](container_type *p) -> void {
+
+		typename aw_t::allocator_type aw_alloc(a);
+
+		if (p->extra_disp == &disp_a) {
+			auto a_ptr(reinterpret_cast<aw_t *>(
+				p->extra_storage
+				+ counted_ptr_extra_a::h_size
+			));
+			aw_t::allocator_traits::destroy(aw_alloc, a_ptr);
+		} else if (p->extra_disp == &disp_ae) {
+			auto a_ptr(reinterpret_cast<aw_t *>(
+				p->extra_storage
+				+ counted_ptr_extra_ae::h_size
+			));
+			aw_t::allocator_traits::destroy(aw_alloc, a_ptr);
+		}
+
+		typename aw_t::byte_allocator_type byte_alloc(a);
+
+		aw_t::byte_allocator_traits::deallocate(
+			byte_alloc,
+			reinterpret_cast<uint8_t *>(p),
+			a_size
+		);
+	});
+
+	typename aw_t::value_allocator_type value_alloc(a);
+	aw_t::value_allocator_traits::construct(
+		value_alloc, reinterpret_cast<ValueType *>(&p->val),
+		std::forward(args)...
+	);
+
+	return up.release();
+}
+
+template <typename ValueType>
+template <typename Alloc>
+void counted_ptr_val<ValueType>::construct_alloc(
+	Alloc const &a, container_type *p, size_t a_size
+)
+{
+	typedef counted_ptr_alloc_wrapper<counted_ptr_val, Alloc> aw_t;
+
+	typedef std::aligned_storage<
+		sizeof(aw_t), std::alignment_of<aw_t>::value
+	> aw_st;
+
+	std::unique_ptr<
+		container_type, std::function<void (container_type *p)>
+	> up(p, [&a, a_size](container_type *p) -> void {
+		typename aw_t::byte_allocator_type byte_alloc(a);	
+		aw_t::byte_allocator_traits::deallocate(
+			byte_alloc,
+			reinterpret_cast<uint8_t *>(p),
+			a_size
+		);
+	});
+
+	typename aw_t::allocator_type aw_alloc(a);
+
+	switch (p->extra_disp) {
+	case &disp_a: {
+		auto e_ptr(reinterpret_cast<counted_ptr_extra_a *>(
+			p->extra_storage
+		));
+		auto a_ptr(reinterpret_cast<aw_t *>(
+			p->extra_storage + counted_ptr_extra_a::h_size
+		));
+		e_ptr->t_size = a_size;
+		aw_t::allocator_traits::construct(
+			aw_alloc, a_ptr, a
+		);
+		e_ptr->a_ref = dynamic_cast<counted_ptr_alloc_base *>(a_ptr);
+	}
+	case &disp_ae: {
+		auto e_ptr(reinterpret_cast<counted_ptr_extra_ae *>(
+			p->extra_storage
+		));
+		auto a_ptr(reinterpret_cast<aw_t *>(
+			p->extra_storage + counted_ptr_extra_ae::h_size
+		));
+		e_ptr->t_size = a_size;
+		e_ptr->e_offset = counted_ptr_extra_ae::h_size + sizeof(aw_st);
+		aw_t::allocator_traits::construct(
+			aw_alloc, a_ptr, a
+		);
+		e_ptr->a_ref = dynamic_cast<counted_ptr_alloc_base *>(a_ptr);
+	}
+	case &disp_b: {
+		auto e_ptr(reinterpret_cast<counted_ptr_extra_b *>(
+			p->extra_storage
+		));
+		e_ptr->t_size = a_size;
+	}
+	};
+
+	up.release();
+}
 
 }}}
 #endif

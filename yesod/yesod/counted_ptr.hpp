@@ -53,12 +53,14 @@ struct counted_ptr {
 	{
 		auto s_ptr(ptr.exchange(nullptr));
 		if (s_ptr)
-			detail::counted_ptr_val<
-				ValueType
-			>::get_this(ptr)->release();
+			s_ptr->release();
 	}
 
 	counted_ptr()
+	: ptr(nullptr)
+	{}
+
+	counted_ptr(nullptr_t)
 	: ptr(nullptr)
 	{}
 
@@ -66,9 +68,7 @@ struct counted_ptr {
 	: ptr(p.ptr)
 	{
 		if (ptr)
-			detail::counted_ptr_val<
-				ValueType
-			>::get_this(ptr)->add_ref_copy();
+			ptr->add_ref_copy();
 	}
 
 	counted_ptr(counted_ptr &&p)
@@ -82,14 +82,10 @@ struct counted_ptr {
 
 		if (s_ptr != r_ptr) {
 			if (r_ptr)
-				detail::counted_ptr_val<
-					ValueType
-				>::get_this(r_ptr)->add_ref_copy();
+				r_ptr->add_ref_copy();
 
 			if (s_ptr)
-				detail::counted_ptr_val<
-					ValueType
-				>::get_this(s_ptr)->release();
+				s_ptr->release();
 		}
 		return *this;
 	}
@@ -99,9 +95,7 @@ struct counted_ptr {
 		auto r_ptr(p.ptr.exchange(nullptr));
 		auto s_ptr(ptr.exchange(r_ptr));
 		if (s_ptr && (s_ptr != r_ptr))
-			detail::counted_ptr_val<
-				ValueType
-			>::get_this(s_ptr)->release();
+			s_ptr->release();
 
 		return *this;
 	}
@@ -110,17 +104,15 @@ struct counted_ptr {
 	{
 		auto s_ptr(ptr.exchange(nullptr));
 		if (s_ptr)
-			detail::counted_ptr_val<
-				ValueType
-			>::get_this(s_ptr)->release();
+			s_ptr->release();
 	}
 
 	ValueType *get() const
 	{
-		return ptr.load();
+		return ptr.load()->get_val_ptr();
 	}
 
-	typename std::add_lptrue_reference<ValueType>::type operator*() const
+	typename std::add_lvalue_reference<ValueType>::type operator*() const
 	{
 		return *get();
 	}
@@ -132,28 +124,18 @@ struct counted_ptr {
 
 	int8_t *get_extra() const
 	{
-		return detail::counted_ptr_val<
-			ValueType
-		>::get_this(ptr)->get_extra();
+		size_t sz;
+		return get_extra(sz);
 	}
 
 	int8_t *get_extra(size_t &sz) const
 	{
-		return detail::counted_ptr_val<
-			ValueType
-		>::get_this(ptr)->get_extra(sz);
+		return ptr.load()->get_extra(sz);
 	}
 
-private:
-	typedef ValueType *counted_ptr::*__unspecified_bool_type;
-
-public:
-	operator __unspecified_bool_type() const
+	explicit operator bool() const
 	{
-		if (ptr)
-			return &counted_ptr::ptr;
-		else
-			return 0;
+		return ptr.load() ? true : false;
 	}
 
 	bool unique() const
@@ -164,9 +146,7 @@ public:
 	unsigned long use_count() const
 	{
 		if (ptr)
-			return detail::counted_ptr_val<
-				ValueType
-			>::get_this(ptr)->get_use_count();
+			ptr.load()->get_use_count();
 		else
 			return 0;
 	}
@@ -178,14 +158,18 @@ public:
 	}
 
 	template <typename Alloc>
-	Alloc get_allocator() const
+	Alloc const &get_allocator() const
 	{
-		if (ptr)
-			return detail::counted_ptr_val<
-				ValueType
-			>::get_this(ptr)->get_allocator<Alloc>();
-		else
-			return Alloc();
+		Alloc *a_ptr(nullptr);
+		auto s_ptr(ptr.load());
+		if (s_ptr) {
+			auto aw(s_ptr->get_alloc_wrapper());
+			a_ptr = dynamic_cast<Alloc *>(aw);
+		}
+		if (!a_ptr)
+			throw std::bad_cast();
+
+		return *a_ptr;
 	}
 
 	template <typename ValueType1, typename Alloc, typename... Args>
@@ -233,13 +217,11 @@ private:
 	) : ptr(ptr_)
 	{
 		if (inc && ptr) {
-			detail::counted_ptr_val<
-				ValueType
-			>::get_this(ptr)->add_ref_copy();
+			ptr->add_ref_copy();
 		}
 	}
 
-	std::atomic<ValueType *> ptr;
+	std::atomic<detail::counted_ptr_val<ValueType> *> ptr;
 };
 
 template <typename ValueType, typename Alloc, typename... Args>

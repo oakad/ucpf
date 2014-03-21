@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 - 2013 Alex Dubov <oakad@yahoo.com>
+ * Copyright (c) 2012-2014 Alex Dubov <oakad@yahoo.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
@@ -18,64 +18,70 @@
 
 namespace ucpf { namespace yesod {
 
-struct default_rope_policy {
-	enum {
-		/* We allocate leaf data in increments of
-		 * 1 << alloc_granularity_shift.
-		 */
-		alloc_granularity_shift = 3,
+template <typename CharType>
+struct rope_default_policy {
+	typedef std::allocator<void> allocator_type;
+	typedef std::char_traits<CharType> char_traits_type;
 
-		/* Iterators will store path_cache_len rope node
-		 * references.
-		 */
-		path_cache_len = 5,
+	/* We allocate leaf data in increments of
+	 * 1 << alloc_granularity_shift.
+	 */
+	static constexpr int alloc_granularity_shift = 3;
 
-		/* Iterators will cache iterator_buf_len characters
-		 * from non-leaf rope nodes.
-		 */
-		iterator_buf_len = 16,
+	/* Iterators will store path_cache_len rope node
+	 * references.
+	 */
+	static constexpr int path_cache_len = 5;
 
-		/* For strings shorter than max_copy, we copy to
-		 * concatenate.
-		 */
-		max_copy = 23,
+	/* Iterators will cache iterator_buf_len characters
+	 * from non-leaf rope nodes.
+	 */
+	static constexpr int iterator_buf_len = 16;
 
-		/* When dumping internal structure, string printouts
-		 * are cut to max_printout_len characters.
-		 */
-		max_printout_len = 40,
+	/* For strings shorter than max_copy, we copy to
+	 * concatenate.
+	 */
+	static constexpr int max_copy = 23;
 
-		/* Maximal rope tree depth. */
-		max_rope_depth = 45,
+	/* When dumping internal structure, string printouts
+	 * are cut to max_printout_len characters.
+	 */
+	static constexpr int max_printout_len = 40;
 
-		/* For substrings longer than lazy_threshold, we create
-		 * substring nodes.
-		 */
-		lazy_threshold = 128
-	};
+	/* For substrings longer than lazy_threshold, we create
+	 * substring nodes.
+	 */
+	static constexpr int lazy_threshold = 128
+
+
 };
 
 typedef rope<
-	char, std::char_traits<char>, std::allocator<char>, default_rope_policy
+	char, rope_default_policy<char>
 > crope;
 typedef rope<
-	wchar_t, std::char_traits<wchar_t>, std::allocator<wchar_t>,
-	default_rope_policy
+	wchar_t, rope_default_policy<w_char_t>
 > wrope;
 
 template <
-	typename CharType,
-	typename TraitsType = std::char_traits<CharType>,
-	typename AllocType = std::allocator<CharType>,
-	typename Policy = default_rope_policy
+	typename CharType, typename Policy = rope_default_policy<CharType>
 > struct rope_file_reader {
-	typedef rope<CharType, TraitsType, AllocType, Policy> rope_type;
+	typedef rope<CharType, Policy>          rope_type;
+	typedef typename Policy::allocator_type allocator_type;
 
-	rope_file_reader(char const *name, AllocType a = AllocType())
+	rope_file_reader(char const *name)
+	: c(make_counted<context>(name))
+	{}
+
+	rope_file_reader(char const *name, allocator_type const &a)
 	: c(allocate_counted<context>(a, name))
 	{}
 
-	rope_file_reader(int fd, bool owned, AllocType a = AllocType())
+	rope_file_reader(int fd, bool owned)
+	: c(make_counted<context>(fd, owned))
+	{}
+
+	rope_file_reader(int fd, bool owned, allocator_type const &a)
 	: c(allocate_counted<context>(a, fd, owned))
 	{}
 

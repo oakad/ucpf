@@ -37,36 +37,6 @@ namespace ucpf { namespace yesod {
 template <
 	typename CharType, typename TraitsType, typename AllocType,
 	typename Policy
-> typename rope<CharType, TraitsType, AllocType, Policy>
-::size_type const
-rope<CharType, TraitsType, AllocType, Policy>::npos
-= static_cast<size_type>(-1);
-
-/* These are Fibonacci numbers < 2**32. */
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> unsigned long const
-rope<CharType, TraitsType, AllocType, Policy>::min_len[
-	Policy::max_rope_depth + 1
-] = {
-	/* 00 */1, /* 01 */2, /* 02 */3, /* 03 */5, /* 04 */8, /* 05 */13,
-	/* 06 */21, /* 07 */34, /* 08 */55, /* 09 */89, /* 10 */144,
-	/* 11 */233, /* 12 */377, /* 13 */610, /* 14 */987, /* 15 */1597,
-	/* 16 */2584, /* 17 */4181, /* 18 */6765, /* 19 */10946, /* 20 */17711,
-	/* 21 */28657, /* 22 */46368, /* 23 */75025, /* 24 */121393,
-	/* 25 */196418, /* 26 */317811, /* 27 */514229, /* 28 */832040,
-	/* 29 */1346269, /* 30 */2178309, /* 31 */3524578, /* 32 */5702887,
-	/* 33 */9227465, /* 34 */14930352, /* 35 */24157817, /* 36 */39088169,
-	/* 37 */63245986, /* 38 */102334155, /* 39 */165580141,
-	/* 40 */267914296, /* 41 */433494437, /* 42 */701408733,
-	/* 43 */1134903170, /* 44 */1836311903, /* 45 */2971215073UL
-};
-
-
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
 > const typename rope<CharType, TraitsType, AllocType, Policy>
 ::rope_rep_ops
 rope<CharType, TraitsType, AllocType, Policy>
