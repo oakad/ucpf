@@ -124,8 +124,7 @@ struct counted_ptr {
 
 	int8_t *get_extra() const
 	{
-		size_t sz;
-		return get_extra(sz);
+		return ptr.load()->get_extra();
 	}
 
 	int8_t *get_extra(size_t &sz) const
@@ -155,6 +154,11 @@ struct counted_ptr {
 	{
 		auto s_ptr(ptr.exchange(p.ptr.load()));
 		p.ptr.exchange(s_ptr);
+	}
+
+	detail::counted_ptr_val<ValueType> *get_value_container() const
+	{
+		return ptr.load();
 	}
 
 	template <typename Alloc>

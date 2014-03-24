@@ -18,10 +18,9 @@
 
 namespace ucpf { namespace yesod {
 
-template <typename CharType>
 struct rope_default_policy {
-	typedef std::allocator<void> allocator_type;
-	typedef std::char_traits<CharType> char_traits_type;
+	/* Maximal rope tree depth. */
+	static constexpr int max_rope_depth = 45;
 
 	/* We allocate leaf data in increments of
 	 * 1 << alloc_granularity_shift.
@@ -56,15 +55,11 @@ struct rope_default_policy {
 
 };
 
-typedef rope<
-	char, rope_default_policy<char>
-> crope;
-typedef rope<
-	wchar_t, rope_default_policy<w_char_t>
-> wrope;
+typedef rope<char, rope_default_policy> crope;
+typedef rope<wchar_t, rope_default_policy> wrope;
 
 template <
-	typename CharType, typename Policy = rope_default_policy<CharType>
+	typename CharType, typename Policy = rope_default_policy
 > struct rope_file_reader {
 	typedef rope<CharType, Policy>          rope_type;
 	typedef typename Policy::allocator_type allocator_type;
@@ -93,7 +88,7 @@ template <
 		c->read(buf, count, offset);
 	}
 
-	operator rope_type ()
+	operator rope_type()
 	{
 		return rope_type(
 			*this, c->size(),

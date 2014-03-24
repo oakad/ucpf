@@ -75,7 +75,7 @@ struct has_cbegin<T, true> {
 
 	typedef decltype(test<T>()) type;
 
-	static bool const value = type::value;
+	static constexpr bool value = type::value;
 };
 
 }

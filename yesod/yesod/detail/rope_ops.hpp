@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 - 2013 Alex Dubov <oakad@yahoo.com>
+ * Copyright (C) 2010 - 2014 Alex Dubov <oakad@yahoo.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
@@ -34,40 +34,88 @@
 
 namespace ucpf { namespace yesod {
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> const typename rope<CharType, TraitsType, AllocType, Policy>
-::rope_rep_ops
-rope<CharType, TraitsType, AllocType, Policy>
-::rep_ops[int(rope_tag::last_tag)] = {
-	{&rope_rep::apply,    &rope_rep::substring},
-	{&rope_leaf::apply,   &rope_leaf::substring},
-	{&rope_concat::apply, &rope_concat::substring},
-	{&rope_substr::apply, &rope_substr::substring},
-	{&rope_func::apply,   &rope_func::substring}
-};
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::node::leaf::apply(
+	node_ptr const &r, apply_func_t &&f, size_type begin, size_type end
+) -> bool
+{
+	return f(extra(r) + begin, end - begin);
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto
-rope<CharType, TraitsType, AllocType, Policy>::add_leaf_to_forest(
-	rope_rep_ptr const &r, rope_rep_ptr *forest
+	return true;
+}
+
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::node::concat::apply(
+	node_ptr const &r, apply_func_t &&f, size_type begin, size_type end
+) -> bool
+{
+	node_ptr left(extra(r)->left);
+	size_type left_len(left->size);
+
+	if (begin < left_len) {
+		size_type left_end(std::min(left_len, end));
+
+		if (!rope_type::apply(
+			left, std::forward<apply_func_t>(f), begin, left_end
+		))
+			return false;
+	}
+
+	if (end > left_len) {
+		node_ptr right(extra(r)->right);
+		size_type right_begin(std::max(left_len, begin));
+
+		if (!rope_type::apply(
+			right, std::forward<apply_func_t>(f),
+			right_begin - left_len, end - left_len
+		))
+			return false;
+	}
+
+	return true;
+}
+
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::node::substr::apply(
+	node_ptr const &r, apply_func_t &&f, size_type begin, size_type end
+) -> bool
+{
+	auto s(extra(r));
+	return rope_type::apply(
+		s->base, std::forward<apply_func_t>(f), begin + s->offset,
+		std::min(r->size, end)
+	);
+}
+
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::node::func::apply(
+	node_ptr const &r, apply_func_t &&f, size_type begin, size_type end
+) -> bool
+{
+	auto len(end - begin);
+
+	auto l(node::make_leaf(std::allocator<void>(), len));
+	extra(r)->fn(leaf::extra(l), len, begin);
+	return f(leaf::extra(l), len);
+}
+
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::add_leaf_to_forest(
+	forest_t &forest, node_ptr const &r
 ) -> void
 {
 	int i; /* forest[0..i-1] is empty */
 	auto s(r->size);
-	rope_rep_ptr too_tiny;
+	node_ptr too_tiny;
 
 	for (i = 0; s >= min_len[i + 1]/* not this bucket */; ++i) {
-		if (0 != forest[i]) {
+		if (bool(forest[i])) {
 			too_tiny = concat_and_set_balanced(forest[i], too_tiny);
 			forest[i].reset();
 		}
 	}
 
-	rope_rep_ptr insertee(concat_and_set_balanced(too_tiny, r));
+	node_ptr insertee(concat_and_set_balanced(too_tiny, r));
 
 	for (;; ++i) {
 		if (forest[i]) {
@@ -82,33 +130,27 @@ rope<CharType, TraitsType, AllocType, Policy>::add_leaf_to_forest(
 	}
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto rope<CharType, TraitsType, AllocType, Policy>::add_to_forest(
-	rope_rep_ptr const &r, rope_rep_ptr *forest
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::add_to_forest(
+	forest_t &forest, node_ptr const &r
 ) -> void
 {
-	rope_concat_ptr c(rep_cast<rope_concat>(r));
-
-	if (!c || c->is_balanced)
-		add_leaf_to_forest(r, forest);
+	if ((r->tag != rope_tag::concat) || r->is_balanced)
+		add_leaf_to_forest(forest, r);
 	else {
-		add_to_forest(c->left, forest);
-		add_to_forest(c->right, forest);
+		auto c(node::concat::extra(r));
+		add_to_forest(forest, c->left);
+		add_to_forest(forest, c->right);
 	}
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
->
-auto rope<CharType, TraitsType, AllocType, Policy>::balance(
-	rope_rep_ptr const &r
-) -> rope_rep_ptr
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::balance(
+	node_ptr const &r
+) -> node_ptr
 {
-	rope_rep_ptr forest[Policy::max_rope_depth + 1];
-	rope_rep_ptr rv;
+	forest_t forest;
+	node_ptr rv;
 	int i;
 
 	/* Invariant:
@@ -117,12 +159,12 @@ auto rope<CharType, TraitsType, AllocType, Policy>::balance(
 	 * forest[i].depth = i
 	 */
 
-	add_to_forest(r, forest);
+	add_to_forest(forest, r);
 
-	for (i = 0; i <= Policy::max_rope_depth; ++i)
-		if (forest[i]) {
-			rv = concat(forest[i], rv);
-			forest[i].reset();
+	for (auto &p: forest)
+		if (bool(p)) {
+			rv = concat(p, rv);
+			p.reset();
 		}
 
 	if (rv->depth > Policy::max_rope_depth)
@@ -131,12 +173,10 @@ auto rope<CharType, TraitsType, AllocType, Policy>::balance(
 	return rv;
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto rope<CharType, TraitsType, AllocType, Policy>::concat(
-	rope_rep_ptr const &l, rope_rep_ptr const &r
-) -> rope_rep_ptr
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::concat(
+	node_ptr const &l, node_ptr const &r
+) -> node_ptr
 {
 	if (!l)
 		return r;
@@ -144,51 +184,42 @@ template <
 	if (!r)
 		return l;
 
-	rope_leaf_ptr r_leaf(rep_cast<rope_leaf>(r));
-
-	if (!r_leaf)
+	if (r->tag != rope_tag::leaf)
 		return tree_concat(l, r);
 
-	rope_leaf_ptr l_leaf(rep_cast<rope_leaf>(l));
-
-	if (l_leaf) {
-		if ((l_leaf->size + r_leaf->size)
-		    <= size_type(Policy::max_copy))
-			return leaf_concat_char_iter(
-				l_leaf, leaf_data(r_leaf), r_leaf->size
+	if (l->tag == rope_tag::leaf) {
+		if (
+			(l->size + r->size) <= size_type(Policy::max_copy)
+		)
+			return leaf_concat_value_iter(
+				l, node::leaf::extra(r), r->size
 			);
-	} else {
-		rope_concat_ptr l_cat(rep_cast<rope_concat>(l));
+	} else if (l->tag == rope_tag::concat) {
+		auto lr(node::concat::extra(l)->right);
 
-		if (l_cat) {
-			rope_leaf_ptr lr_leaf(
-				rep_cast<rope_leaf>(l_cat->right)
-			);
+		if (
+			(lr->tag == rope_tag::leaf)
+			&& (
+				(lr->size + r->size)
+				<= size_type(Policy::max_copy)
+			)
+		) {
+			auto ll(node::concat::extra(l)->left);
+			node_ptr rest(leaf_concat_value_iter(
+				lr, node::leaf::extra(r), r->size
+			));
 
-			if (lr_leaf
-			    && ((lr_leaf->size + r_leaf->size)
-				<= size_type(Policy::max_copy))) {
-				rope_rep_ptr ll(l_cat->left);
-				rope_rep_ptr rest(leaf_concat_char_iter(
-					lr_leaf, leaf_data(r_leaf),
-					r_leaf->size
-				));
-
-				return tree_concat(ll, rest);
-			}
+			return tree_concat(ll, rest);
 		}
 	}
 
 	return tree_concat(l, r);
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
->
-auto rope<CharType, TraitsType, AllocType, Policy>::tree_concat(
-	rope_rep_ptr const &l, rope_rep_ptr const &r
-) -> rope_rep_ptr
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::tree_concat(
+	node_ptr const &l, node_ptr const &r
+) -> node_ptr
 {
 	rope_concat_ptr rv(rope_concat::make(l, r));
 	size_type depth(rv->depth);
@@ -201,11 +232,8 @@ auto rope<CharType, TraitsType, AllocType, Policy>::tree_concat(
 		return rv;
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> template <typename input_iter_t> auto
-rope<CharType, TraitsType, AllocType, Policy>::leaf_concat_char_iter(
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::leaf_concat_char_iter(
 	rope_leaf_ptr const &r, input_iter_t iter, size_type n
 ) -> rope_leaf_ptr
 {
@@ -221,13 +249,10 @@ rope<CharType, TraitsType, AllocType, Policy>::leaf_concat_char_iter(
 	return rv;
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> template <typename input_iter_t>
-auto rope<CharType, TraitsType, AllocType, Policy>::concat_char_iter(
-	rope_rep_ptr const &r, input_iter_t iter, size_type n
-) -> rope_rep_ptr
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::concat_char_iter(
+	node_ptr const &r, input_iter_t iter, size_type n
+) -> node_ptr
 {
 	if (!n)
 		return r;
@@ -255,12 +280,9 @@ auto rope<CharType, TraitsType, AllocType, Policy>::concat_char_iter(
 	return tree_concat(r, l);
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
->
-auto rope<CharType, TraitsType, AllocType, Policy>::flatten(
-	rope_rep_ptr const &r, size_type begin, size_type n, CharType *s
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::flatten(
+	node_ptr const &r, size_type begin, size_type n, CharType *s
 ) -> CharType *
 {
 	size_type end(begin + std::min(n, r->size));
@@ -276,15 +298,12 @@ auto rope<CharType, TraitsType, AllocType, Policy>::flatten(
 	return s + (end - begin);
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
->
-auto rope<CharType, TraitsType, AllocType, Policy>::fetch(
-	rope_rep_ptr const &r, size_type pos
-) -> CharType
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::fetch(
+	node_ptr const &r, size_type pos
+) -> value_type
 {
-	CharType c;
+	value_type c;
 	apply(
 		r, [&c](CharType const *in, size_type in_sz) -> bool {
 			std::copy_n(in, in_sz, &c);
@@ -296,49 +315,14 @@ auto rope<CharType, TraitsType, AllocType, Policy>::fetch(
 	return c;
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
->
-auto rope<CharType, TraitsType, AllocType, Policy>::rope_concat::apply(
-	rope_rep_ptr const &r,
-	std::function<bool (CharType const *, size_type)> f,
-	size_type begin, size_type end
-) -> bool
-{
-	rope_concat_ptr c(static_pointer_cast<rope_concat>(r));
-	rope_rep_ptr left(c->left);
-	size_type left_len(left->size);
 
-	if (begin < left_len) {
-		size_type left_end(std::min(left_len, end));
-
-		if (!rope_type::apply(left, f, begin, left_end))
-			return false;
-	}
-
-	if (end > left_len) {
-		rope_rep_ptr right(c->right);
-		size_type right_begin(std::max(left_len, begin));
-
-		if (!rope_type::apply(right, f, right_begin - left_len,
-				      end - left_len))
-			return false;
-	}
-
-	return true;
-}
-
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto
-rope<CharType, TraitsType, AllocType, Policy>::rope_leaf::substring(
-	rope_rep_ptr const &r, size_type begin, size_type end, size_type adj_end
-) -> rope_rep_ptr
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::leaf::substring(
+	node_ptr const &r, size_type begin, size_type end, size_type adj_end
+) -> node_ptr
 {
 	if (begin >= adj_end)
-		return rope_rep_ptr();
+		return node_ptr();
 
 	rope_leaf_ptr l(static_pointer_cast<rope_leaf>(r));
 	size_type res_len(adj_end - begin);
@@ -355,17 +339,14 @@ rope<CharType, TraitsType, AllocType, Policy>::rope_leaf::substring(
 		);
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto
-rope<CharType, TraitsType, AllocType, Policy>::rope_concat::substring(
-	rope_rep_ptr const &r, size_type begin, size_type end, size_type adj_end
-) -> rope_rep_ptr
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::concat::substring(
+	node_ptr const &r, size_type begin, size_type end, size_type adj_end
+) -> node_ptr
 {
 	rope_concat_ptr c(static_pointer_cast<rope_concat>(r));
 
-	rope_rep_ptr left(c->left), right(c->right);
+	node_ptr left(c->left), right(c->right);
 	size_type left_len(left->size);
 
 	if (adj_end <= left_len)
@@ -380,16 +361,13 @@ rope<CharType, TraitsType, AllocType, Policy>::rope_concat::substring(
 	);
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto
-rope<CharType, TraitsType, AllocType, Policy>::rope_substr::substring(
-	rope_rep_ptr const &r, size_type begin, size_type end, size_type adj_end
-) -> rope_rep_ptr
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::substr::substring(
+	node_ptr const &r, size_type begin, size_type end, size_type adj_end
+) -> node_ptr
 {
 	if (begin >= adj_end)
-		return rope_rep_ptr();
+		return node_ptr();
 
 	// Avoid introducing multiple layers of substring nodes.
 	rope_substr_ptr old(static_pointer_cast<rope_substr>(r));
@@ -406,17 +384,14 @@ rope<CharType, TraitsType, AllocType, Policy>::rope_substr::substring(
 		);
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto
-rope<CharType, TraitsType, AllocType, Policy>::rope_func::substring(
-	rope_rep_ptr const &r, size_type begin, size_type end,
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::func::substring(
+	node_ptr const &r, size_type begin, size_type end,
 	size_type adj_end
-) -> rope_rep_ptr
+) -> node_ptr
 {
 	if (begin >= adj_end)
-		return rope_rep_ptr();
+		return node_ptr();
 
 	rope_func_ptr f(static_pointer_cast<rope_func>(r));
 	size_type res_len(adj_end - begin);
@@ -436,11 +411,8 @@ rope<CharType, TraitsType, AllocType, Policy>::rope_func::substring(
 	}
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto
-rope<CharType, TraitsType, AllocType, Policy>::iterator_base::setbuf(
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::iterator_base::setbuf(
 	iterator_base &iter
 ) -> void
 {
@@ -487,11 +459,8 @@ rope<CharType, TraitsType, AllocType, Policy>::iterator_base::setbuf(
 	}
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto
-rope<CharType, TraitsType, AllocType, Policy>::iterator_base::setcache(
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::iterator_base::setcache(
 	iterator_base &iter
 ) -> void
 {
@@ -502,7 +471,7 @@ rope<CharType, TraitsType, AllocType, Policy>::iterator_base::setcache(
 		return;
 	}
 
-	rope_rep_ptr path[Policy::max_rope_depth + 1];
+	node_ptr path[Policy::max_rope_depth + 1];
 	int cur_depth(-1);
 
 	size_type cur_start_pos(0);
@@ -510,7 +479,7 @@ rope<CharType, TraitsType, AllocType, Policy>::iterator_base::setcache(
 	/* Bit vector marking right turns in the path. */
 	unsigned long long dirns(0);
 
-	rope_rep_ptr cur_rope(iter.root);
+	node_ptr cur_rope(iter.root);
 
 	while (true) {
 		++cur_depth;
@@ -551,12 +520,8 @@ rope<CharType, TraitsType, AllocType, Policy>::iterator_base::setcache(
 	setbuf(iter);
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto
-rope<CharType, TraitsType, AllocType, Policy>::iterator_base
-::setcache_for_incr(
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::iterator_base::setcache_for_incr(
 	iterator_base &iter
 ) -> void
 {
@@ -629,13 +594,8 @@ rope<CharType, TraitsType, AllocType, Policy>::iterator_base
 	setbuf(iter);
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto
-rope<CharType, TraitsType, AllocType, Policy>::iterator_base::incr(
-	size_type n
-) -> void
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::iterator_base::incr(size_type n) -> void
 {
 	current_pos += n;
 
@@ -652,13 +612,8 @@ rope<CharType, TraitsType, AllocType, Policy>::iterator_base::incr(
 	}
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto
-rope<CharType, TraitsType, AllocType, Policy>::iterator_base::decr(
-	size_type n
-) -> void
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::iterator_base::decr(size_type n) -> void
 {
 	if (buf_cur) {
 		size_type chars_left(buf_cur - buf_begin);
@@ -672,16 +627,14 @@ rope<CharType, TraitsType, AllocType, Policy>::iterator_base::decr(
 	current_pos -= n;
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto rope<CharType, TraitsType, AllocType, Policy>::dump(
-	rope_rep_ptr const &r, std::basic_ostream<CharType, TraitsType> &os,
+template <typename ValueType, typename Policy>
+template <typename CharType>
+auto rope<ValueType, Policy>::dump(
+	node_ptr const &r, std::basic_ostream<CharType> &os,
 	int indent
-) -> std::basic_ostream<CharType, TraitsType> &
+) -> std::basic_ostream<CharType> &
 {
-	typedef std::ostream_iterator<CharType, CharType, TraitsType>
-	iter_type;
+	typedef std::ostream_iterator<value_type, CharType> iter_type;
 
 	iter_type out_iter(os);
 
@@ -699,8 +652,8 @@ template <
 		 */
 
 		rope_concat const *c(static_cast<rope_concat const *>(r.get()));
-		rope_rep_ptr const &left(c->left);
-		rope_rep_ptr const &right(c->right);
+		node_ptr const &left(c->left);
+		node_ptr const &right(c->right);
 
 		os << "Concatenation " << r.get() << " (rc = " << r.use_count()
 		   << ", depth = " << static_cast<int>(r->depth) << ", size = "
@@ -733,7 +686,7 @@ template <
 		size_type s_len;
 
 		{
-			rope_rep_ptr prefix(
+			node_ptr prefix(
 				substring(r, 0, Policy::max_printout_len)
 			);
 
@@ -751,11 +704,9 @@ template <
 	}
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto rope<CharType, TraitsType, AllocType, Policy>::compare(
-	rope_rep_ptr const &left, rope_rep_ptr const &right
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::compare(
+	node_ptr const &left, node_ptr const &right
 ) -> int
 {
 	if (!right)
@@ -803,12 +754,10 @@ template <
 	}
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> rope<CharType, TraitsType, AllocType, Policy>::rope(
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::rope(
 	size_type n, CharType c, AllocType a
-) : treeplus(rope_rep_ptr(), a)
+) : treeplus(node_ptr(), a)
 {
 	typedef rope<CharType, TraitsType, AllocType, Policy> rope_type;
 
@@ -863,10 +812,8 @@ template <
 	std::get<0>(this->treeplus) = std::get<0>(rv.treeplus);
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto rope<CharType, TraitsType, AllocType, Policy>::find(
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::find(
 	CharType c, size_type pos
 ) const -> size_type
 {
@@ -881,10 +828,8 @@ template <
 	return iter_pos;
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> auto rope<CharType, TraitsType, AllocType, Policy>::find(
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::find(
 	CharType const *s, size_type pos
 ) const -> size_type
 {
@@ -899,16 +844,13 @@ template <
 	return iter_pos;
 }
 
-template <
-	typename CharType, typename TraitsType, typename AllocType,
-	typename Policy
-> std::basic_ostream<CharType, TraitsType> &operator<<(
-	std::basic_ostream<CharType, TraitsType> &os,
-	rope<CharType, TraitsType, AllocType, Policy> const &r
+template <typename CharType, typename ValueType, typename Policy>
+std::basic_ostream<CharType> &operator<<(
+	std::basic_ostream<CharType> &os, rope<ValueType, Policy> const &r
 )
 {
-	typedef rope<CharType, TraitsType, AllocType, Policy> rope_type;
-	std::ostream_iterator<CharType, CharType, TraitsType> out_iter(os);
+	typedef rope<ValueType, Policy> rope_type;
+	std::ostream_iterator<ValueType, CharType> out_iter(os);
 	auto rope_len(r.size());
 	decltype(rope_len) w(os.width());
 	auto pad_len((rope_len < w) ? (w - rope_len) : 0);
@@ -919,13 +861,12 @@ template <
 
 	rope_type::apply(
 		std::get<0>(r.treeplus),
-		[&out_iter](CharType const *in,
-			    typename AllocType::size_type in_sz)
-		-> bool {
+		[&out_iter](
+			ValueType const *in, decltype(rope_len) in_sz
+		) -> bool {
 			std::copy_n(in, in_sz, out_iter);
 			return true;
-		},
-		0, rope_len
+		}, 0, rope_len
 	);
 
 	if (left && pad_len > 0)

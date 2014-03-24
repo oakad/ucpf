@@ -13,6 +13,44 @@
 
 namespace ucpf { namespace yesod { namespace detail {
 
+template <typename T>
+struct has_destroy {
+	template <typename U>
+	struct wrapper {};
+
+	template <typename U>
+	static std::true_type test(
+		wrapper<U> const volatile *,
+		wrapper<typename U::destroy> * = 0
+	);
+
+	static std::false_type test(...);
+
+	typedef decltype(test(static_cast<wrapper<T> *>(nullptr))) type;
+
+	static constexpr bool value = type::value;
+};
+
+template <typename T, typename Alloc, bool HasDestroy = false>
+struct counted_ptr_destroy_value {
+	typedef std::allocator_traits<Alloc> allocator_traits;
+
+	static void destroy(Alloc const &a, T *v)
+	{
+		allocator_traits::destroy(a, v);
+	}
+};
+
+template <typename T, typename Alloc>
+struct counted_ptr_destroy_value<T, Alloc, true> {
+	typedef std::allocator_traits<Alloc> allocator_traits;
+
+	static void destroy(Alloc const &a, T *v)
+	{
+		T::destroy(a, v);
+	}
+};
+
 template <typename ValueType> struct counted_ptr_val;
 
 template <typename ValueType>
@@ -76,7 +114,10 @@ struct counted_ptr_alloc_wrapper : counted_ptr_alloc_base, Alloc {
 		allocator_type self_alloc(*this);
 		byte_allocator_type byte_alloc(*this);
 
-		value_allocator_traits::destroy(value_alloc, x_value);
+		counted_ptr_destroy_value<
+			value_type, value_allocator_type,
+			has_destroy<value_type>::value
+		>::destroy(value_alloc, x_value);
 		allocator_traits::destroy(self_alloc, this);
 
 		byte_allocator_traits::deallocate(
@@ -93,7 +134,10 @@ struct counted_ptr_alloc_wrapper : counted_ptr_alloc_base, Alloc {
 		value_allocator_type value_alloc(*this);
 		byte_allocator_type byte_alloc(*this);
 
-		value_allocator_traits::destroy(value_alloc, x_value);
+		counted_ptr_destroy_value<
+			value_type, value_allocator_type,
+			has_destroy<value_type>::value
+		>::destroy(value_alloc, x_value);
 
 		byte_allocator_traits::deallocate(
 			byte_alloc, reinterpret_cast<uint8_t *>(p), sz
