@@ -60,7 +60,7 @@ struct counted_ptr {
 	: ptr(nullptr)
 	{}
 
-	counted_ptr(nullptr_t)
+	counted_ptr(std::nullptr_t)
 	: ptr(nullptr)
 	{}
 
@@ -122,14 +122,19 @@ struct counted_ptr {
 		return get();
 	}
 
-	int8_t *get_extra() const
+	void *get_extra() const
 	{
 		return ptr.load()->get_extra();
 	}
 
-	int8_t *get_extra(size_t &sz) const
+	void *get_extra(size_t &sz) const
 	{
 		return ptr.load()->get_extra(sz);
+	}
+
+	void access_allocator(void *data) const
+	{
+		ptr.load()->access_allocator(data);
 	}
 
 	explicit operator bool() const
@@ -217,11 +222,11 @@ private:
 	friend struct counted_ptr;
 
 	explicit counted_ptr(
-		ValueType *ptr_, bool inc
+		detail::counted_ptr_val<ValueType> *ptr_, bool inc
 	) : ptr(ptr_)
 	{
 		if (inc && ptr) {
-			ptr->add_ref_copy();
+			ptr.load()->add_ref_copy();
 		}
 	}
 
