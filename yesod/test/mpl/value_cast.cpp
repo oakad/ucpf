@@ -18,16 +18,21 @@ namespace ucpf { namespace yesod { namespace mpl {
 
 BOOST_AUTO_TEST_CASE(make_value_0)
 {
-	typedef vector_c<char, 'a', 'b', 'c', 'd', 'e'> v1;
-	auto str1(value_cast<v1, std::string>());
+	typedef package_c<char, 'z', 'y', 'x', 'w', 'v', 'u'> p0;
+	typedef value_cast<p0> xv0;
+	std::string str0(xv0::value.begin(), xv0::value.end());
+	BOOST_CHECK_EQUAL(str0, std::string("zyxwvu"));
 
+	typedef vector_c<char, 'a', 'b', 'c', 'd', 'e'> v1;
+	typedef value_cast<v1> xv1;
+	std::string str1(xv1::value.begin(), xv1::value.end());
 	BOOST_CHECK_EQUAL(str1, std::string("abcde"));
 
 	typedef list_c<int, 1, 2, 3, 4, 5> l2;
-	std::vector<int> ans2({1, 2, 3, 4, 5});
+	std::array<int, 5> ans2({1, 2, 3, 4, 5});
+	typedef value_cast<l2> xv2;
+	BOOST_CHECK(std::equal(ans2.begin(), ans2.end(), xv2::value.begin()));
 
-	auto v2(value_cast<l2, std::vector<int>>());
-	BOOST_CHECK(std::equal(ans2.begin(), ans2.end(), v2.begin()));
 }
 
 }}}

@@ -60,6 +60,12 @@ struct apply_pack;
 template <typename... Tn, template <typename... Un> class Op>
 struct apply_pack<package<Tn...>, Op> : Op<Tn...> {};
 
+template <typename Pack, template <typename U, U... Un> class Op>
+struct apply_pack_c;
+
+template <typename T, T... Tn, template <typename U, U... Un> class Op>
+struct apply_pack_c<package_c<T, Tn...>, Op> : Op<T, Tn...> {};
+
 template <typename T>
 struct at_c_always {
 	template <typename Index, Index I>
@@ -76,7 +82,7 @@ template <
 
 template <
 	typename Index, Index... In,
-	template <typename IndexOp, IndexOp I>class Op,
+	template <typename IndexOp, IndexOp I> class Op,
 	template <typename...> class Sequence
 > struct at_c_indices<
 	Op, package_c<Index, In...>, Sequence
@@ -155,7 +161,7 @@ struct front_impl<package_tag> {
 	struct apply_impl;
 
 	template <typename T0, typename... Tn>
-	struct apply_impl<package<T0, Tn...>> {  
+	struct apply_impl<package<T0, Tn...>> {
 		typedef T0 type;
 	};
 

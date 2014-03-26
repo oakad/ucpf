@@ -26,6 +26,7 @@ run distance.cpp : : test_case ;
 run empty_sequence.cpp : : test_case ;
 run equal.cpp : : test_case ;
 run erase.cpp : : test_case ;
+run fibonacci_c.cpp : : test_case ;
 run find.cpp : : test_case ;
 run fold.cpp : : test_case ;
 run for_each.cpp : : test_case ;
