@@ -94,7 +94,7 @@ auto rope<ValueType, Policy>::node::func::apply(
 {
 	auto len(end - begin);
 
-	auto l(node::make_leaf(std::allocator<void>(), len));
+	auto l(node::make_leaf(r, len));
 	extra(r)->fn(leaf::extra(l), len, begin);
 	return f(leaf::extra(l), len);
 }
@@ -108,7 +108,7 @@ auto rope<ValueType, Policy>::add_leaf_to_forest(
 	auto s(r->size);
 	node_ptr too_tiny;
 
-	for (i = 0; s >= min_len[i + 1]/* not this bucket */; ++i) {
+	for (i = 0; s >= min_len::value[i + 1]/* not this bucket */; ++i) {
 		if (bool(forest[i])) {
 			too_tiny = concat_and_set_balanced(forest[i], too_tiny);
 			forest[i].reset();
@@ -123,7 +123,7 @@ auto rope<ValueType, Policy>::add_leaf_to_forest(
 			forest[i].reset();
 		}
 		if ((i == Policy::max_rope_depth)
-		    || (insertee->size < min_len[i+1])) {
+		    || (insertee->size < min_len::value[i+1])) {
 			forest[i] = insertee;
 			return;
 		}
@@ -155,7 +155,7 @@ auto rope<ValueType, Policy>::balance(
 
 	/* Invariant:
 	 * The concatenation of forest in descending order is equal to r.
-	 * forest[i].size >= min_len[i]
+	 * forest[i].size >= min_len::value[i]
 	 * forest[i].depth = i
 	 */
 
@@ -233,20 +233,18 @@ auto rope<ValueType, Policy>::tree_concat(
 }
 
 template <typename ValueType, typename Policy>
-auto rope<ValueType, Policy>::leaf_concat_char_iter(
-	rope_leaf_ptr const &r, input_iter_t iter, size_type n
-) -> rope_leaf_ptr
+template <typename Iterator>
+auto rope<ValueType, Policy>::leaf_concat_value_iter(
+	node_ptr const &r, Iterator iter, size_type n
+) -> node_ptr
 {
 	size_type old_len(r->size);
 
-	rope_leaf_ptr rv(rope_leaf::make(
-		old_len + n, *r.template get_allocator<AllocType>()
+	auto v_range(iterator::make_joined_range(
+		r->leaf_range(), iterator::make_range(iter, iter + n)
 	));
 
-	traits_type::copy(leaf_data(rv), leaf_data(r), old_len);
-	traits_type::copy(leaf_data(rv) + old_len, iter, n);
-
-	return rv;
+	return node_ptr::make_leaf(r, v_range.first, v_range.last);
 }
 
 template <typename ValueType, typename Policy>

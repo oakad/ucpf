@@ -29,9 +29,11 @@
 #if !defined(UCPF_YESOD_DETAIL_ROPE_BASE_OCT_31_2013_1840)
 #define UCPF_YESOD_DETAIL_ROPE_BASE_OCT_31_2013_1840
 
-#include <functional>
 #include <algorithm>
+#include <functional>
 #include <yesod/counted_ptr.hpp>
+#include <yesod/mpl/value_cast.hpp>
+#include <yesod/mpl/fibonacci_c.hpp>
 #include <yesod/iterator/facade.hpp>
 #include <yesod/detail/allocator_utils.hpp>
 
@@ -64,20 +66,18 @@ protected:
 	};
 
 	/* Fibonacci numbers */
-	static constexpr std::array<
-		uint64_t, Policy::max_rope_depth + 1
-	> min_len = {{
-		1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987,
-		1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025,
-		121393, 196418, 317811, 514229, 832040, 1346269, 2178309,
-		3524578, 5702887, 9227465, 14930352, 24157817, 39088169,
-		63245986, 102334155, 165580141, 267914296, 433494437,
-		701408733, 1134903170u, 1836311903u, 2971215073u
-	}};
+	typedef typedef value_cast<
+		typename fibonacci_c<
+			typename std::conditional<
+				Policy::max_rope_depth < 46,
+				uint32_t, uint64_t
+			>::type,
+			Policy::max_rope_depth + 1
+		>::type
+	> min_len;
 
 	struct node;
 	typedef counted_ptr<node> node_ptr;
-
 	typedef std::array<node_ptr, Policy::max_rope_depth + 1> forest_t;
 	typedef std::function<
 		bool (value_type const *, size_type)
@@ -108,6 +108,13 @@ protected:
 
 			template <typename Alloc>
 			static void destroy(Alloc const &a, node *p);
+
+			static value_type *extra(node_ptr const &p)
+			{
+				return reinterpret_cast<value_type *>(
+					p.get_extra()
+				);
+			}
 		};
 
 		struct concat {
@@ -126,6 +133,13 @@ protected:
 
 			template <typename Alloc>
 			static void destroy(Alloc const &a, node *p);
+
+			static concat *extra(node_ptr const &p)
+			{
+				return reinterpret_cast<concat *>(
+					p.get_extra()
+				);
+			}
 
 			concat(node_ptr const &l, node_ptr const &r)
 			: left(l), right(r)
@@ -151,6 +165,13 @@ protected:
 
 			template <typename Alloc>
 			static void destroy(Alloc const &a, node *p);
+
+			static substr *extra(node_ptr const &p)
+			{
+				return reinterpret_cast<substr *>(
+					p.get_extra()
+				);
+			}
 
 			substr(node_ptr const &base_, size_type offset_)
 			: base(base_), offset(offset_)
@@ -181,6 +202,13 @@ protected:
 
 			template <typename Alloc>
 			static void destroy(Alloc const &a, node *p);
+
+			static func *extra(node_ptr const &p)
+			{
+				return reinterpret_cast<func *>(
+					p.get_extra()
+				);
+			}
 
 			func(func_type &&fn_)
 			: fn(std::forward<func_type>(fn_))
@@ -346,6 +374,20 @@ protected:
 			>::destroy(a, p, 1, false);
 		}
 
+		iterator::range<value_type *> leaf_range()
+		{
+			if (tag == rope_tag::leaf)
+				return iterator::make_range(
+					reinterpret_cast<value_type *>(
+						self->get_extra()
+					), size
+				);
+			else
+				return iterator::make_range<value_type *>(
+					nullptr, 0
+				);
+		}
+
 		node(rope_tag tag_, uint8_t d, bool b, size_type size_)
 		: size(size_), tag(tag_), depth(d), is_balanced(b ? 1 : 0)
 		{}
@@ -438,7 +480,7 @@ protected:
 
 	static bool is_balanced(node_ptr const &r)
 	{
-		return (r->size >= min_len[r->depth]);
+		return (r->size >= min_len::value[r->depth]);
 	}
 
 	static node_ptr concat_and_set_balanced(
@@ -1069,7 +1111,7 @@ public:
 		 * Longer ropes will probably still work, but it's harder to
 		 * make guarantees.
 		 */
-		 return min_len[Policy::max_rope_depth - 1] - 1;
+		 return min_len::value[Policy::max_rope_depth - 1] - 1;
 	}
 
 	rope &operator+=(rope const &r)
