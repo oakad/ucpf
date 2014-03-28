@@ -26,12 +26,18 @@ struct range {
 	template <typename ValueType>
 	struct iterator_base : facade<
 		iterator_base<ValueType>, ValueType,
-		std::iterator_traits<Iterator>::iterator_category
+		typename std::iterator_traits<Iterator>::iterator_category,
+		reference, difference_type
 	> {
 	private:
-		friend struct iterator_core_access;
+		friend struct core_access;
+		friend struct range;
 
 		iterator_base() = default;
+
+		iterator_base(Iterator pos_)
+		: pos(pos_)
+		{}
 
 		template <typename ValueType1>
 		iterator_base(
@@ -39,7 +45,7 @@ struct range {
 			typename std::enable_if<
 				std::is_convertible<
 					ValueType1 *, ValueType *
-				>::value, nullptr_t
+				>::value, std::nullptr_t
 			>::type = nullptr
 		) : pos(other)
 		{}
@@ -60,12 +66,20 @@ struct range {
 			--pos;
 		}
 
-		void advance(difference_type n)
+ 		void advance(typename iterator_base::difference_type n)
 		{
 			pos += n;
 		}
 
-		ValueType &dereference() const
+		template <typename ValueType1>
+		typename iterator_base::difference_type distance_to(
+			iterator_base<ValueType1> const &other
+		) const
+		{
+			return other.pos - pos;
+		}
+
+		typename iterator_base::reference dereference() const
 		{
 			return *pos;
 		}
@@ -110,21 +124,21 @@ private:
 };
 
 template <typename Iterator>
-range<Iterator> make_range(Iterator first, Iterator last)
+auto make_range(Iterator first, Iterator last) -> range<Iterator>
 {
 	return range<Iterator>(first, last);
 }
 
 template <typename Iterator>
-range<Iterator> make_range(Iterator first, size_t n)
+auto make_range(Iterator first, size_t n) -> range<Iterator>
 {
 	return range<Iterator>(first, first + n);
 }
 
 template <typename Range>
-range<decltype(std::begin(Range)> make_range(Range const &r)
+auto make_range(Range const &r) -> range<decltype(std::begin(Range{}))> 
 {
-	return range<Iterator>(std::begin(r), std::end(r));
+	return range<decltype(std::begin(Range{}))>(std::begin(r), std::end(r));
 }
 
 }}}

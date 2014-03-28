@@ -218,7 +218,7 @@ typename Iterator::value_type make_operator_brackets_result(
 
 struct choose_difference_type {
 	template <typename T0, typename T1>
-	using apply = mpl::eval_if_c<
+	using apply = std::conditional<
 		std::is_convertible<T1, T0>::value,
 		typename std::iterator_traits<T0>::difference_type,
 		typename std::iterator_traits<T1>::difference_type
@@ -491,7 +491,7 @@ private:
  * 1. Derived type for CRTP
  * 2. Value type
  * 3. Iterator category or traversal type
- * 4. Reference typede
+ * 4. Reference type
  * 5. Difference type
  */
 template <typename... Tn>
@@ -502,7 +502,6 @@ struct facade {
 		"must be specified."
 	);
 
-private:
 	typedef typename mpl::apply_wrap<mpl::arg<0>, Tn...>::type derived_type;
 	typedef typename mpl::apply_wrap<mpl::arg<1>, Tn...>::type x_value_type;
 	typedef typename mpl::apply_wrap<
@@ -519,7 +518,6 @@ private:
 		return *static_cast<derived_type const *>(this);
 	}
 
-public:
 	typedef typename std::conditional<
 		(sizeof...(Tn) > 3),
 		typename mpl::apply_wrap<mpl::arg<3>, Tn...>::type,
@@ -777,7 +775,7 @@ template <typename... Tn, typename... Un>
 typename detail::enable_if_interoperable<
 	typename facade<Tn...>::derived_type,
 	typename facade<Un...>::derived_type,
-	typename mpl::apply<
+	typename mpl::apply_wrap<
 		detail::choose_difference_type,
 		typename facade<Tn...>::derived_type,
 		typename facade<Un...>::derived_type
@@ -787,8 +785,8 @@ typename detail::enable_if_interoperable<
 	facade<Un...> const &rhs
 )
 {
-	typedef typename decltype(lhs)::derived_type lh_derived;
-	typedef typename decltype(rhs)::derived_type rh_derived;
+	typedef typename facade<Tn...>::derived_type lh_derived;
+	typedef typename facade<Un...>::derived_type rh_derived;
 
 	static_assert(
 		detail::is_interoperable<lh_derived, rh_derived>::value,

@@ -6,7 +6,7 @@
     file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ==============================================================================*/
 
-#define BOOST_TEST_MODULE yesod_mpl
+#define BOOST_TEST_MODULE yesod_iterator
 #include <boost/test/included/unit_test.hpp>
 
 #include <yesod/iterator/facade.hpp>
@@ -128,7 +128,7 @@ struct iterator_with_proxy_reference : facade<
 
 }
 
-BOOST_AUTO_TEST_CASE(iterator_facade_0)
+BOOST_AUTO_TEST_CASE(facade_0)
 {
 	int state = 0;
 	test::readable_iterator_test(
@@ -145,7 +145,7 @@ BOOST_AUTO_TEST_CASE(iterator_facade_0)
 	BOOST_CHECK_EQUAL(state, 8);
 }
 
-BOOST_AUTO_TEST_CASE(iterator_facade_1)
+BOOST_AUTO_TEST_CASE(facade_1)
 {
 	test::input_iter p;
 	(*p).mutator();
@@ -156,7 +156,7 @@ BOOST_AUTO_TEST_CASE(iterator_facade_1)
 	>::value));
 }
 
-BOOST_AUTO_TEST_CASE(iterator_facade_2)
+BOOST_AUTO_TEST_CASE(facade_2)
 {
 	int x = 0;
 	test::iterator_with_proxy_reference i(x);
