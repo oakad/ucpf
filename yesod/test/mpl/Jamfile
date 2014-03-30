@@ -18,6 +18,7 @@ run bind.cpp : : test_case ;
 run bitwise.cpp : : test_case ;
 run bool.cpp : : test_case ;
 run bound.cpp : : test_case ;
+run common_base.cpp : : test_case ;
 run comparison.cpp : : test_case ;
 run contains.cpp : : test_case ;
 run copy.cpp : : test_case ;

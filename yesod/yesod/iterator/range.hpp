@@ -136,9 +136,13 @@ auto make_range(Iterator first, size_t n) -> range<Iterator>
 }
 
 template <typename Range>
-auto make_range(Range const &r) -> range<decltype(std::begin(Range{}))> 
+auto make_range(Range const &r) -> range<
+	decltype(std::begin(std::declval<Range>()))
+>
 {
-	return range<decltype(std::begin(Range{}))>(std::begin(r), std::end(r));
+	return range<
+		decltype(std::begin(std::declval<Range>()))
+	>(std::begin(r), std::end(r));
 }
 
 }}}

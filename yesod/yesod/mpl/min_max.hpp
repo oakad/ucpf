@@ -28,8 +28,8 @@ struct min;
 
 template <>
 struct min<> {
-	template <typename T0, typename T1, typename... Tn>
-	struct apply : min<T0, T1> {};
+	template <typename... Tn>
+	struct apply : min<Tn...> {};
 };
 
 template <typename Tag>
@@ -39,16 +39,22 @@ struct lambda<min<>, Tag, long_<-1>> {
 	typedef min<> type;
 };
 
-template <typename N0, typename N1>
-struct min<N0, N1> : if_<less<N0, N1>, N0, N1> {};
+template <typename T0, typename T1>
+struct min<T0, T1> : std::conditional<less<T0, T1>::value, T0, T1> {};
+
+template <typename T0, typename... Tn>
+struct min<T0, Tn...> : std::conditional<
+	less<T0, typename min<Tn...>::type>::value,
+	T0, typename min<Tn...>::type
+> {};
 
 template <typename...>
 struct max;
 
 template <>
 struct max<> {
-	template <typename T0, typename T1, typename... Tn>
-	struct apply : max<T0, T1> {};
+	template <typename... Tn>
+	struct apply : max<Tn...> {};
 };
 
 template <typename Tag>
@@ -58,8 +64,14 @@ struct lambda<max<>, Tag, long_<-1>> {
 	typedef max<> type;
 };
 
-template <typename N0, typename N1>
-struct max<N0, N1> : if_<less<N0, N1>, N1, N0> {};
+template <typename T0, typename T1>
+struct max<T0, T1> : std::conditional<less<T0, T1>::value, T1, T0> {};
+
+template <typename T0, typename... Tn>
+struct max<T0, Tn...> : std::conditional<
+	less<T0, typename max<Tn...>::type>::value,
+	typename max<Tn...>::type, T0
+> {};
 
 }}}
 

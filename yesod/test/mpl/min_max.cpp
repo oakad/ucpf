@@ -29,6 +29,14 @@ BOOST_AUTO_TEST_CASE(min_max_0)
 	BOOST_CHECK((std::is_same<                      \
 		max<int_<-5>, int_<-7>>::type, int_<-5> \
 	>::value));
+
+	BOOST_CHECK((std::is_same<                                       \
+		min<int_<5>, int_<7>, int_<1>, int_<10>>::type, int_<1>  \
+	>::value));
+	BOOST_CHECK((std::is_same<                                       \
+		max<int_<5>, int_<7>, int_<1>, int_<10>>::type, int_<10> \
+	>::value));
+
 }
 
 }}}

@@ -1,11 +1,14 @@
 #include <array>
 #include <tuple>
 #include <vector>
+#include <list>
 #include <iostream>
 
 #include <yesod/mpl/package.hpp>
 #include <yesod/mpl/package_range_c.hpp>
 #include <yesod/iterator/range.hpp>
+#include <yesod/iterator/joined_range.hpp>
+
 
 #include "../test/test_demangle.hpp"
 
@@ -58,6 +61,12 @@ void t1()
 	std::get<0>(aa.pack).print();
 	std::get<1>(aa.pack).print();
 	std::get<2>(aa.pack).print();
+
+	std::array<int, 3> xx = {{1, 2, 3}};
+	std::list<int> yy = {4, 5, 6};
+	std::vector<int> zz = {7, 8, 9};
+
+	auto xr(make_joined_range(xx, yy, zz));
 }
 
 }}}
