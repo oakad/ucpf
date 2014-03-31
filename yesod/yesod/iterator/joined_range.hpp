@@ -9,8 +9,11 @@
 #define UCPF_YESOD_ITERATOR_JOINED_RANGE_MAR_27_2014_1630
 
 #include <functional>
+
 #include <yesod/mpl/min_max.hpp>
 #include <yesod/mpl/common_base.hpp>
+#include <yesod/mpl/package_range_c.hpp>
+
 #include <yesod/iterator/facade.hpp>
 
 namespace ucpf { namespace yesod { namespace iterator {
@@ -18,10 +21,6 @@ namespace ucpf { namespace yesod { namespace iterator {
 template <typename... Rn>
 struct joined_range {
 private:
-	struct slice_base {
-		virtual ~slice_base()
-		{}
-	};
 	template <typename... Iterator>
 	struct base_iterator_traits_ {
 		typedef typename std::common_type<
@@ -53,6 +52,27 @@ private:
 		decltype(std::begin(std::declval<Rn>()))...
 	> base_iterator_traits;
 
+	struct slice_base {
+		typedef typename base_iterator_traits::storage_type
+		storage_type;
+		typedef typename base_iterator_traits::value_type &reference;
+		typedef typename base_iterator_traits::value_type const
+		&const_reference;
+
+		virtual ~slice_base()
+		{}
+
+		virtual void put(storage_type *iter) = 0;
+		virtual void get_first(storage_type *iter) = 0;
+		virtual void get_last(storage_type *iter) = 0;
+		virtual bool equal(storage_type *iter, storage_type *other) = 0;
+		virtual bool increment(storage_type *iter) = 0;
+		virtual bool decrement(storage_type *iter) = 0;
+		virtual reference dereference(storage_type *iter) = 0;
+		virtual const_reference dereference(
+			storage_type const *iter
+		) const = 0;
+	};
 public:
 	typedef typename base_iterator_traits::value_type value_type;
 	typedef typename base_iterator_traits::iterator_category
@@ -64,13 +84,83 @@ public:
 		iterator_category
 	> {
 
+		~iterator_base()
+		{
+			if (r && (slice_pos < r->s_access.size()))
+				r->s_access[slice_pos]->put(&iter);
+		}
+
 	private:
 		friend struct core_access;
 		friend struct joined_range;
 
+		iterator_base(joined_range *r_, size_t slice_pos_)
+		: r(r_), slice_pos(slice_pos_)
+		{
+			if (r && (slice_pos < r->s_access.size()))
+				r->s_access[slice_pos]->get_first(&iter);
+		}
+
+		template <typename ValueType1>
+		bool equal(iterator_base<ValueType1> const &other) const
+		{
+			if ((r != other.r) || (slice_pos != other.slice_pos))
+				return false;
+
+			if (slice_pos >= r->s_access.size())
+				return true;
+
+			return r->s_access[slice_pos]->equal(
+				&iter, &other.iter
+			);
+		}
+
+		void increment()
+		{
+			if (slice_pos >= r->s_access.size())
+				return;
+
+			if (r->s_access[slice_pos]->increment(&iter)) {
+				r->s_access[slice_pos]->put(&iter);
+				++slice_pos;
+
+				if (slice_pos < r->s_access.size())
+					r->s_access[slice_pos]->get_first(
+						&iter
+					);
+
+			}
+		}
+
+		void decrement()
+		{
+			if (slice_pos >= r->s_access.size())
+				return;
+
+			if (r->s_access[slice_pos]->decrement(&iter)) {
+				if (slice_pos > 0) {
+					r->s_access[slice_pos]->put(&iter);
+					--slice_pos;
+					r->s_access[slice_pos]->get_last(
+						&iter
+					);
+				}
+			}
+		}
+
+		typename iterator_base::reference dereference()
+		{
+			return r->s_access[slice_pos]->dereference(&iter);
+		}
+
+		ValueType const &dereference() const
+		{
+			return r->s_access[slice_pos]->dereference(&iter);
+		}
+
 		joined_range *r;
 		size_t slice_pos;
-		typename base_iterator_traits::storage_type pos;
+		typename base_iterator_traits::storage_type iter;
 	};
 
 	typedef iterator_base<value_type> iterator;
@@ -85,12 +175,34 @@ public:
 	: slices(std::make_tuple(std::ref(r), this)...), slice_pos(0)
 	{}
 
+	iterator begin()
+	{
+		return iterator(this, 0);
+	}
+
+	iterator end()
+	{
+		return iterator(this, s_access.size());
+	}
+
+	const_iterator begin() const
+	{
+		return const_iterator(this, 0);
+	}
+
+	const_iterator end() const
+	{
+		return const_iterator(this, s_access.size());
+	}
+
 private:
 	template <typename Range, size_t N>
 	struct slice : slice_base {
 		typedef decltype(
 			std::begin(std::declval<Range>())
 		) iterator;
+		typedef std::allocator<iterator> allocator_type;
+		typedef std::allocator_traits<allocator_type> allocator_traits;
 
 		template <typename P>
 		slice(P &&p)
@@ -99,6 +211,77 @@ private:
 		{
 			std::get<1>(p)->s_access[N]
 			= dynamic_cast<slice_base *>(this);
+		}
+
+		virtual void put(typename slice_base::storage_type *iter)
+		{
+			allocator_type a;
+			allocator_traits::destroy(
+				a, reinterpret_cast<iterator *>(iter)
+			);
+		}
+
+		virtual void get_first(typename slice_base::storage_type *iter)
+		{
+			allocator_type a;
+			allocator_traits::construct(
+				a, reinterpret_cast<iterator *>(iter), first
+			);
+		}
+
+		virtual void get_last(typename slice_base::storage_type *iter)
+		{
+			auto x_last(last);
+			--x_last;
+			allocator_type a;
+			allocator_traits::construct(
+				a, reinterpret_cast<iterator *>(iter), x_last
+			);
+		}
+
+		virtual bool equal(
+			typename slice_base::storage_type *iter,
+			typename slice_base::storage_type *other
+		)
+		{
+			auto &x_iter(*reinterpret_cast<iterator *>(iter));
+			auto &x_other(*reinterpret_cast<iterator *>(other));
+			return x_iter == x_other;
+		}
+
+		virtual bool increment(typename slice_base::storage_type *iter)
+		{
+			auto &x_iter(*reinterpret_cast<iterator *>(iter));
+			if (x_iter != last)
+				++x_iter;
+
+			return x_iter == last;
+		}
+
+		virtual bool decrement(typename slice_base::storage_type *iter)
+		{
+			auto &x_iter(*reinterpret_cast<iterator *>(iter));
+			if (x_iter == first)
+				return true;
+
+			--x_iter;
+			return false;
+		}
+
+		virtual typename slice_base::reference dereference(
+			typename slice_base::storage_type *iter
+		)
+		{
+			auto &x_iter(*reinterpret_cast<iterator *>(iter));
+			return *x_iter;
+		}
+
+		virtual typename slice_base::const_reference dereference(
+			typename slice_base::storage_type const *iter
+		) const
+		{
+			auto &x_iter(*reinterpret_cast<iterator const *>(iter));
+			return *x_iter;
 		}
 
 		iterator first;
