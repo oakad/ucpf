@@ -29,12 +29,17 @@
 #if !defined(UCPF_YESOD_DETAIL_ROPE_BASE_OCT_31_2013_1840)
 #define UCPF_YESOD_DETAIL_ROPE_BASE_OCT_31_2013_1840
 
+#include <stdexcept>
 #include <algorithm>
-#include <functional>
+#include <ext/algorithm>
+
 #include <yesod/counted_ptr.hpp>
 #include <yesod/mpl/value_cast.hpp>
 #include <yesod/mpl/fibonacci_c.hpp>
-#include <yesod/iterator/facade.hpp>
+
+#include <yesod/iterator/range.hpp>
+#include <yesod/iterator/joined_range.hpp>
+
 #include <yesod/detail/allocator_utils.hpp>
 
 namespace ucpf { namespace yesod {
@@ -66,8 +71,8 @@ protected:
 	};
 
 	/* Fibonacci numbers */
-	typedef typedef value_cast<
-		typename fibonacci_c<
+	typedef typename mpl::value_cast<
+		typename mpl::fibonacci_c<
 			typename std::conditional<
 				Policy::max_rope_depth < 46,
 				uint32_t, uint64_t
@@ -256,6 +261,13 @@ protected:
 			return rv;
 		}
 
+		static node_ptr make_leaf(node_ptr const &a, size_type n);
+
+		template <typename Iterator>
+		static node_ptr make_leaf(
+			node_ptr const &a, Iterator first, Iterator last
+		);
+
 		template <typename Alloc>
 		static node_ptr make_concat(
 			Alloc const &a, node_ptr const &l, node_ptr const &r
@@ -276,6 +288,10 @@ protected:
 			>::make(a, rv.get_extra(), 1, l, r);
 		}
 
+		static node_ptr make_concat(
+			node_ptr const &l, node_ptr const &r
+		);
+
 		template <typename Alloc>
 		static node_ptr make_substr(
 			Alloc const &a, node_ptr const &base, size_type offset,
@@ -294,6 +310,10 @@ protected:
 				substr, Alloc
 			>::make(a, rv.get_extra(), 1, base, offset);
 		}
+
+		static node_ptr make_substr(
+			node_ptr const &base, size_type offset, size_type n
+		);
 
 		template <typename Alloc>
 		static node_ptr make_func(
@@ -374,18 +394,18 @@ protected:
 			>::destroy(a, p, 1, false);
 		}
 
-		iterator::range<value_type *> leaf_range()
+		yesod::iterator::range<value_type *> leaf_range()
 		{
 			if (tag == rope_tag::leaf)
-				return iterator::make_range(
+				return yesod::iterator::make_range(
 					reinterpret_cast<value_type *>(
 						self->get_extra()
 					), size
 				);
 			else
-				return iterator::make_range<value_type *>(
-					nullptr, 0
-				);
+				return yesod::iterator::make_range<
+					value_type *
+				>(nullptr, 0);
 		}
 
 		node(rope_tag tag_, uint8_t d, bool b, size_type size_)
@@ -507,17 +527,16 @@ protected:
 
 	template <typename Iterator>
 	static node_ptr leaf_concat_value_iter(
-		node_ptr const &r, Iterator iter, size_type n
+		node_ptr const &l, Iterator iter, size_type n
 	);
 
 	template <typename Iterator>
 	static node_ptr concat_value_iter(
-		node_ptr const &r, Iterator iter, size_type n
+		node_ptr const &l, Iterator iter, size_type n
 	);
 
 	static value_type *flatten(
-		node_ptr const &r, size_type begin, size_type n,
-		value_type *s
+		node_ptr const &r, size_type begin, size_type n, value_type *s
 	);
 
 	static value_type *flatten(node_ptr const &r, value_type *s)

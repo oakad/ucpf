@@ -29,9 +29,6 @@
 #if !defined(UCPF_YESOD_DETAIL_ROPE_OPS_OCT_31_2013_1840)
 #define UCPF_YESOD_DETAIL_ROPE_OPS_OCT_31_2013_1840
 
-#include <stdexcept>
-#include <ext/algorithm>
-
 namespace ucpf { namespace yesod {
 
 template <typename ValueType, typename Policy>
@@ -42,6 +39,22 @@ auto rope<ValueType, Policy>::node::leaf::apply(
 	return f(extra(r) + begin, end - begin);
 
 	return true;
+}
+
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::node::leaf::substring(
+	node_ptr const &r, size_type begin, size_type end, size_type adj_end
+) -> node_ptr
+{
+	if (begin >= adj_end)
+		return node_ptr();
+
+	size_type res_len(adj_end - begin);
+
+	if (res_len > Policy::lazy_threshold)
+		return node_ptr::make_substr(r, begin, adj_end - begin);
+	else
+		return node_ptr::make_leaf(r, extra(r) + begin, res_len);
 }
 
 template <typename ValueType, typename Policy>
@@ -76,6 +89,29 @@ auto rope<ValueType, Policy>::node::concat::apply(
 }
 
 template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::node::concat::substring(
+	node_ptr const &r, size_type begin, size_type end, size_type adj_end
+) -> node_ptr
+{
+	auto c(node_ptr::concat::extra(r));
+
+	node_ptr left(c->left), right(c->right);
+	size_type left_len(left->size);
+
+	if (adj_end <= left_len)
+		return rope_type::substring(left, begin, end);
+	else if (begin >= left_len)
+		return rope_type::substring(
+			right, begin - left_len, adj_end - left_len
+		);
+
+	return concat(
+		rope_type::substring(left, begin, left_len),
+		rope_type::substring(right, 0, end - left_len)
+	);
+}
+
+template <typename ValueType, typename Policy>
 auto rope<ValueType, Policy>::node::substr::apply(
 	node_ptr const &r, apply_func_t &&f, size_type begin, size_type end
 ) -> bool
@@ -88,6 +124,28 @@ auto rope<ValueType, Policy>::node::substr::apply(
 }
 
 template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::node::substr::substring(
+	node_ptr const &r, size_type begin, size_type end, size_type adj_end
+) -> node_ptr
+{
+	if (begin >= adj_end)
+		return node_ptr();
+
+	/* Avoid introducing multiple layers of substring nodes. */
+	auto c(node_ptr::substr::extra(r));
+	size_type res_len(adj_end - begin);
+
+	if (res_len > Policy::lazy_threshold)
+		return node_ptr::make_substr(
+			c->base, begin + c->offset, adj_end - begin
+		);
+	else
+		return rope_type::substring(
+			c->base, begin + c->offset, adj_end - begin
+		);
+}
+
+template <typename ValueType, typename Policy>
 auto rope<ValueType, Policy>::node::func::apply(
 	node_ptr const &r, apply_func_t &&f, size_type begin, size_type end
 ) -> bool
@@ -97,6 +155,26 @@ auto rope<ValueType, Policy>::node::func::apply(
 	auto l(node::make_leaf(r, len));
 	extra(r)->fn(leaf::extra(l), len, begin);
 	return f(leaf::extra(l), len);
+}
+
+template <typename ValueType, typename Policy>
+auto rope<ValueType, Policy>::node::func::substring(
+	node_ptr const &r, size_type begin, size_type end,
+	size_type adj_end
+) -> node_ptr
+{
+	if (begin >= adj_end)
+		return node_ptr();
+
+	size_type res_len(adj_end - begin);
+
+	if (res_len > Policy::lazy_threshold)
+		return node_ptr::make_substr(r, begin, adj_end - begin);
+	else {
+		auto rv(node_ptr::make_leaf(r, res_len));
+		extra(r)->fn(node_ptr::leaf::extra(rv), res_len, begin);
+		return rv;
+	}
 }
 
 template <typename ValueType, typename Policy>
@@ -221,7 +299,7 @@ auto rope<ValueType, Policy>::tree_concat(
 	node_ptr const &l, node_ptr const &r
 ) -> node_ptr
 {
-	rope_concat_ptr rv(rope_concat::make(l, r));
+	auto rv(node_ptr::make_concat(l, r));
 	size_type depth(rv->depth);
 
 	if ((depth > 20)
@@ -235,63 +313,57 @@ auto rope<ValueType, Policy>::tree_concat(
 template <typename ValueType, typename Policy>
 template <typename Iterator>
 auto rope<ValueType, Policy>::leaf_concat_value_iter(
-	node_ptr const &r, Iterator iter, size_type n
+	node_ptr const &l, Iterator iter, size_type n
 ) -> node_ptr
 {
-	size_type old_len(r->size);
+	size_type old_len(l->size);
 
-	auto v_range(iterator::make_joined_range(
-		r->leaf_range(), iterator::make_range(iter, iter + n)
+	auto v_range(yesod::iterator::make_joined_range(
+		l->leaf_range(), yesod::iterator::make_range(iter, iter + n)
 	));
 
-	return node_ptr::make_leaf(r, v_range.first, v_range.last);
+	return node_ptr::make_leaf(l, v_range.first, v_range.last);
 }
 
 template <typename ValueType, typename Policy>
-auto rope<ValueType, Policy>::concat_char_iter(
-	node_ptr const &r, input_iter_t iter, size_type n
+template <typename Iterator>
+auto rope<ValueType, Policy>::concat_value_iter(
+	node_ptr const &l, Iterator iter, size_type n
 ) -> node_ptr
 {
 	if (!n)
-		return r;
+		return l;
 
-	rope_leaf_ptr l(rep_cast<rope_leaf>(r));
-
-	if (l && l->size + n <= Policy::max_copy)
-		return leaf_concat_char_iter(l, iter, n);
-	else {
-		rope_concat_ptr c(rep_cast<rope_concat>(r));
-		if (c) {
-			l = rep_cast<rope_leaf>(c->right);
-
-			if (l && l->size + n <= Policy::max_copy) {
-				rope_leaf_ptr right(leaf_concat_char_iter(
-						l, iter, n
-				));
-				return tree_concat(c->left, right);
+	if (l->tag == rope_tag::leaf) {
+		if ((l->size + n) <= Policy::max_copy)
+			return leaf_concat_value_iter(l, iter, n);
+	} else if (l->tag == rope_tag::concat) {
+		auto c(node_ptr::concat::extra(l));
+		auto r(c->right);
+		if (r->tag == rope_tag::leaf) {
+			if ((r->size + n) <= Policy::max_copy) {
+				auto rr(leaf_concat_value_iter(r, iter, n));
+				return tree_concat(c->left, rr);
 			}
 		}
 	}
 
-	l = rope_leaf::make(iter, n, *r.template get_allocator<AllocType>());
-
-	return tree_concat(r, l);
+	return tree_concat(l, node_ptr::make_leaf(l, iter, n));
 }
 
 template <typename ValueType, typename Policy>
 auto rope<ValueType, Policy>::flatten(
-	node_ptr const &r, size_type begin, size_type n, CharType *s
-) -> CharType *
+	node_ptr const &r, size_type begin, size_type n, value_type *s
+) -> value_type *
 {
 	size_type end(begin + std::min(n, r->size));
 
 	apply(
-		r, [&s](CharType const *in, size_type in_sz) -> bool {
+		r, [&s](ValueType const *in, size_type in_sz) -> bool {
 			std::copy_n(in, in_sz, s);
 			s += in_sz;
 			return true;
-		},
-		begin, end
+		}, begin, end
 	);
 	return s + (end - begin);
 }
@@ -303,7 +375,7 @@ auto rope<ValueType, Policy>::fetch(
 {
 	value_type c;
 	apply(
-		r, [&c](CharType const *in, size_type in_sz) -> bool {
+		r, [&c](value_type const *in, size_type in_sz) -> bool {
 			std::copy_n(in, in_sz, &c);
 			return true;
 		},
@@ -311,102 +383,6 @@ auto rope<ValueType, Policy>::fetch(
 	);
 
 	return c;
-}
-
-
-template <typename ValueType, typename Policy>
-auto rope<ValueType, Policy>::leaf::substring(
-	node_ptr const &r, size_type begin, size_type end, size_type adj_end
-) -> node_ptr
-{
-	if (begin >= adj_end)
-		return node_ptr();
-
-	rope_leaf_ptr l(static_pointer_cast<rope_leaf>(r));
-	size_type res_len(adj_end - begin);
-
-	if (res_len > Policy::lazy_threshold)
-		return rope_substr::make(
-			r, begin, adj_end - begin,
-			*r.template get_allocator<AllocType>()
-		);
-	else
-		return rope_leaf::make(
-			leaf_data(l) + begin, res_len,
-			*l.template get_allocator<AllocType>()
-		);
-}
-
-template <typename ValueType, typename Policy>
-auto rope<ValueType, Policy>::concat::substring(
-	node_ptr const &r, size_type begin, size_type end, size_type adj_end
-) -> node_ptr
-{
-	rope_concat_ptr c(static_pointer_cast<rope_concat>(r));
-
-	node_ptr left(c->left), right(c->right);
-	size_type left_len(left->size);
-
-	if (adj_end <= left_len)
-		return rope_type::substring(left, begin, end);
-	else if (begin >= left_len)
-		return rope_type::substring(right, begin - left_len,
-					    adj_end - left_len);
-
-	return concat(
-		rope_type::substring(left, begin, left_len),
-		rope_type::substring(right, 0, end - left_len)
-	);
-}
-
-template <typename ValueType, typename Policy>
-auto rope<ValueType, Policy>::substr::substring(
-	node_ptr const &r, size_type begin, size_type end, size_type adj_end
-) -> node_ptr
-{
-	if (begin >= adj_end)
-		return node_ptr();
-
-	// Avoid introducing multiple layers of substring nodes.
-	rope_substr_ptr old(static_pointer_cast<rope_substr>(r));
-	size_type res_len(adj_end - begin);
-
-	if (res_len > Policy::lazy_threshold)
-		return rope_substr::make(
-			old->base, begin + old->start, adj_end - begin,
-			*old.template get_allocator<AllocType>()
-		);
-	else
-		return rope_type::substring(
-			old->base, begin + old->start, adj_end - begin
-		);
-}
-
-template <typename ValueType, typename Policy>
-auto rope<ValueType, Policy>::func::substring(
-	node_ptr const &r, size_type begin, size_type end,
-	size_type adj_end
-) -> node_ptr
-{
-	if (begin >= adj_end)
-		return node_ptr();
-
-	rope_func_ptr f(static_pointer_cast<rope_func>(r));
-	size_type res_len(adj_end - begin);
-
-	if (res_len > Policy::lazy_threshold)
-		return rope_substr::make(
-			r, begin, adj_end - begin,
-			*r.template get_allocator<AllocType>()
-		);
-	else {
-		rope_leaf_ptr rv(rope_leaf::make(
-			res_len, *r.template get_allocator<AllocType>()
-		));
-
-		f->fn(leaf_data(rv), res_len, begin);
-		return rv;
-	}
 }
 
 template <typename ValueType, typename Policy>

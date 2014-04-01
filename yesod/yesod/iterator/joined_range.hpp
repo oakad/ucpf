@@ -65,11 +65,12 @@ private:
 		virtual void put(storage_type *iter) = 0;
 		virtual void get_first(storage_type *iter) = 0;
 		virtual void get_last(storage_type *iter) = 0;
-		virtual bool equal(storage_type *iter, storage_type *other) = 0;
+		virtual bool equal(
+			storage_type const *iter, storage_type const *other
+		) const = 0;
 		virtual bool increment(storage_type *iter) = 0;
 		virtual bool decrement(storage_type *iter) = 0;
-		virtual reference dereference(storage_type *iter) = 0;
-		virtual const_reference dereference(
+		virtual reference dereference(
 			storage_type const *iter
 		) const = 0;
 	};
@@ -148,12 +149,7 @@ public:
 			}
 		}
 
-		typename iterator_base::reference dereference()
-		{
-			return r->s_access[slice_pos]->dereference(&iter);
-		}
-
-		ValueType const &dereference() const
+		typename iterator_base::reference dereference() const
 		{
 			return r->s_access[slice_pos]->dereference(&iter);
 		}
@@ -240,12 +236,16 @@ private:
 		}
 
 		virtual bool equal(
-			typename slice_base::storage_type *iter,
-			typename slice_base::storage_type *other
-		)
+			typename slice_base::storage_type const *iter,
+			typename slice_base::storage_type const *other
+		) const
 		{
-			auto &x_iter(*reinterpret_cast<iterator *>(iter));
-			auto &x_other(*reinterpret_cast<iterator *>(other));
+			auto &x_iter(
+				*reinterpret_cast<iterator const *>(iter)
+			);
+			auto &x_other(
+				*reinterpret_cast<iterator const *>(other)
+			);
 			return x_iter == x_other;
 		}
 
@@ -269,19 +269,13 @@ private:
 		}
 
 		virtual typename slice_base::reference dereference(
-			typename slice_base::storage_type *iter
-		)
-		{
-			auto &x_iter(*reinterpret_cast<iterator *>(iter));
-			return *x_iter;
-		}
-
-		virtual typename slice_base::const_reference dereference(
 			typename slice_base::storage_type const *iter
 		) const
 		{
 			auto &x_iter(*reinterpret_cast<iterator const *>(iter));
-			return *x_iter;
+			return const_cast<typename slice_base::reference>(
+				*x_iter
+			);
 		}
 
 		iterator first;

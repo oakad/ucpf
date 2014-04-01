@@ -656,8 +656,8 @@ typename detail::enable_if_interoperable<
 	facade<Un...> const &rhs
 )
 {
-	typedef typename decltype(lhs)::derived_type lh_derived;
-	typedef typename decltype(rhs)::derived_type rh_derived;
+	typedef typename facade<Tn...>::derived_type lh_derived;
+	typedef typename facade<Un...>::derived_type rh_derived;
 
 	static_assert(
 		detail::is_interoperable<lh_derived, rh_derived>::value,
