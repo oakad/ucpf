@@ -52,9 +52,11 @@ auto rope<ValueType, Policy>::node::leaf::substring(
 	size_type res_len(adj_end - begin);
 
 	if (res_len > Policy::lazy_threshold)
-		return node_ptr::make_substr(r, begin, adj_end - begin);
+		return node::make_substr(r, begin, adj_end - begin);
 	else
-		return node_ptr::make_leaf(r, extra(r) + begin, res_len);
+		return node::make_leaf(
+			r, extra(r) + begin, extra(r) + begin + res_len
+		);
 }
 
 template <typename ValueType, typename Policy>
@@ -93,7 +95,7 @@ auto rope<ValueType, Policy>::node::concat::substring(
 	node_ptr const &r, size_type begin, size_type end, size_type adj_end
 ) -> node_ptr
 {
-	auto c(node_ptr::concat::extra(r));
+	auto c(node::concat::extra(r));
 
 	node_ptr left(c->left), right(c->right);
 	size_type left_len(left->size);
@@ -105,7 +107,7 @@ auto rope<ValueType, Policy>::node::concat::substring(
 			right, begin - left_len, adj_end - left_len
 		);
 
-	return concat(
+	return rope_type::concat(
 		rope_type::substring(left, begin, left_len),
 		rope_type::substring(right, 0, end - left_len)
 	);
@@ -132,11 +134,11 @@ auto rope<ValueType, Policy>::node::substr::substring(
 		return node_ptr();
 
 	/* Avoid introducing multiple layers of substring nodes. */
-	auto c(node_ptr::substr::extra(r));
+	auto c(node::substr::extra(r));
 	size_type res_len(adj_end - begin);
 
 	if (res_len > Policy::lazy_threshold)
-		return node_ptr::make_substr(
+		return node::make_substr(
 			c->base, begin + c->offset, adj_end - begin
 		);
 	else
@@ -169,10 +171,10 @@ auto rope<ValueType, Policy>::node::func::substring(
 	size_type res_len(adj_end - begin);
 
 	if (res_len > Policy::lazy_threshold)
-		return node_ptr::make_substr(r, begin, adj_end - begin);
+		return node::make_substr(r, begin, adj_end - begin);
 	else {
-		auto rv(node_ptr::make_leaf(r, res_len));
-		extra(r)->fn(node_ptr::leaf::extra(rv), res_len, begin);
+		auto rv(node::make_leaf(r, res_len));
+		extra(r)->fn(node::leaf::extra(rv), res_len, begin);
 		return rv;
 	}
 }
@@ -229,7 +231,6 @@ auto rope<ValueType, Policy>::balance(
 {
 	forest_t forest;
 	node_ptr rv;
-	int i;
 
 	/* Invariant:
 	 * The concatenation of forest in descending order is equal to r.
@@ -266,9 +267,7 @@ auto rope<ValueType, Policy>::concat(
 		return tree_concat(l, r);
 
 	if (l->tag == rope_tag::leaf) {
-		if (
-			(l->size + r->size) <= size_type(Policy::max_copy)
-		)
+		if ((l->size + r->size) <= Policy::max_copy)
 			return leaf_concat_value_iter(
 				l, node::leaf::extra(r), r->size
 			);
@@ -277,10 +276,7 @@ auto rope<ValueType, Policy>::concat(
 
 		if (
 			(lr->tag == rope_tag::leaf)
-			&& (
-				(lr->size + r->size)
-				<= size_type(Policy::max_copy)
-			)
+			&& ((lr->size + r->size) <= Policy::max_copy)
 		) {
 			auto ll(node::concat::extra(l)->left);
 			node_ptr rest(leaf_concat_value_iter(
@@ -316,10 +312,8 @@ auto rope<ValueType, Policy>::leaf_concat_value_iter(
 	node_ptr const &l, Iterator iter, size_type n
 ) -> node_ptr
 {
-	size_type old_len(l->size);
-
 	auto v_range(yesod::iterator::make_joined_range(
-		l->leaf_range(), yesod::iterator::make_range(iter, iter + n)
+		l->leaf_range(), yesod::iterator::make_range(iter, n)
 	));
 
 	return node::make_leaf(l, v_range.begin(), v_range.end());
@@ -338,7 +332,7 @@ auto rope<ValueType, Policy>::concat_value_iter(
 		if ((l->size + n) <= Policy::max_copy)
 			return leaf_concat_value_iter(l, iter, n);
 	} else if (l->tag == rope_tag::concat) {
-		auto c(node_ptr::concat::extra(l));
+		auto c(node::concat::extra(l));
 		auto r(c->right);
 		if (r->tag == rope_tag::leaf) {
 			if ((r->size + n) <= Policy::max_copy) {
@@ -348,7 +342,7 @@ auto rope<ValueType, Policy>::concat_value_iter(
 		}
 	}
 
-	return tree_concat(l, node_ptr::make_leaf(l, iter, n));
+	return tree_concat(l, node::make_leaf(l, iter, n));
 }
 
 template <typename ValueType, typename Policy>

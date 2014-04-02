@@ -29,7 +29,6 @@ struct range {
 		typename std::iterator_traits<Iterator>::iterator_category,
 		reference, difference_type
 	> {
-	private:
 		friend struct core_access;
 		friend struct range;
 
@@ -47,9 +46,9 @@ struct range {
 					ValueType1 *, ValueType *
 				>::value, std::nullptr_t
 			>::type = nullptr
-		) : pos(other)
+		) : pos(other.pos)
 		{}
-
+	private:
 		template <typename ValueType1>
 		bool equal(iterator_base<ValueType1> const &other) const
 		{

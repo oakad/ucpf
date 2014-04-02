@@ -149,6 +149,13 @@ public:
 			}
 		}
 
+		void advance(typename iterator_base::difference_type n);
+
+		template <typename ValueType1>
+		typename iterator_base::difference_type distance_to(
+			iterator_base<ValueType1> const &other
+		) const;
+
 		typename iterator_base::reference dereference() const
 		{
 			return r->s_access[slice_pos]->dereference(&iter);

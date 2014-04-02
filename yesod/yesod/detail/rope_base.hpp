@@ -115,9 +115,16 @@ protected:
 			template <typename Alloc>
 			static void destroy(Alloc const &a, node *p);
 
-			static value_type *extra(node_ptr const &p)
+			static value_type *extra(node_ptr &p)
 			{
 				return reinterpret_cast<value_type *>(
+					p.get_extra()
+				);
+			}
+
+			static value_type const *extra(node_ptr const &p)
+			{
+				return reinterpret_cast<value_type const *>(
 					p.get_extra()
 				);
 			}
@@ -140,9 +147,16 @@ protected:
 			template <typename Alloc>
 			static void destroy(Alloc const &a, node *p);
 
-			static concat *extra(node_ptr const &p)
+			static concat *extra(node_ptr &p)
 			{
 				return reinterpret_cast<concat *>(
+					p.get_extra()
+				);
+			}
+
+			static concat const *extra(node_ptr const &p)
+			{
+				return reinterpret_cast<concat const *>(
 					p.get_extra()
 				);
 			}
@@ -172,9 +186,16 @@ protected:
 			template <typename Alloc>
 			static void destroy(Alloc const &a, node *p);
 
-			static substr *extra(node_ptr const &p)
+			static substr *extra(node_ptr &p)
 			{
 				return reinterpret_cast<substr *>(
+					p.get_extra()
+				);
+			}
+
+			static substr const *extra(node_ptr const &p)
+			{
+				return reinterpret_cast<substr const *>(
 					p.get_extra()
 				);
 			}
@@ -209,9 +230,16 @@ protected:
 			template <typename Alloc>
 			static void destroy(Alloc const &a, node *p);
 
-			static func *extra(node_ptr const &p)
+			static func *extra(node_ptr &p)
 			{
 				return reinterpret_cast<func *>(
+					p.get_extra()
+				);
+			}
+
+			static func const *extra(node_ptr const &p)
+			{
+				return reinterpret_cast<func const *>(
 					p.get_extra()
 				);
 			}
@@ -354,7 +382,7 @@ protected:
 				&substr::apply,
 				&func::apply
 			};
-			return (*ad[r->tag])(
+			return (*ad[int(r->tag)])(
 				r, std::forward<apply_func_t>(f), begin, end
 			);
 		}
@@ -364,7 +392,7 @@ protected:
 			size_type end, size_type adj_end
 		)
 		{
-			static constexpr bool (*sd[])(
+			static constexpr node_ptr (*sd[])(
 				node_ptr const &, size_type, size_type,
 				size_type
 			) = {
@@ -374,7 +402,7 @@ protected:
 				&substr::substring,
 				&func::substring
 			};
-			return (*sd[r->tag])(r, begin, end, adj_end);
+			return (*sd[int(r->tag)])(r, begin, end, adj_end);
 		}
 
 		template <typename Alloc>
@@ -384,13 +412,13 @@ protected:
 				Alloc const &a, node *p
 			) = {
 				nullptr,
-				&leaf::destroy<Alloc>,
-				&concat::destroy<Alloc>,
-				&substr::destroy<Alloc>,
-				&func::destroy<Alloc>
+				&leaf::template destroy<Alloc>,
+				&concat::template destroy<Alloc>,
+				&substr::template destroy<Alloc>,
+				&func::template destroy<Alloc>
 			};
 
-			(*dd[p->tag])(a, p);
+			(*dd[int(p->tag)])(a, p);
 			detail::allocator_array_helper<
 				node, Alloc
 			>::destroy(a, p, 1, false);
@@ -407,7 +435,21 @@ protected:
 			else
 				return yesod::iterator::make_range<
 					value_type *
-				>(nullptr, 0);
+				>(nullptr, size_t(0));
+		}
+
+		yesod::iterator::range<value_type const *> leaf_range() const
+		{
+			if (tag == rope_tag::leaf)
+				return yesod::iterator::make_range(
+					reinterpret_cast<value_type const *>(
+						self->get_extra()
+					), size
+				);
+			else
+				return yesod::iterator::make_range<
+					value_type const *
+				>(nullptr, size_t(0));
 		}
 
 		node(rope_tag tag_, uint8_t d, bool b, size_type size_)
@@ -875,7 +917,7 @@ public:
 	template <typename Alloc>
 	Alloc const &get_allocator() const
 	{
-		return root_node.get_allocator<Alloc>();
+		return root_node.template get_allocator<Alloc>();
 	}
 
 	bool empty() const

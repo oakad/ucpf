@@ -40,7 +40,7 @@ struct rope_default_policy {
 	/* For strings shorter than max_copy, we copy to
 	 * concatenate.
 	 */
-	static constexpr int max_copy = 23;
+	static constexpr size_t max_copy = 23;
 
 	/* When dumping internal structure, string printouts
 	 * are cut to max_printout_len characters.

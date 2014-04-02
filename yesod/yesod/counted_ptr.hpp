@@ -34,9 +34,6 @@ counted_ptr<ValueType> make_counted(
 template <typename ValueType, typename... Args>
 counted_ptr<ValueType> make_counted(Args&&... args);
 
-template <typename ValueType0, typename ValueType1>
-counted_ptr<ValueType0> const_pointer_cast(counted_ptr<ValueType1> const &p);
-
 template <typename ValueType>
 struct counted_ptr {
 	typedef ValueType type;
@@ -150,7 +147,7 @@ struct counted_ptr {
 	unsigned long use_count() const
 	{
 		if (ptr)
-			ptr.load()->get_use_count();
+			return ptr.load()->get_use_count();
 		else
 			return 0;
 	}
@@ -201,21 +198,6 @@ struct counted_ptr {
 
 	template <typename ValueType1, typename... Args>
 	friend counted_ptr<ValueType1> make_counted(Args&&... args);
-
-	template <typename ValueType0, typename ValueType1>
-	friend counted_ptr<ValueType0> static_pointer_cast(
-		counted_ptr<ValueType1> const &p
-	);
-
-	template <typename ValueType0, typename ValueType1>
-	friend counted_ptr<ValueType0> const_pointer_cast(
-		counted_ptr<ValueType1> const &p
-	);
-
-	template <typename ValueType0, typename ValueType1>
-	friend counted_ptr<ValueType0> dynamic_pointer_cast(
-		counted_ptr<ValueType1> const &p
-	);
 
 private:
 	template <typename ValueType1>
@@ -405,14 +387,6 @@ template <typename ValueType>
 bool operator>=(std::nullptr_t, counted_ptr<ValueType> const &a)
 {
 	return !(nullptr < a);
-}
-
-template <typename ValueType0, typename ValueType1>
-counted_ptr<ValueType0> const_pointer_cast(counted_ptr<ValueType1> const &p)
-{
-	return counted_ptr<ValueType0>(
-		const_cast<ValueType0>(p.ptr.load()), true
-	);
 }
 
 }}
