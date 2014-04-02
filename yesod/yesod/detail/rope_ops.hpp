@@ -299,7 +299,7 @@ auto rope<ValueType, Policy>::tree_concat(
 	node_ptr const &l, node_ptr const &r
 ) -> node_ptr
 {
-	auto rv(node_ptr::make_concat(l, r));
+	auto rv(node::make_concat(l, r));
 	size_type depth(rv->depth);
 
 	if ((depth > 20)
@@ -322,7 +322,7 @@ auto rope<ValueType, Policy>::leaf_concat_value_iter(
 		l->leaf_range(), yesod::iterator::make_range(iter, iter + n)
 	));
 
-	return node_ptr::make_leaf(l, v_range.first, v_range.last);
+	return node::make_leaf(l, v_range.begin(), v_range.end());
 }
 
 template <typename ValueType, typename Policy>
@@ -352,20 +352,22 @@ auto rope<ValueType, Policy>::concat_value_iter(
 }
 
 template <typename ValueType, typename Policy>
+template <typename Iterator>
 auto rope<ValueType, Policy>::flatten(
-	node_ptr const &r, size_type begin, size_type n, value_type *s
-) -> value_type *
+	node_ptr const &r, size_type begin, size_type n, Iterator first
+) -> Iterator
 {
 	size_type end(begin + std::min(n, r->size));
 
 	apply(
-		r, [&s](ValueType const *in, size_type in_sz) -> bool {
-			std::copy_n(in, in_sz, s);
-			s += in_sz;
+		r, [&first](ValueType const *in, size_type in_sz) -> bool {
+			std::copy_n(in, in_sz, first);
+			first += in_sz;
 			return true;
 		}, begin, end
 	);
-	return s + (end - begin);
+	//return first + (end - begin);
+	return first;
 }
 
 template <typename ValueType, typename Policy>
@@ -386,24 +388,20 @@ auto rope<ValueType, Policy>::fetch(
 }
 
 template <typename ValueType, typename Policy>
-auto rope<ValueType, Policy>::iterator_base::setbuf(
-	iterator_base &iter
-) -> void
+void rope<ValueType, Policy>::iterator_base::setbuf(iterator_base &iter)
 {
 	size_type leaf_pos(iter.leaf_pos);
 	size_type pos(iter.current_pos);
+	auto l(iter.path_end[iter.path_index]);
 
-	rope_leaf_ptr l(rep_cast<rope_leaf>(iter.path_end[iter.path_index]));
-
-	if (l) {
-		iter.buf_begin = leaf_data(l);
+	if (l->tag == rope_tag::leaf) {
+		iter.buf_begin = node::leaf::extra(l);
 		iter.buf_cur = iter.buf_begin + (pos - leaf_pos);
 		iter.buf_end = iter.buf_begin + l->size;
 	} else {
 		size_type len(Policy::iterator_buf_len);
 		size_type buf_start_pos(leaf_pos);
-		size_t leaf_end(iter.path_end[iter.path_index]->size
-				+ leaf_pos);
+		size_t leaf_end(l->size + leaf_pos);
 
 		if (buf_start_pos + len <= pos) {
 			buf_start_pos = pos - len / 4;
@@ -415,12 +413,12 @@ auto rope<ValueType, Policy>::iterator_base::setbuf(
 		if (buf_start_pos + len > leaf_end)
 			len = leaf_end - buf_start_pos;
 
-		auto tmp_buf(iter.tmp_buf);
 		apply(
-			iter.path_end[iter.path_index],
-			[tmp_buf](CharType const *in, size_type in_sz)
-			-> bool {
-				std::copy_n(in, in_sz, tmp_buf);
+			l,
+			[&iter](
+				value_type const *in, size_type in_sz
+			) -> bool {
+				std::copy_n(in, in_sz, iter.tmp_buf);
 				return true;
 			},
 			buf_start_pos - leaf_pos,
@@ -434,9 +432,7 @@ auto rope<ValueType, Policy>::iterator_base::setbuf(
 }
 
 template <typename ValueType, typename Policy>
-auto rope<ValueType, Policy>::iterator_base::setcache(
-	iterator_base &iter
-) -> void
+void rope<ValueType, Policy>::iterator_base::set_cache(iterator_base &iter)
 {
 	size_type pos(iter.current_pos);
 
@@ -445,28 +441,25 @@ auto rope<ValueType, Policy>::iterator_base::setcache(
 		return;
 	}
 
-	node_ptr path[Policy::max_rope_depth + 1];
-	int cur_depth(-1);
-
-	size_type cur_start_pos(0);
-
+	std::array<node_ptr, Policy::max_rope_depth + 1> path;
 	/* Bit vector marking right turns in the path. */
-	unsigned long long dirns(0);
-
-	node_ptr cur_rope(iter.root);
+	decltype(iter.path_directions) dirns;
+	int cur_depth(-1);
+	size_type cur_start_pos(0);
+	auto cur_rope(iter.root);
 
 	while (true) {
 		++cur_depth;
 		path[cur_depth] = cur_rope;
-		rope_concat_ptr c(rep_cast<rope_concat>(cur_rope));
 
-		if (c) {
+		if (cur_rope->tag == rope_tag::concat) {
+			auto c(node::concat::extra(cur_rope));
 			size_type left_len(c->left->size);
 
 			dirns <<= 1;
 
 			if (pos >= cur_start_pos + left_len) {
-				dirns |= 1;
+				dirns.set(0, true);
 				cur_rope = c->right;
 				cur_start_pos += left_len;
 			} else
@@ -491,11 +484,11 @@ auto rope<ValueType, Policy>::iterator_base::setcache(
 	}
 
 	iter.path_directions = dirns;
-	setbuf(iter);
+	set_buf(iter);
 }
 
 template <typename ValueType, typename Policy>
-auto rope<ValueType, Policy>::iterator_base::setcache_for_incr(
+auto rope<ValueType, Policy>::iterator_base::set_cache_for_incr(
 	iterator_base &iter
 ) -> void
 {
@@ -506,18 +499,16 @@ auto rope<ValueType, Policy>::iterator_base::setcache_for_incr(
 
 	if (iter.current_pos - node_start_pos < len) {
 		/* More stuff in this leaf, we just didn't cache it. */
-		setbuf(iter);
+		set_buf(iter);
 		return;
 	}
 
 	/*  node_start_pos is starting position of last node. */
 	while (--current_index >= 0) {
-		if (!(dirns & 1)) /* Path turned left */
+		if (!dirns.test(0)) /* Path turned left */
 			break;
 
-		rope_concat_ptr c(static_pointer_cast<rope_concat>(
-			iter.path_end[current_index]
-		));
+		auto c(node::concat::extra(iter.path_end[current_index]));
 
 		/* Otherwise we were in the right child. Thus we should pop the
 		 * concatenation node.
@@ -528,7 +519,7 @@ auto rope<ValueType, Policy>::iterator_base::setcache_for_incr(
 
 	if (current_index < 0) {
 		/* We underflowed the cache. Punt. */
-		setcache(iter);
+		set_cache(iter);
 		return;
 	}
 
@@ -536,36 +527,36 @@ auto rope<ValueType, Policy>::iterator_base::setcache_for_incr(
 	 * the first character in its right child. node_start_pos is starting
 	 * position of current_node.
 	 */
-	rope_concat_ptr c(static_pointer_cast<rope_concat>(
-		iter.path_end[current_index]
-	));
-
+	auto l(iter.path_end[current_index]);
+	auto c(node::concat::extra(l));
 	node_start_pos += c->left->size;
 	iter.path_end[++current_index] = c->right;
-	dirns |= 1;
-	c = rep_cast<rope_concat>(c->right);
+	dirns.set(0, true);
+	l = c->right;
 
-	while (c) {
+	while (l->tag == rope_tag::concat) {
 		++current_index;
 
 		if (Policy::path_cache_len == current_index) {
-			for (int i = 0; i < (Policy::path_cache_len - 1);
-			     ++i)
+			for (
+				int i(0); i < (Policy::path_cache_len - 1); ++i
+			)
 				iter.path_end[i] = iter.path_end[i+1];
 
 			--current_index;
 		}
 
+		c = node::concat::extra(l);
 		iter.path_end[current_index] = c->left;
 		dirns <<= 1;
-		c = rep_cast<rope_concat>(c->left);
+		l = c->left;
 		/* node_start_pos is unchanged. */
 	}
 
 	iter.path_index = current_index;
 	iter.leaf_pos = node_start_pos;
 	iter.path_directions = dirns;
-	setbuf(iter);
+	set_buf(iter);
 }
 
 template <typename ValueType, typename Policy>
@@ -612,8 +603,8 @@ auto rope<ValueType, Policy>::dump(
 
 	iter_type out_iter(os);
 
-	std::fill_n(out_iter, indent, os.fill());
-
+	for (int c(0); c < indent; ++c)
+		os.put(os.fill());
 
 	if (!r) {
 		os << "NULL\n";
@@ -624,10 +615,9 @@ auto rope<ValueType, Policy>::dump(
 		/* To maintain precise diagnostics we must avoid incrementing
 		 * reference counts here.
 		 */
-
-		rope_concat const *c(static_cast<rope_concat const *>(r.get()));
-		node_ptr const &left(c->left);
-		node_ptr const &right(c->right);
+		auto c(node::concat::extra(r));
+		auto &left(c->left);
+		auto &right(c->right);
 
 		os << "Concatenation " << r.get() << " (rc = " << r.use_count()
 		   << ", depth = " << static_cast<int>(r->depth) << ", size = "
@@ -656,7 +646,7 @@ auto rope<ValueType, Policy>::dump(
 		   << ", depth = " << static_cast<int>(r->depth) << ", size = "
 		   << r->size << ") ";
 
-		CharType s[Policy::max_printout_len];
+		std::array<value_type, Policy::max_printout_len> s;
 		size_type s_len;
 
 		{
@@ -664,13 +654,13 @@ auto rope<ValueType, Policy>::dump(
 				substring(r, 0, Policy::max_printout_len)
 			);
 
-			flatten(prefix, s);
+			flatten(prefix, s.begin());
 			s_len = prefix->size;
 		}
 
 		out_iter = os;
 
-		std::copy_n(s, s_len, out_iter);
+		std::copy_n(s.begin(), s_len, out_iter);
 
 		os << (r->size > s_len ? "...\n" : "\n");
 
@@ -689,38 +679,36 @@ auto rope<ValueType, Policy>::compare(
 	if (!left)
 		return -1;
 
-	auto left_len(left->size);
-	auto right_len(right->size);
-
-	rope_leaf_ptr l(rep_cast<rope_leaf>(left));
-
-	if (l) {
-		rope_leaf_ptr r(rep_cast<rope_leaf>(right));
-		if (r)
+	if (left->tag == rope_tag::leaf) {
+		if (right->tag == rope_tag::leaf)
 			return __gnu_cxx::lexicographical_compare_3way(
-				leaf_data(l), leaf_data(l) + left_len,
-				leaf_data(r), leaf_data(r) + right_len
+				node::leaf::extra(left),
+				node::leaf::extra(left) + left->size,
+				node::leaf::extra(right),
+				node::leaf::extra(right) + right->size
 			);
 		else {
 			const_iterator rstart(right, 0);
-			const_iterator rend(right, right_len);
+			const_iterator rend(right, right->size);
 			return __gnu_cxx::lexicographical_compare_3way(
-				leaf_data(l), leaf_data(l) + left_len,
+				node::leaf::extra(left),
+				node::leaf::extra(left) + left->size,
 				rstart, rend
 			);
 		}
 	} else {
 		const_iterator lstart(left, 0);
-		const_iterator lend(left, left_len);
-		rope_leaf_ptr r(rep_cast<rope_leaf>(right));
+		const_iterator lend(left, left->size);
 
-		if (r)
+		if (right->tag == rope_tag::leaf)
 			return __gnu_cxx::lexicographical_compare_3way(
-				lstart, lend, r->data, r->data + right_len
+				lstart, lend,
+				node::leaf::extra(right),
+				node::leaf::extra(right) + right->size
 			);
 		else {
 			const_iterator rstart(right, 0);
-			const_iterator rend(right, right_len);
+			const_iterator rend(right, right->size);
 			return __gnu_cxx::lexicographical_compare_3way(
 				lstart, lend, rstart, rend
 			);
@@ -729,11 +717,12 @@ auto rope<ValueType, Policy>::compare(
 }
 
 template <typename ValueType, typename Policy>
-auto rope<ValueType, Policy>::rope(
-	size_type n, CharType c, AllocType a
-) : treeplus(node_ptr(), a)
+template <typename Alloc>
+rope<ValueType, Policy>::rope(
+	size_type n, value_type const &v, Alloc const &a
+)
 {
-	typedef rope<CharType, TraitsType, AllocType, Policy> rope_type;
+	typedef rope<ValueType, Policy> rope_type;
 
 	size_type const exponentiate_threshold(32);
 
@@ -742,19 +731,16 @@ auto rope<ValueType, Policy>::rope(
 
 	size_type exponent(n / exponentiate_threshold);
 	size_type rest(n % exponentiate_threshold);
-	rope_leaf_ptr remainder;
+	node_ptr remainder;
 
 	if (rest)
-		remainder = rope_leaf::make(rest, c, a);
+		remainder = node::make_leaf(a, v, rest);
 
-	rope_type remainder_rope(remainder, a), rv(a);
+	rope_type remainder_rope(remainder), rv;
 
 	if (exponent) {
-		rope_leaf_ptr base_leaf(rope_leaf::make(
-			exponentiate_threshold, c, a
-		));
-
-		rope_type base_rope(base_leaf, a);
+		auto base_leaf(node::make_leaf(a, v, exponentiate_threshold));
+		rope_type base_rope(base_leaf);
 
 		rv = base_rope;
 
@@ -783,16 +769,16 @@ auto rope<ValueType, Policy>::rope(
 	} else
 		rv = remainder_rope;
 
-	std::get<0>(this->treeplus) = std::get<0>(rv.treeplus);
+	root_node = rv.root_node;
 }
 
 template <typename ValueType, typename Policy>
 auto rope<ValueType, Policy>::find(
-	CharType c, size_type pos
+	value_type const &v, size_type pos
 ) const -> size_type
 {
 	const_iterator iter(
-		std::search_n(cbegin() + pos, cend(), 1, c)
+		std::search_n(cbegin() + pos, cend(), 1, v)
 	);
 	auto iter_pos(iter.index());
 
@@ -803,13 +789,12 @@ auto rope<ValueType, Policy>::find(
 }
 
 template <typename ValueType, typename Policy>
+template <typename Iterator>
 auto rope<ValueType, Policy>::find(
-	CharType const *s, size_type pos
+	Iterator first, Iterator last, size_type pos
 ) const -> size_type
 {
-	const_iterator iter(std::search(
-		cbegin() + pos, cend(), s, s + traits_type::length(s)
-	));
+	const_iterator iter(std::search(cbegin() + pos, cend(), first, last));
 	size_type iter_pos(iter.index());
 
 	if (iter_pos == size())
@@ -834,7 +819,7 @@ std::basic_ostream<CharType> &operator<<(
 		std::fill_n(out_iter, pad_len, os.fill());
 
 	rope_type::apply(
-		std::get<0>(r.treeplus),
+		r.root_node,
 		[&out_iter](
 			ValueType const *in, decltype(rope_len) in_sz
 		) -> bool {

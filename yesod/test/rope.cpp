@@ -26,7 +26,7 @@ BOOST_AUTO_TEST_CASE(rope_0)
 
 	crope c(a + b);
 	out << c << std::endl;
-	h1 << c.dump() << std::endl;
+	h1 << c.dump<char>() << std::endl;
 	BOOST_CHECK(out.match_pattern());
 	BOOST_CHECK(h1.match_pattern());
 }

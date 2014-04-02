@@ -65,10 +65,10 @@ struct counted_ptr {
 	{}
 
 	counted_ptr(counted_ptr const &p)
-	: ptr(p.ptr)
+	: ptr(p.ptr.load())
 	{
 		if (ptr)
-			ptr->add_ref_copy();
+			ptr.load()->add_ref_copy();
 	}
 
 	counted_ptr(counted_ptr &&p)

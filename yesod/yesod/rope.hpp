@@ -50,9 +50,7 @@ struct rope_default_policy {
 	/* For substrings longer than lazy_threshold, we create
 	 * substring nodes.
 	 */
-	static constexpr int lazy_threshold = 128
-
-
+	static constexpr int lazy_threshold = 128;
 };
 
 typedef rope<char, rope_default_policy> crope;
@@ -62,13 +60,13 @@ template <
 	typename CharType, typename Policy = rope_default_policy
 > struct rope_file_reader {
 	typedef rope<CharType, Policy>          rope_type;
-	typedef typename Policy::allocator_type allocator_type;
 
 	rope_file_reader(char const *name)
 	: c(make_counted<context>(name))
 	{}
 
-	rope_file_reader(char const *name, allocator_type const &a)
+	template <typename Alloc>
+	rope_file_reader(char const *name, Alloc const &a)
 	: c(allocate_counted<context>(a, name))
 	{}
 
@@ -76,7 +74,8 @@ template <
 	: c(make_counted<context>(fd, owned))
 	{}
 
-	rope_file_reader(int fd, bool owned, allocator_type const &a)
+	template <typename Alloc>
+	rope_file_reader(int fd, bool owned, Alloc const &a)
 	: c(allocate_counted<context>(a, fd, owned))
 	{}
 
@@ -90,13 +89,19 @@ template <
 
 	operator rope_type()
 	{
-		return rope_type(
-			*this, c->size(),
-			*c.template get_allocator<AllocType>()
-		);
+		wrapper w = {
+			.reader = this
+		};
+		c.access_allocator(&w);
+		return w.rv;
 	}
 
 private:
+	struct wrapper {
+		rope_file_reader *reader;
+		rope_type r;
+	};
+
 	struct context {
 		context(char const *name)
 		: fd(open(name, O_RDONLY)), owned(true)
@@ -145,6 +150,17 @@ private:
 				return 0;
 
 			return s.st_size / sizeof(CharType);
+		}
+
+		template <typename Alloc>
+		static void access_allocator(
+			Alloc &a, context const *p, void *data
+		)
+		{
+			auto w(reinterpret_cast<wrapper *>(data));
+			w->rv = rope_type(
+				*(w->reader), w->reader.c->size(), a
+			);
 		}
 
 	private:

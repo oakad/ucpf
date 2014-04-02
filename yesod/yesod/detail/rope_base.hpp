@@ -29,6 +29,7 @@
 #if !defined(UCPF_YESOD_DETAIL_ROPE_BASE_OCT_31_2013_1840)
 #define UCPF_YESOD_DETAIL_ROPE_BASE_OCT_31_2013_1840
 
+#include <bitset>
 #include <stdexcept>
 #include <algorithm>
 #include <ext/algorithm>
@@ -235,17 +236,18 @@ protected:
 				leaf::ref_tag, 0, true, n
 			));
 			rv->self = rv.get_value_container();
+			return rv;
 		}
 
 		template <typename Alloc>
 		static node_ptr make_leaf(
-			Alloc const &a, size_type n, value_type c
+			Alloc const &a, size_type n, value_type const &v
 		)
 		{
 			auto rv(make_leaf(a, n));
 			detail::allocator_array_helper<
 				value_type, Alloc
-			>::make(a, rv.get_extra(), n, c);
+			>::make(a, rv.get_extra(), n, v);
 			return rv;
 		}
 
@@ -352,7 +354,7 @@ protected:
 				&substr::apply,
 				&func::apply
 			};
-			return ad[r->tag](
+			return (*ad[r->tag])(
 				r, std::forward<apply_func_t>(f), begin, end
 			);
 		}
@@ -372,7 +374,7 @@ protected:
 				&substr::substring,
 				&func::substring
 			};
-			return sd[r->tag](r, begin, end, adj_end);
+			return (*sd[r->tag])(r, begin, end, adj_end);
 		}
 
 		template <typename Alloc>
@@ -388,7 +390,7 @@ protected:
 				&func::destroy<Alloc>
 			};
 
-			dd[p->tag](a, p);
+			(*dd[p->tag])(a, p);
 			detail::allocator_array_helper<
 				node, Alloc
 			>::destroy(a, p, 1, false);
@@ -433,7 +435,7 @@ protected:
 		 * The path is truncated to keep iterators copying penalty to
 		 * the possible minimum.
 		 */
-		node_ptr path_end[Policy::path_cache_len];
+		std::array<node_ptr, Policy::path_cache_len> path_end;
 
 		/* Last valid position in path_end.
 		 * path_end[0] ... path_end[path_index - 1] point to
@@ -445,7 +447,7 @@ protected:
 		 * path_end[path_index - i - 1] to path_end[path_index - i] by
 		 * going to the right.
 		 */
-		unsigned long long path_directions;
+		std::bitset<Policy::max_rope_depth + 1> path_directions;
 
 		/* Buffer possibly containing current char. */
 		value_type const *buf_begin;
@@ -467,9 +469,9 @@ protected:
 
 		static void setbuf(iterator_base &iter);
 
-		static void setcache(iterator_base &iter);
+		static void set_cache(iterator_base &iter);
 
-		static void setcache_for_incr(iterator_base &iter);
+		static void set_cache_for_incr(iterator_base &iter);
 
 		void incr(size_type n);
 		void decr(size_type n);
@@ -535,13 +537,15 @@ protected:
 		node_ptr const &l, Iterator iter, size_type n
 	);
 
-	static value_type *flatten(
-		node_ptr const &r, size_type begin, size_type n, value_type *s
+	template <typename Iterator>
+	static Iterator flatten(
+		node_ptr const &r, size_type begin, size_type n, Iterator first
 	);
 
-	static value_type *flatten(node_ptr const &r, value_type *s)
+	template <typename Iterator>
+	static Iterator flatten(node_ptr const &r, Iterator first)
 	{
-		return flatten(r, 0, r->size, s);
+		return flatten(r, 0, r->size, first);
 	}
 
 	static value_type fetch(node_ptr const &r, size_type pos);
@@ -573,7 +577,9 @@ protected:
 	)
 	{
 		if (r)
-			return node::apply(r, f, begin, end);
+			return node::apply(
+				r, std::forward<apply_func_t>(f), begin, end
+			);
 		else
 			return true;
 	}
@@ -604,6 +610,10 @@ protected:
 	);
 
 	node_ptr root_node;
+
+	rope(node_ptr const &other)
+	: root_node(other)
+	{}
 
 public:
 	struct reference {
@@ -879,7 +889,7 @@ public:
 	}
 
 	template <typename Iterator, typename Alloc = std::allocator<void>>
-	rope(Iterator first, Iterator last, Alloc a = Alloc())
+	rope(Iterator first, Iterator last, Alloc const &a = Alloc())
 	: root_node(node::make_leaf(a, first, last))
 	{}
 
@@ -892,19 +902,24 @@ public:
 	{}
 
 	template <typename Alloc = std::allocator<void>>
-	rope(value_type c, Alloc a = Alloc())
-	: root_node(node::make_leaf(a, 1, c))
+	rope(value_type const &v, Alloc const &a = Alloc())
+	: root_node(node::make_leaf(a, 1, v))
 	{}
 
 	template <typename Alloc = std::allocator<void>>
-	rope(size_type n, value_type c, Alloc a = Alloc());
+	rope(size_type n, value_type const &v, Alloc const &a = Alloc());
+
+	template <size_t N, typename Alloc = std::allocator<void>>
+	rope(value_type const (&v)[N], Alloc const &a = Alloc())
+	: root_node(node::make_leaf(a, &v[0], &v[N - 1]))
+	{}
 
 	rope() = default;
 
 	template <typename Alloc = std::allocator<void>>
 	rope(
 		typename node::func::func_type &&fn, size_type n,
-		Alloc a = Alloc()
+		Alloc const &a = Alloc()
 	) : root_node(node::make_func(
 		std::forward<typename node::func::func_type>(fn), n, a
 	))
@@ -1545,7 +1560,7 @@ public:
 		);
 	}
 #endif
-	size_type find(value_type const &c, size_type pos = 0) const;
+	size_type find(value_type const &v, size_type pos = 0) const;
 
 	template <typename Iterator>
 	size_type find(Iterator first, Iterator last, size_type pos = 0) const;
@@ -1584,15 +1599,12 @@ public:
 		&l,
 		CharType1 c
 	);
-
-	template <typename CharType1, typename TraitsType1,
-		  typename AllocType1, typename Policy1>
-	friend std::basic_ostream<CharType1, TraitsType1> &operator<<(
-		std::basic_ostream<CharType1, TraitsType1> &os,
-		rope<CharType1, TraitsType1, AllocType1, Policy1> const
-		&r
-	);
 #endif
+	template <typename CharType, typename ValueType1, typename Policy1>
+	friend std::basic_ostream<CharType> &operator<<(
+		std::basic_ostream<CharType> &os,
+		rope<ValueType1, Policy1> const &r
+	);
 };
 
 template <typename ValueType, typename Policy>
