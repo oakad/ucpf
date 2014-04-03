@@ -104,27 +104,39 @@ protected:
 
 			static bool apply(
 				node_ptr const &r, apply_func_t &&f,
-				size_type begin, size_type end
+				size_type first, size_type end
 			);
 
 			static node_ptr substring(
-				node_ptr const &r, size_type begin,
+				node_ptr const &r, size_type first,
 				size_type end, size_type adj_end
 			);
 
 			template <typename Alloc>
-			static void destroy(Alloc const &a, node *p);
-
-			static value_type *extra(node_ptr &p)
+			static void construct(
+				Alloc const &a, node_ptr const &p
+			)
 			{
-				return reinterpret_cast<value_type *>(
-					p.get_extra()
+				detail::allocator_array_helper<
+					value_type, Alloc
+				>::make(a, p.get_extra(), p->size);
+			}
+
+			template <typename Alloc>
+			static void destroy(Alloc const &a, node *p)
+			{
+				detail::allocator_array_helper<
+					value_type, Alloc
+				>::destroy(
+					a, reinterpret_cast<value_type *>(
+						p->self->get_extra()
+					), p->size, false
 				);
 			}
 
-			static value_type const *extra(node_ptr const &p)
+			static value_type *extra(node_ptr const &p)
 			{
-				return reinterpret_cast<value_type const *>(
+				return reinterpret_cast<value_type *>(
 					p.get_extra()
 				);
 			}
@@ -132,38 +144,43 @@ protected:
 
 		struct concat {
 			static constexpr rope_tag ref_tag = rope_tag::concat;
-			static size_type const extra_size;
+			static size_t const extra_size;
 
 			static bool apply(
 				node_ptr const &r, apply_func_t &&f,
-				size_type begin, size_type end
+				size_type first, size_type end
 			);
 
 			static node_ptr substring(
-				node_ptr const &r, size_type begin,
+				node_ptr const &r, size_type first,
 				size_type end, size_type adj_end
 			);
 
 			template <typename Alloc>
-			static void destroy(Alloc const &a, node *p);
+			static void construct(Alloc const &a, node_ptr const &p)
+			{
+				detail::allocator_array_helper<
+					concat, Alloc
+				>::make(a, p.get_extra(), 1);
+			}
 
-			static concat *extra(node_ptr &p)
+			template <typename Alloc>
+			static void destroy(Alloc const &a, node *p)
+			{
+				detail::allocator_array_helper<
+					concat, Alloc
+				>::destroy(
+					a, reinterpret_cast<concat *>(
+						p->self->get_extra()
+					), 1, false);
+			}
+
+			static concat *extra(node_ptr const &p)
 			{
 				return reinterpret_cast<concat *>(
 					p.get_extra()
 				);
 			}
-
-			static concat const *extra(node_ptr const &p)
-			{
-				return reinterpret_cast<concat const *>(
-					p.get_extra()
-				);
-			}
-
-			concat(node_ptr const &l, node_ptr const &r)
-			: left(l), right(r)
-			{}
 
 			node_ptr left;
 			node_ptr right;
@@ -171,46 +188,52 @@ protected:
 
 		struct substr {
 			static constexpr rope_tag ref_tag = rope_tag::substr;
-			static size_type const extra_size;
+			static size_t const extra_size;
 
 			static bool apply(
 				node_ptr const &r, apply_func_t &&f,
-				size_type begin, size_type end
+				size_type first, size_type end
 			);
 
 			static node_ptr substring(
-				node_ptr const &r, size_type begin,
+				node_ptr const &r, size_type first,
 				size_type end, size_type adj_end
 			);
 
 			template <typename Alloc>
-			static void destroy(Alloc const &a, node *p);
+			static void construct(Alloc const &a, node_ptr const &p)
+			{
+				detail::allocator_array_helper<
+					substr, Alloc
+				>::make(a, p.get_extra(), 1);
+			}
 
-			static substr *extra(node_ptr &p)
+			template <typename Alloc>
+			static void destroy(Alloc const &a, node *p)
+			{
+				detail::allocator_array_helper<
+					substr, Alloc
+				>::destroy(
+					a, reinterpret_cast<substr *>(
+						p->self->get_extra()
+					), 1, false
+				);
+			}
+
+			static substr *extra(node_ptr const &p)
 			{
 				return reinterpret_cast<substr *>(
 					p.get_extra()
 				);
 			}
 
-			static substr const *extra(node_ptr const &p)
-			{
-				return reinterpret_cast<substr const *>(
-					p.get_extra()
-				);
-			}
-
-			substr(node_ptr const &base_, size_type offset_)
-			: base(base_), offset(offset_)
-			{}
-
 			node_ptr base;
 			size_type offset;
 		};
 
 		struct func {
-			static rope_tag const ref_tag = rope_tag::func;
-			static size_type const extra_size;
+			static constexpr rope_tag ref_tag = rope_tag::func;
+			static size_t const extra_size;
 
 			/* Same argument order as pread (2) */
 			typedef std::function<
@@ -219,34 +242,40 @@ protected:
 
 			static bool apply(
 				node_ptr const &r, apply_func_t &&f,
-				size_type begin, size_type end
+				size_type first, size_type end
 			);
 
 			static node_ptr substring(
-				node_ptr const &r, size_type begin,
+				node_ptr const &r, size_type first,
 				size_type end, size_type adj_end
 			);
 
 			template <typename Alloc>
-			static void destroy(Alloc const &a, node *p);
+			static void construct(Alloc const &a, node_ptr const &p)
+			{
+				detail::allocator_array_helper<
+					func, Alloc
+				>::make(a, p.get_extra(), 1);
+			}
 
-			static func *extra(node_ptr &p)
+			template <typename Alloc>
+			static void destroy(Alloc const &a, node *p)
+			{
+				detail::allocator_array_helper<
+					func, Alloc
+				>::destroy(
+					a, reinterpret_cast<func *>(
+						p->self->get_extra()
+					), 1, false
+				);
+			}
+
+			static func *extra(node_ptr const &p)
 			{
 				return reinterpret_cast<func *>(
 					p.get_extra()
 				);
 			}
-
-			static func const *extra(node_ptr const &p)
-			{
-				return reinterpret_cast<func const *>(
-					p.get_extra()
-				);
-			}
-
-			func(func_type &&fn_)
-			: fn(std::forward<func_type>(fn_))
-			{}
 
 			func_type fn;
 		};
@@ -261,9 +290,10 @@ protected:
 				typename node_ptr::extra_size_t(
 					leaf::rounded_up_size(n)
 				),
-				leaf::ref_tag, 0, true, n
+				n, leaf::ref_tag, 0, true
 			));
 			rv->self = rv.get_value_container();
+			leaf::construct(a, rv);
 			return rv;
 		}
 
@@ -273,9 +303,7 @@ protected:
 		)
 		{
 			auto rv(make_leaf(a, n));
-			detail::allocator_array_helper<
-				value_type, Alloc
-			>::make(a, rv.get_extra(), n, v);
+			std::fill_n(leaf::extra(rv), n, v);
 			return rv;
 		}
 
@@ -285,18 +313,29 @@ protected:
 		)
 		{
 			auto rv(make_leaf(a, last - first));
-			detail::allocator_array_helper<
-				value_type, Alloc
-			>::make(a, rv.get_extra(), first, last);
+			std::copy(first, last, leaf::extra(rv));
 			return rv;
 		}
 
-		static node_ptr make_leaf(node_ptr const &a, size_type n);
+		static node_ptr make_leaf(node_ptr const &a, size_type n)
+		{
+			alloc_wrapper w(
+				leaf::rounded_up_size(n),
+				n, leaf::ref_tag, 0, true
+			);
+			a.access_allocator(&w);
+			return w.p;
+		}
 
 		template <typename Iterator>
 		static node_ptr make_leaf(
 			node_ptr const &a, Iterator first, Iterator last
-		);
+		)
+		{
+			auto rv(make_leaf(a, last - first));
+			std::copy(first, last, leaf::extra(rv));
+			return rv;
+		}
 
 		template <typename Alloc>
 		static node_ptr make_concat(
@@ -308,19 +347,34 @@ protected:
 				typename node_ptr::extra_size_t(
 					concat::extra_size
 				),
-				concat::ref_tag,
+				l->size + r->size, concat::ref_tag,
 				std::max(l->depth, r->depth) + 1,
-				false, l->size + r->size
+				false
 			));
 			rv->self = rv.get_value_container();
-			detail::allocator_array_helper<
-				concat, Alloc
-			>::make(a, rv.get_extra(), 1, l, r);
+			concat::construct(a, rv);
+			auto c(concat::extra(rv));
+			c->left = l;
+			c->right = r;
+			return rv;
 		}
 
 		static node_ptr make_concat(
 			node_ptr const &l, node_ptr const &r
-		);
+		)
+		{
+			alloc_wrapper w(
+				concat::extra_size, l->size + r->size,
+				concat::ref_tag,
+				std::max(l->depth, r->depth) + 1,
+				false
+			);
+			l.access_allocator(&w);
+			auto c(concat::extra(w.p));
+			c->left = l;
+			c->right = r;
+			return w.p;
+		}
 
 		template <typename Alloc>
 		static node_ptr make_substr(
@@ -333,17 +387,30 @@ protected:
 				typename node_ptr::extra_size_t(
 					substr::extra_size
 				),
-				substr::ref_tag, 0, true, n
+				n, substr::ref_tag, 0, true
 			));
 			rv->self = rv.get_value_container();
-			detail::allocator_array_helper<
-				substr, Alloc
-			>::make(a, rv.get_extra(), 1, base, offset);
+			substr::construct(a, rv);
+			auto c(substr::extra(rv));
+			c->base = base;
+			c->offset = offset;
+			return rv;
 		}
 
 		static node_ptr make_substr(
 			node_ptr const &base, size_type offset, size_type n
-		);
+		)
+		{
+			alloc_wrapper w(
+				substr::extra_size, n, substr::ref_tag,
+				0, true
+			);
+			base.access_allocator(&w);
+			auto c(substr::extra(w.p));
+			c->base = base;
+			c->offset = offset;
+			return w.p;
+		}
 
 		template <typename Alloc>
 		static node_ptr make_func(
@@ -356,23 +423,20 @@ protected:
 				typename node_ptr::extra_size_t(
 					func::extra_size
 				),
-				func::ref_tag, 0, true, n
+				n, func::ref_tag, 0, true
 			));
 			rv->self = rv.get_value_container();
-			detail::allocator_array_helper<
-				func, Alloc
-			>::make(
-				a, rv.get_extra(), 1,
-				std::forward<func::func_type>(f)
-			);
+			func::construct(a, rv);
+			rv->fn = f;
+			return rv;
 		}
 
 		static bool apply(
 			node_ptr const &r, apply_func_t &&f,
-			size_type begin, size_type end
+			size_type first, size_type end
 		)
 		{
-			static constexpr bool (*ad[])(
+			static constexpr bool (*disp[])(
 				node_ptr const &, apply_func_t &&, size_type,
 				size_type
 			) = {
@@ -382,17 +446,17 @@ protected:
 				&substr::apply,
 				&func::apply
 			};
-			return (*ad[int(r->tag)])(
-				r, std::forward<apply_func_t>(f), begin, end
+			return (*disp[int(r->tag)])(
+				r, std::forward<apply_func_t>(f), first, end
 			);
 		}
 
 		static node_ptr substring(
-			node_ptr const &r, size_type begin,
+			node_ptr const &r, size_type first,
 			size_type end, size_type adj_end
 		)
 		{
-			static constexpr node_ptr (*sd[])(
+			static constexpr node_ptr (*disp[])(
 				node_ptr const &, size_type, size_type,
 				size_type
 			) = {
@@ -402,13 +466,29 @@ protected:
 				&substr::substring,
 				&func::substring
 			};
-			return (*sd[int(r->tag)])(r, begin, end, adj_end);
+			return (*disp[int(r->tag)])(r, first, end, adj_end);
+		}
+
+		template <typename Alloc>
+		static void construct_extra(Alloc const &a, node_ptr const &p)
+		{
+			static constexpr void (*disp[])(
+				Alloc const &a, node_ptr const &p
+			) = {
+				nullptr,
+				&leaf::template construct<Alloc>,
+				&concat::template construct<Alloc>,
+				&substr::template construct<Alloc>,
+				&func::template construct<Alloc>
+			};
+
+			(*disp[int(p->tag)])(a, p);
 		}
 
 		template <typename Alloc>
 		static void destroy(Alloc const &a, node *p)
 		{
-			static constexpr void (*dd[])(
+			static constexpr void (*disp[])(
 				Alloc const &a, node *p
 			) = {
 				nullptr,
@@ -418,7 +498,7 @@ protected:
 				&func::template destroy<Alloc>
 			};
 
-			(*dd[int(p->tag)])(a, p);
+			(*disp[int(p->tag)])(a, p);
 			detail::allocator_array_helper<
 				node, Alloc
 			>::destroy(a, p, 1, false);
@@ -452,15 +532,58 @@ protected:
 				>(nullptr, size_t(0));
 		}
 
-		node(rope_tag tag_, uint8_t d, bool b, size_type size_)
-		: size(size_), tag(tag_), depth(d), is_balanced(b ? 1 : 0)
+		struct alloc_wrapper {
+			alloc_wrapper(
+				size_type extra_size_,
+				size_type size_,
+				rope_tag tag_,
+				uint8_t depth_,
+				bool is_balanced_
+			) : extra_size(extra_size_), size(size_), tag(tag_),
+			    depth(depth_), is_balanced(is_balanced_)
+			{}
+
+			node_ptr p;
+			size_type extra_size;
+			size_type size;
+			rope_tag tag;
+			uint8_t depth;
+			bool is_balanced;
+		};
+
+		template <typename Alloc>
+		static void access_allocator(
+			Alloc &a, node const *p, void *data
+		)
+		{
+			auto w(reinterpret_cast<alloc_wrapper *>(data));
+
+			w->p = allocate_counted<node>(
+				a,
+				typename node_ptr::extra_size_t(w->extra_size),
+				*w
+			);
+			w->p->self = w->p.get_value_container();
+			construct_extra(a, w->p);
+		}
+
+		node(
+			size_type size_, rope_tag tag_, uint8_t depth_,
+			bool is_balanced_
+    		) : size(size_), tag(tag_), depth(depth_),
+		    is_balanced(is_balanced_)
+		{}
+
+		node(alloc_wrapper const &w)
+		: size(w.size), tag(w.tag), depth(w.depth),
+		  is_balanced(w.is_balanced)
 		{}
 
 		detail::counted_ptr_val<node> *self;
 		size_type size;
-		rope_tag  tag;
-		uint8_t   depth;
-		bool   is_balanced;
+		rope_tag tag;
+		uint8_t depth;
+		bool is_balanced;
 	};
 
 	struct iterator_base
@@ -581,7 +704,7 @@ protected:
 
 	template <typename Iterator>
 	static Iterator flatten(
-		node_ptr const &r, size_type begin, size_type n, Iterator first
+		node_ptr const &r, size_type offset, size_type n, Iterator iter
 	);
 
 	template <typename Iterator>
@@ -593,7 +716,7 @@ protected:
 	static value_type fetch(node_ptr const &r, size_type pos);
 
 	static node_ptr substring(
-		node_ptr const &r, size_type begin, size_type end
+		node_ptr const &r, size_type first, size_type last
 	)
 	{
 		if (!r)
@@ -602,40 +725,40 @@ protected:
 		size_type len(r->size);
 		size_type adj_end;
 
-		if (end >= len) {
-			if (0 == begin)
+		if (last >= len) {
+			if (0 == first)
 				return r;
 			else
 				adj_end = len;
 		} else
-			adj_end = end;
+			adj_end = last;
 
-		return node::substring(r, begin, end, adj_end);
+		return node::substring(r, first, last, adj_end);
 	}
 
 	static bool apply(
 		node_ptr const &r, apply_func_t &&f,
-		size_type begin, size_type end
+		size_type first, size_type last
 	)
 	{
 		if (r)
 			return node::apply(
-				r, std::forward<apply_func_t>(f), begin, end
+				r, std::forward<apply_func_t>(f), first, last
 			);
 		else
 			return true;
 	}
 
 	static node_ptr replace(
-		node_ptr const &old, size_type begin, size_type end,
+		node_ptr const &old, size_type first, size_type last,
 		node_ptr const &r
 	)
 	{
 		if (!old)
 			return r;
 
-		node_ptr left(substring(old, 0, begin));
-		node_ptr right(substring(old, end, old->size));
+		node_ptr left(substring(old, 0, first));
+		node_ptr right(substring(old, last, old->size));
 
 		if (!r)
 			return concat(left, right);
@@ -996,9 +1119,10 @@ public:
 		root_node.reset();
 	}
 
-	void push_back(value_type const &c)
+	template <typename Alloc = std::allocator<void>>
+	void push_back(value_type const &c, Alloc const &a = Alloc())
 	{
-		append(c);
+		append(c, a);
 	}
 
 	void pop_back()
@@ -1015,12 +1139,16 @@ public:
 		return fetch(r, r->size - 1);
 	}
 
-	void push_front(value_type const &c)
+	template <typename Alloc = std::allocator<void>>
+	void push_front(value_type const &c, Alloc const &a = Alloc())
 	{
 		node_ptr old(root_node);
-		node_ptr l(node::make_leaf(
-			std::allocator<void>(), 1, c
-		));
+		node_ptr l;
+
+		if (!old)
+			l = node::make_leaf(a, 1, c);
+		else
+			l = node::make_leaf(old, 1, c);
 
 		root_node = concat(l, old);
 	}
@@ -1108,11 +1236,12 @@ public:
 		return s;
 	}
 
-	template <typename Alloc = std::allocator<void>>
-	void flatten(Alloc const &a = Alloc())
+	void flatten()
 	{
 		if (root_node && (root_node->tag != rope_tag::leaf)) {
-			auto l(node::make_leaf(a, size(), value_type()));
+			auto l(node::make_leaf(
+				root_node, size(), value_type()
+			));
 			copy(l->data);
 			root_node = l;
 		}
@@ -1206,8 +1335,8 @@ public:
 		return append(c);
 	}
 
-	template <typename Iterator>
-	rope &append(Iterator first, Iterator last)
+	template <typename Iterator, typename Alloc = std::allocator<void>>
+	rope &append(Iterator first, Iterator last, Alloc const &a = Alloc())
 	{
 		if (root_node)
 			root_node = concat_value_iter(
@@ -1251,9 +1380,9 @@ public:
 	{
 		root_node = replace(root_node, pos, pos, r.root_node);
 	}
-#if 0
-	template <typename input_iter_t>
-	void insert(size_type pos, input_iter_t iter, size_type n)
+
+	template <typename Iterator>
+	void insert(size_type pos, Iterator iter, size_type n)
 	{
 		node_ptr left(root_node, 0, pos);
 		node_ptr right(root_node, pos, size());
@@ -1263,33 +1392,34 @@ public:
 		);
 	}
 
-	void insert(size_type pos, CharType const *s)
+	template <typename Range>
+	void insert(size_type pos, Range const &r)
 	{
-		insert(pos, s, traits_type::length(s));
+		insert(pos, std::begin(r), std::end(r));
 	}
 
-	void insert(size_type pos, CharType c)
+	void insert(size_type pos, value_type const &v)
 	{
-		insert(pos, &c, 1);
+		insert(pos, &v, 1);
 	}
 
-	template <typename input_iter_t>
-	void insert(size_type pos, input_iter_t begin, input_iter_t end)
+	template <typename Iterator>
+	void insert(size_type pos, Iterator first, Iterator last)
 	{
-		rope_type r(begin, end, std::get<1>(treeplus));
+		rope_type r(first, last, std::get<1>(treeplus));
 		insert(pos, r);
 	}
 
-	void insert(size_type pos, const_iterator const &begin,
-		    const_iterator const &end)
+	void insert(size_type pos, const_iterator const &first,
+		    const_iterator const &last)
 	{
-		rope_type r(begin, end, std::get<1>(treeplus));
+		rope_type r(first, last, std::get<1>(treeplus));
 		insert(pos, r);
 	}
 
-	void insert(size_type pos, iterator const &begin, iterator const &end)
+	void insert(size_type pos, iterator const &first, iterator const &last)
 	{
-		rope_type r(begin, end, std::get<1>(treeplus));
+		rope_type r(first, last, std::get<1>(treeplus));
 		insert(pos, r);
 	}
 
@@ -1301,8 +1431,8 @@ public:
 		);
 	}
 
-	template <typename input_iter_t>
-	void replace(size_type pos, size_type n, input_iter_t iter,
+	template <typename Iterator>
+	void replace(size_type pos, size_type n, Iterator iter,
 		     size_type len)
 	{
 		rope_type r(iter, len, std::get<1>(r.treeplus));
@@ -1321,25 +1451,25 @@ public:
 		replace(pos, n, r);
 	}
 
-	template <typename input_iter_t>
-	void replace(size_type pos, size_type n, input_iter_t begin,
-		     input_iter_t end)
+	template <typename Iterator>
+	void replace(size_type pos, size_type n, Iterator first,
+		     Iterator last)
 	{
-		rope_type r(begin, end, std::get<1>(r.treeplus));
+		rope_type r(first, last, std::get<1>(r.treeplus));
 		replace(pos, n, r);
 	}
 
-	void replace(size_type pos, size_type n, const_iterator const &begin,
-		     const_iterator const &end)
+	void replace(size_type pos, size_type n, const_iterator const &first,
+		     const_iterator const &last)
 	{
-		rope_type r(begin, end, std::get<1>(r.treeplus));
+		rope_type r(first, last, std::get<1>(r.treeplus));
 		replace(pos, n, r);
 	}
 
-	void replace(size_type pos, size_type n, iterator const &begin,
-		     iterator const &end)
+	void replace(size_type pos, size_type n, iterator const &first,
+		     iterator const &last)
 	{
-		rope_type r(begin, end, std::get<1>(r.treeplus));
+		rope_type r(first, last, std::get<1>(r.treeplus));
 		replace(pos, n, r);
 	}
 
@@ -1354,8 +1484,8 @@ public:
 		replace(pos, 1, r);
 	}
 
-	template <typename input_iter_t>
-	void replace(size_type pos, input_iter_t iter, size_type len)
+	template <typename Iterator>
+	void replace(size_type pos, Iterator iter, size_type len)
 	{
 		replace(pos, 1, iter, len);
 	}
@@ -1365,21 +1495,23 @@ public:
 		replace(pos, 1, s);
 	}
 
-	template <typename input_iter_t>
-	void replace(size_type pos, input_iter_t begin, input_iter_t end)
+	template <typename Iterator>
+	void replace(size_type pos, Iterator first, Iterator last)
 	{
-		replace(pos, 1, begin, end);
+		replace(pos, 1, first, last);
 	}
 
-	void replace(size_type pos, const_iterator const &begin,
-		     const_iterator const &end)
+	void replace(
+		size_type pos, const_iterator const &first,
+		const_iterator const &last
+	)
 	{
-		replace(pos, 1, begin, end);
+		replace(pos, 1, first, last);
 	}
 
-	void replace(size_type pos, iterator const &begin, iterator const &end)
+	void replace(size_type pos, iterator const &first, iterator const &last)
 	{
-		replace(pos, 1, begin, end);
+		replace(pos, 1, first, last);
 	}
 
 	void erase(size_type pos, size_type n)
@@ -1394,102 +1526,117 @@ public:
 		erase(pos, pos + 1);
 	}
 
-	iterator insert(iterator const &pos, const rope& r)
+	iterator insert(iterator const &pos, rope const &r)
 	{
 		insert(pos.index(), r);
 		return pos;
 	}
 
-	iterator insert(iterator const &pos, size_type n, CharType c)
+	iterator insert(iterator const &pos, size_type n, value_type const &v)
 	{
-		insert(pos.index(), n, c);
+		insert(pos.index(), n, v);
 		return pos;
 	}
 
-	iterator insert(iterator const &pos, CharType c)
+	iterator insert(iterator const &pos, value_type const &v)
 	{
-		insert(pos.index(), c);
+		insert(pos.index(), v);
 		return pos;
 	}
 
-	iterator insert(iterator const &pos, CharType const *s)
+	template <typename Iterator>
+	iterator insert(iterator const &pos, Iterator other)
 	{
-		insert(pos.index(), s);
+		insert(pos.index(), other);
 		return pos;
 	}
 
-	template <typename input_iter_t>
-	iterator insert(iterator const &pos, input_iter_t begin, size_t n)
+	template <typename Iterator>
+	iterator insert(iterator const &pos, Iterator first, size_t n)
 	{
-		insert(pos.index(), begin, n);
+		insert(pos.index(), first, n);
 		return pos;
 	}
 
-	template <typename input_iter_t>
-	iterator insert(iterator const &pos, input_iter_t begin,
-			input_iter_t end)
+	template <typename Iterator>
+	iterator insert(iterator const &pos, Iterator first, Iterator last)
 	{
-		insert(pos.index(), begin, end);
+		insert(pos.index(), first, last);
 		return pos;
 	}
 
-	iterator insert(iterator const &pos, const_iterator const &begin,
-			const_iterator const &end)
+	iterator insert(
+		iterator const &pos, const_iterator const &first,
+		const_iterator const &last
+	)
 	{
-		insert(pos.index(), begin, end);
+		insert(pos.index(), first, last);
 		return pos;
 	}
 
-	iterator insert(iterator const &pos, iterator const &begin,
-			iterator const &end)
+	iterator insert(
+		iterator const &pos, iterator const &first,
+		iterator const &last
+	)
 	{
-		insert(pos.index(), begin, end);
+		insert(pos.index(), first, last);
 		return pos;
 	}
 
-	void replace(iterator const &begin, iterator const &end, rope const &r)
+	void replace(iterator const &first, iterator const &last, rope const &r)
 	{
-		replace(begin.index(), end.index() - begin.index(), r);
+		replace(first.index(), last.index() - first.index(), r);
 	}
 
-	void replace(iterator const &begin, iterator const &end, CharType c)
+	void replace(
+		iterator const &first, iterator const &last, value_type const &v
+	)
 	{
-		replace(begin.index(), end.index() - begin.index(), c);
+		replace(first.index(), last.index() - first.index(), v);
 	}
 
-	void replace(iterator const &begin, iterator const &end,
-		     CharType const *s)
+	template <typename Iterator>
+	void replace(
+		iterator const &first, iterator const &last,
+		Iterator other, size_type n
+	)
 	{
-		replace(begin.index(), end.index() - begin.index(), s);
+		replace(first.index(), last.index() - first.index(), other, n);
 	}
 
-	template <typename input_iter_t>
-	void replace(iterator const &begin, iterator const &end,
-		     input_iter_t iter, size_type n)
+	template <typename Iterator>
+	void replace(
+		iterator const &first, iterator const &last,
+		Iterator other_first, Iterator other_last
+	)
 	{
-		replace(begin.index(), end.index() - begin.index(), iter, n);
+		replace(
+			first.index(), last.index() - first.index(),
+			other_first, other_last
+		);
 	}
 
-	template <typename input_iter_t>
-	void replace(iterator const &begin, iterator const &end,
-		     input_iter_t i_begin, input_iter_t i_end)
+	void replace(
+		iterator const &first, iterator const &last,
+		const_iterator const &other_first,
+		const_iterator const &other_last
+	)
 	{
-		replace(begin.index(), end.index() - begin.index(), i_begin,
-			i_end);
+		replace(
+			first.index(), last.index() - first.index(),
+			other_first, other_last
+		);
 	}
 
-	void replace(iterator const &begin, iterator const &end,
-		     const_iterator const &i_begin, const_iterator const &i_end)
+	void replace(
+		iterator const &first, iterator const &last,
+		iterator const &other_first, iterator const &other_last
+	)
 	{
-		replace(begin.index(), end.index() - begin.index(), i_begin,
-			i_end);
-	}
-
-	void replace(iterator const &begin, iterator const &end,
-		     iterator const &i_begin, iterator const &i_end)
-	{
-		replace(begin.index(), end.index() - begin.index(), i_begin,
-			i_end);
+		replace(
+			first.index(), last.index() - first.index(),
+			other_first, other_last
+		);
 	}
 
 	void replace(iterator const &pos, rope const &r)
@@ -1497,44 +1644,40 @@ public:
 		replace(pos.index(), r);
 	}
 
-	void replace(iterator const &pos, CharType c)
+	void replace(iterator const &pos, value_type const &v)
 	{
-		replace(pos.index(), c);
+		replace(pos.index(), v);
 	}
 
-	void replace(iterator const &pos, CharType const *s)
-	{
-		replace(pos.index(), s);
-	}
-
-	template <typename input_iter_t>
-	void replace(iterator const &pos, input_iter_t iter, size_type n)
+	template <typename Iterator>
+	void replace(iterator const &pos, Iterator iter, size_type n)
 	{
 		replace(pos.index(), iter, n);
 	}
 
-	template <typename input_iter_t>
-	void replace(iterator const &pos, input_iter_t begin, input_iter_t end)
+	template <typename Iterator>
+	void replace(iterator const &pos, Iterator first, Iterator last)
 	{
-		replace(pos.index(), begin, end);
+		replace(pos.index(), first, last);
 	}
 
-	void replace(iterator const &pos, const_iterator begin,
-		     const_iterator end)
+	void replace(
+		iterator const &pos, const_iterator first, const_iterator last
+	)
 	{
-		replace(pos.index(), begin, end);
+		replace(pos.index(), first, last);
 	}
 
-	void replace(iterator const &pos, iterator begin, iterator end)
+	void replace(iterator const &pos, iterator first, iterator last)
 	{
-		replace(pos.index(), begin, end);
+		replace(pos.index(), first, last);
 	}
 
-	iterator erase(iterator const &begin, iterator const &end)
+	iterator erase(iterator const &first, iterator const &last)
 	{
-		size_type begin_index(begin.index());
-		erase(begin_index, end.index() - begin_index);
-		return iterator(this, begin_index);
+		size_type first_index(first.index());
+		erase(first_index, last.index() - first_index);
+		return iterator(this, first_index);
 	}
 
 	iterator erase(iterator const &pos)
@@ -1554,12 +1697,12 @@ public:
 		);
 	}
 
-	rope substr(iterator const &begin, iterator const &end) const
+	rope substr(iterator const &first, iterator const &last) const
 	{
 		return rope_type(
 			substring(
-				root_node, begin.index(),
-				end.index()
+				root_node, first.index(),
+				last.index()
 			),
 			std::get<1>(treeplus)
 		);
@@ -1577,31 +1720,24 @@ public:
 		);
 	}
 
-	rope substr(const_iterator const &begin,
-		    const_iterator const &end) const
+	rope substr(
+		const_iterator const &first, const_iterator const &last
+	) const
 	{
-		return rope_type(
-			substring(
-				root_node, begin.index(),
-				end.index()
-			),
-			std::get<1>(treeplus)
-		);
+		return rope_type(substring(
+			root_node, first.index(), last.index()
+		));
 	}
 
 	rope substr(const_iterator const &pos) const
 	{
 		size_type pos_index(pos.index());
 
-		return rope_type(
-			substring(
-				root_node, pos_index,
-				pos_index + 1
-			),
-			std::get<1>(treeplus)
-		);
+		return rope_type(substring(
+			root_node, pos_index, pos_index + 1
+		));
 	}
-#endif
+
 	size_type find(value_type const &v, size_type pos = 0) const;
 
 	template <typename Iterator>
@@ -1623,25 +1759,18 @@ public:
 		rope<ValueType1, Policy1> const &l,
 		rope<ValueType1, Policy1> const &r
 	);
-#if 0
-	template <typename CharType1, typename TraitsType1,
-		  typename AllocType1, typename Policy1>
-	friend rope<CharType1, TraitsType1, AllocType1, Policy1>
+
+	template <typename ValueType1, typename Policy1, typename Range>
+	friend rope<ValueType1, Policy1>
+	operator+(rope<ValueType1, Policy1> const &l, Range const &r);
+
+	template <typename ValueType1, typename Policy1, typename Range>
+	friend rope<ValueType1, Policy1>
 	operator+(
-		rope<CharType1, TraitsType1, AllocType1, Policy1> const
-		&l,
-		CharType1 const *s
+		rope<ValueType1, Policy1> const &l,
+		ValueType1 const &v
 	);
 
-	template <typename CharType1, typename TraitsType1,
-		  typename AllocType1, typename Policy1>
-	friend rope<CharType1, TraitsType1, AllocType1, Policy1>
-	operator+(
-		rope<CharType1, TraitsType1, AllocType1, Policy1> const
-		&l,
-		CharType1 c
-	);
-#endif
 	template <typename CharType, typename ValueType1, typename Policy1>
 	friend std::basic_ostream<CharType> &operator<<(
 		std::basic_ostream<CharType> &os,
@@ -1658,26 +1787,22 @@ rope<ValueType, Policy> operator+(
 
 	return rope_type(rope_type::concat(l.root_node, r.root_node));
 }
-#if 0
-template <typename CharType, typename TraitsType, typename AllocType,
-	  typename Policy>
-rope<CharType, TraitsType, AllocType, Policy> &operator+=(
-	rope<CharType, TraitsType, AllocType, Policy> &l,
-	rope<CharType, TraitsType, AllocType, Policy> const &r
+
+template <typename ValueType, typename Policy>
+rope<ValueType, Policy> &operator+=(
+	rope<ValueType, Policy> &l, rope<ValueType, Policy> const &r
 )
 {
 	l.append(r);
 	return l;
 }
-
-template <typename CharType, typename TraitsType, typename AllocType,
-	  typename Policy>
-rope<CharType, TraitsType, AllocType, Policy> operator+(
-	rope<CharType, TraitsType, AllocType, Policy> const &l,
-	CharType const *s
+/*
+template <typename ValueType, typename Policy, typename Range>
+rope<ValueType, Policy> operator+(
+	rope<ValueType, Policy>  const &l, Range const &r
 )
 {
-	typedef rope<CharType, TraitsType, AllocType, Policy> rope_type;
+	typedef rope<ValueType, Policy> rope_type;
 	typedef typename rope_type::size_type size_type;
 
 	size_type s_len(rope_type::traits_type::length(s));
@@ -1690,107 +1815,88 @@ rope<CharType, TraitsType, AllocType, Policy> operator+(
 	else
 		return rope_type(s, std::get<1>(l.treeplus));
 }
-
-template <typename CharType, typename TraitsType, typename AllocType,
-	  typename Policy>
-rope<CharType, TraitsType, AllocType, Policy> &operator+=(
-	rope<CharType, TraitsType, AllocType, Policy> &l,
-	CharType const *s
+*/
+template <typename ValueType, typename Policy, typename Range>
+rope<ValueType, Policy> &operator+=(
+	rope<ValueType, Policy> &l, Range const &r
 )
 {
 	l.append(s);
 	return l;
 }
 
-template <typename CharType, typename TraitsType, typename AllocType,
-	  typename Policy>
-rope<CharType, TraitsType, AllocType, Policy> operator+(
-	rope<CharType, TraitsType, AllocType, Policy> const &l,
-	CharType c
+/*
+template <typename ValueType, typename Policy>
+rope<ValueType, Policy> operator+(
+	rope<ValueType, Policy> &l, value_type const &v
 )
 {
-	typedef rope<CharType, TraitsType, AllocType, Policy> rope_type;
+	typedef rope<ValueType, Policy> rope_type;
 
-	if (std::get<0>(l.treeplus))
+	if (l.root_node)
 		return rope_type(
-			l._S_concat_value_iter(std::get<0>(l.treeplus), &c, 1),
-			std::get<1>(l.treeplus)
+			rope_type::concat_value_iter(root_node, &c, 1)
 		);
 	else
 		return rope_type(1, c, std::get<1>(l.treeplus));
 }
-
-template <typename CharType, typename TraitsType, typename AllocType,
-	  typename Policy>
-rope<CharType, TraitsType, AllocType, Policy> &operator+=(
-	rope<CharType, TraitsType, AllocType, Policy> &l,
-	CharType c
+*/
+template <typename ValueType, typename Policy>
+rope<ValueType, Policy> &operator+=(
+	rope<ValueType, Policy> &l, value_type const &v
 )
 {
-	l.append(c);
+	l.append(v);
 	return l;
 }
 
-template <typename CharType, typename TraitsType, typename AllocType,
-	  typename Policy>
+template <typename ValueType, typename Policy>
 bool operator<(
-	rope<CharType, TraitsType, AllocType, Policy> const &l,
-	rope<CharType, TraitsType, AllocType, Policy> const &r
+	rope<ValueType, Policy> const &l, rope<ValueType, Policy> const &r
 )
 {
 	return l.compare(r) < 0;
 }
 
-template <typename CharType, typename TraitsType, typename AllocType,
-	  typename Policy>
+template <typename ValueType, typename Policy>
 bool operator>(
-	rope<CharType, TraitsType, AllocType, Policy> const &l,
-	rope<CharType, TraitsType, AllocType, Policy> const &r
+	rope<ValueType, Policy> const &l, rope<ValueType, Policy> const &r
 )
 {
 	return l.compare(r) > 0;
 }
 
-template <typename CharType, typename TraitsType, typename AllocType,
-	  typename Policy>
+template <typename ValueType, typename Policy>
 bool operator<=(
-	rope<CharType, TraitsType, AllocType, Policy> const &l,
-	rope<CharType, TraitsType, AllocType, Policy> const &r
+	rope<ValueType, Policy> const &l, rope<ValueType, Policy> const &r
 )
 {
 	return l.compare(r) <= 0;
 }
 
-template <typename CharType, typename TraitsType, typename AllocType,
-	  typename Policy>
+template <typename ValueType, typename Policy>
 bool operator>=(
-	rope<CharType, TraitsType, AllocType, Policy> const &l,
-	rope<CharType, TraitsType, AllocType, Policy> const &r
+	rope<ValueType, Policy> const &l, rope<ValueType, Policy> const &r
 )
 {
 	return l.compare(r) >= 0;
 }
 
-template <typename CharType, typename TraitsType, typename AllocType,
-	  typename Policy>
+template <typename ValueType, typename Policy>
 bool operator==(
-	rope<CharType, TraitsType, AllocType, Policy> const &l,
-	rope<CharType, TraitsType, AllocType, Policy> const &r
+	rope<ValueType, Policy> const &l, rope<ValueType, Policy> const &r
 )
 {
 	return l.compare(r) == 0;
 }
 
-template <typename CharType, typename TraitsType, typename AllocType,
-	  typename Policy>
+template <typename ValueType, typename Policy>
 bool operator!=(
-	rope<CharType, TraitsType, AllocType, Policy> const &l,
-	rope<CharType, TraitsType, AllocType, Policy> const &r
+	rope<ValueType, Policy> const &l, rope<ValueType, Policy> const &r
 )
 {
 	return l.compare(r) != 0;
 }
-#endif
 
 template <typename CharType, typename ValueType, typename Policy>
 std::basic_ostream<CharType> &operator<<(

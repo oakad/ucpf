@@ -13,6 +13,11 @@
 
 namespace ucpf { namespace yesod { namespace detail {
 
+template <typename T>
+using aligned_storage_t = typename std::aligned_storage<
+	sizeof(T), std::alignment_of<T>::value
+>::type;
+
 template <typename T, typename Alloc>
 struct allocator_array_helper {
 	typedef typename std::allocator_traits<

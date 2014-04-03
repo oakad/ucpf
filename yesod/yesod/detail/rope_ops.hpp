@@ -32,6 +32,43 @@
 namespace ucpf { namespace yesod {
 
 template <typename ValueType, typename Policy>
+constexpr typename rope<ValueType, Policy>::rope_tag
+rope<ValueType, Policy>::node::leaf::ref_tag;
+
+template <typename ValueType, typename Policy>
+constexpr typename rope<ValueType, Policy>::rope_tag
+rope<ValueType, Policy>::node::concat::ref_tag;
+
+template <typename ValueType, typename Policy>
+size_t const rope<ValueType, Policy>::node::concat::extra_size = sizeof(
+	detail::aligned_storage_t<
+		typename rope<ValueType, Policy>::node::concat
+	>
+);
+
+template <typename ValueType, typename Policy>
+constexpr typename rope<ValueType, Policy>::rope_tag
+rope<ValueType, Policy>::node::substr::ref_tag;
+
+template <typename ValueType, typename Policy>
+size_t const rope<ValueType, Policy>::node::substr::extra_size = sizeof(
+	detail::aligned_storage_t<
+		typename rope<ValueType, Policy>::node::substr
+	>
+);
+
+template <typename ValueType, typename Policy>
+constexpr typename rope<ValueType, Policy>::rope_tag
+rope<ValueType, Policy>::node::func::ref_tag;
+
+template <typename ValueType, typename Policy>
+size_t const rope<ValueType, Policy>::node::func::extra_size = sizeof(
+	detail::aligned_storage_t<
+		typename rope<ValueType, Policy>::node::func
+	>
+);
+
+template <typename ValueType, typename Policy>
 auto rope<ValueType, Policy>::node::leaf::apply(
 	node_ptr const &r, apply_func_t &&f, size_type begin, size_type end
 ) -> bool
@@ -348,20 +385,20 @@ auto rope<ValueType, Policy>::concat_value_iter(
 template <typename ValueType, typename Policy>
 template <typename Iterator>
 auto rope<ValueType, Policy>::flatten(
-	node_ptr const &r, size_type begin, size_type n, Iterator first
+	node_ptr const &r, size_type offset, size_type n, Iterator iter
 ) -> Iterator
 {
-	size_type end(begin + std::min(n, r->size));
+	size_type end(offset + std::min(n, r->size));
 
 	apply(
-		r, [&first](ValueType const *in, size_type in_sz) -> bool {
-			std::copy_n(in, in_sz, first);
-			first += in_sz;
+		r, [&offset](ValueType const *in, size_type in_sz) -> bool {
+			std::copy_n(in, in_sz, iter);
+			iter += in_sz;
 			return true;
-		}, begin, end
+		}, offset, end
 	);
 	//return first + (end - begin);
-	return first;
+	return iter;
 }
 
 template <typename ValueType, typename Policy>

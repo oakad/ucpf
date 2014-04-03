@@ -73,6 +73,13 @@ private:
 		virtual reference dereference(
 			storage_type const *iter
 		) const = 0;
+		virtual size_t size() const = 0;
+		virtual std::pair<size_t, size_t> location(
+			storage_type const *iter
+		) const = 0;
+		virtual ssize_t distance_to(
+			storage_type const *iter, storage_type const *other
+		) const = 0;
 	};
 public:
 	typedef typename base_iterator_traits::value_type value_type;
@@ -154,7 +161,40 @@ public:
 		template <typename ValueType1>
 		typename iterator_base::difference_type distance_to(
 			iterator_base<ValueType1> const &other
-		) const;
+		) const
+		{
+			if (slice_pos == other.slice_pos)
+				return r->s_access[slice_pos]->distance_to(
+					&iter, &other.iter
+				);
+
+			auto f_pos(std::min(slice_pos, other.slice_pos));
+			auto l_pos(std::max(slice_pos, other.slice_pos));
+			typename iterator_base::difference_type rv(0);
+
+			for (auto pos(l_pos + 1); pos < f_pos; ++pos)
+				rv += r->s_access[pos]->size();
+
+			if (other.slice_pos > slice_pos) {
+				rv += r->s_access[other.slice_pos]->location(
+					&other.iter
+				).first;
+
+				rv += r->s_access[slice_pos]->location(
+					&iter
+				).second;
+			} else {
+				rv = -rv;
+				rv -= r->s_access[other.slice_pos]->location(
+					&other.iter
+				).second;
+
+				rv -= r->s_access[slice_pos]->location(
+					&iter
+				).first;
+			}
+			return rv;
+		}
 
 		typename iterator_base::reference dereference() const
 		{
@@ -175,7 +215,7 @@ public:
 	>::type const_iterator;
 
 	joined_range(Rn&&... r)
-	: slices(std::make_tuple(std::ref(r), this)...), slice_pos(0)
+	: slices(std::make_tuple(std::ref(r), this)...)
 	{}
 
 	iterator begin()
@@ -285,6 +325,34 @@ private:
 			);
 		}
 
+		virtual size_t size() const
+		{
+			return last - first;
+		}
+
+		virtual std::pair<size_t, size_t> location(
+			typename slice_base::storage_type const *iter
+		) const
+		{
+			auto &x_iter(*reinterpret_cast<iterator const *>(iter));
+			return std::make_pair(x_iter - first, last - x_iter);
+		}
+
+		virtual ssize_t distance_to(
+			typename slice_base::storage_type const *iter,
+			typename slice_base::storage_type const *other
+		) const
+		{
+			auto &x_iter(
+				*reinterpret_cast<iterator const *>(iter)
+			);
+			auto &x_other(
+				*reinterpret_cast<iterator const *>(other)
+			);
+
+			return x_other - x_iter;
+		}
+
 		iterator first;
 		iterator last;
 	};
@@ -305,7 +373,6 @@ private:
 		slice_pack_type::template apply
 	>::type slices;
 	std::array<slice_base *, sizeof...(Rn)> s_access;
-	size_t slice_pos;
 };
 
 template <typename... Range>
