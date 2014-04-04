@@ -681,8 +681,8 @@ typename detail::enable_if_interoperable<
 	facade<Un...> const &rhs
 )
 {
-	typedef typename decltype(lhs)::derived_type lh_derived;
-	typedef typename decltype(rhs)::derived_type rh_derived;
+	typedef typename facade<Tn...>::derived_type lh_derived;
+	typedef typename facade<Un...>::derived_type rh_derived;
 
 	static_assert(
 		detail::is_interoperable<lh_derived, rh_derived>::value,
@@ -706,8 +706,8 @@ typename detail::enable_if_interoperable<
 	facade<Un...> const &rhs
 )
 {
-	typedef typename decltype(lhs)::derived_type lh_derived;
-	typedef typename decltype(rhs)::derived_type rh_derived;
+	typedef typename facade<Tn...>::derived_type lh_derived;
+	typedef typename facade<Un...>::derived_type rh_derived;
 
 	static_assert(
 		detail::is_interoperable<lh_derived, rh_derived>::value,
@@ -731,8 +731,8 @@ typename detail::enable_if_interoperable<
 	facade<Un...> const &rhs
 )
 {
-	typedef typename decltype(lhs)::derived_type lh_derived;
-	typedef typename decltype(rhs)::derived_type rh_derived;
+	typedef typename facade<Tn...>::derived_type lh_derived;
+	typedef typename facade<Un...>::derived_type rh_derived;
 
 	static_assert(
 		detail::is_interoperable<lh_derived, rh_derived>::value,
@@ -756,8 +756,8 @@ typename detail::enable_if_interoperable<
 	facade<Un...> const &rhs
 )
 {
-	typedef typename decltype(lhs)::derived_type lh_derived;
-	typedef typename decltype(rhs)::derived_type rh_derived;
+	typedef typename facade<Tn...>::derived_type lh_derived;
+	typedef typename facade<Un...>::derived_type rh_derived;
 
 	static_assert(
 		detail::is_interoperable<lh_derived, rh_derived>::value,
@@ -806,7 +806,8 @@ auto operator+(
 	typename facade<Tn...>::derived_type::difference_type rhs
 ) -> typename facade<Tn...>::derived_type
 {
-	typedef typename decltype(lhs)::derived_type lh_derived;
+	typedef typename facade<Tn...>::derived_type lh_derived;
+
 	lh_derived tmp(static_cast<lh_derived const &>(lhs));
 	return tmp += rhs; 
 }
@@ -817,7 +818,8 @@ auto operator+(
 	facade<Tn...> const &rhs
 ) ->  typename facade<Tn...>::derived_type
 {
-	typedef typename decltype(rhs)::derived_type rh_derived;
+	typedef typename facade<Tn...>::derived_type rh_derived;
+
 	rh_derived tmp(static_cast<rh_derived const &>(rhs));
 	return tmp += lhs; 
 }

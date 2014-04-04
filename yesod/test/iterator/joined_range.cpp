@@ -37,6 +37,9 @@ BOOST_AUTO_TEST_CASE(range_1)
 	std::string ref0("abcdefgh");
 
 	BOOST_CHECK(std::equal(j0.begin(), j0.end(), ref0.begin()));
+
+	std::string s2(j0.begin(), j0.end());
+	BOOST_CHECK_EQUAL(ref0, s2);
 }
 
 }}}

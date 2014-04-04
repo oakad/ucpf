@@ -22,6 +22,8 @@
 #include <yesod/mpl/list.hpp>
 #include <yesod/mpl/find.hpp>
 
+#include <iterator>
+
 namespace ucpf { namespace yesod { namespace iterator {
 
 struct no_traversal_tag {};

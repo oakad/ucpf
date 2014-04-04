@@ -13,8 +13,7 @@
 #include <yesod/detail/rope_ops.hpp>
 
 #include <cstring>
-#include <sys/stat.h>
-#include <fcntl.h>
+#include <cstdio>
 
 namespace ucpf { namespace yesod {
 
@@ -104,10 +103,10 @@ private:
 
 	struct context {
 		context(char const *name)
-		: fd(open(name, O_RDONLY)), owned(true)
+		: fd(fopen(name, "rb")), owned(true)
 		{}
 
-		context(int fd_, bool owned_)
+		context(FILE *fd_, bool owned_)
 		: fd(fd_), owned(owned_)
 		{}
 
@@ -123,21 +122,21 @@ private:
 		~context()
 		{
 			if (owned)
-				close(fd);
+				fclose(fd);
 		}
 
 		void read(CharType *buf, size_t count, size_t offset)
 		{
-			auto b_count(count * sizeof(CharType));
+			fseek(fd, count * sizeof(CharType), SEEK_SET);
 
-			auto rv(pread(
-				fd, buf, b_count, offset * sizeof(CharType)
+			auto rv(fread(
+				buf, sizeof(CharType), count, fd
 			));
 
-			if (rv < ssize_t(b_count)) {
+			if (rv < ssize_t(count)) {
 				if (rv < 0)
 					rv = 0;
-				memset(buf + rv, 0, b_count - size_t(rv));
+				std::fill_n(buf + rv, count - rv, 0);
 			}
 		}
 
@@ -164,7 +163,7 @@ private:
 		}
 
 	private:
-		int fd;
+		FILE *fd;
 		bool owned;
 	};
 

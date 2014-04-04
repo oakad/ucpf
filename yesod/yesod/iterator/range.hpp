@@ -117,6 +117,11 @@ struct range {
 		return const_iterator(last);
 	}
 
+	size_type size() const
+	{
+		return std::distance(first, last);
+	}
+
 private:
 	Iterator first;
 	Iterator last;

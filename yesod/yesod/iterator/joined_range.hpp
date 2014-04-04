@@ -77,9 +77,10 @@ private:
 		virtual std::pair<size_t, size_t> location(
 			storage_type const *iter
 		) const = 0;
-		virtual ssize_t distance_to(
+		virtual ptrdiff_t distance_to(
 			storage_type const *iter, storage_type const *other
 		) const = 0;
+		virtual ptrdiff_t advance(storage_type *iter, ptrdiff_t n) = 0;
 	};
 public:
 	typedef typename base_iterator_traits::value_type value_type;
@@ -156,7 +157,23 @@ public:
 			}
 		}
 
-		void advance(typename iterator_base::difference_type n);
+		void advance(typename iterator_base::difference_type n)
+		{
+			while (true) {
+				n = r->s_access[slice_pos]->advance(&iter, n);
+
+				if (n > 0) {
+					++slice_pos;
+					if (slice_pos >= r->s_access.size())
+						break;
+				} else if (n < 0) {
+					if (!slice_pos)
+						break;
+					--slice_pos;
+				} else
+					break;
+			};
+		}
 
 		template <typename ValueType1>
 		typename iterator_base::difference_type distance_to(
@@ -236,6 +253,16 @@ public:
 	const_iterator end() const
 	{
 		return const_iterator(this, s_access.size());
+	}
+
+	size_t size() const
+	{
+		size_t rv(0);
+
+		for (auto s: s_access)
+			rv += s->size();
+
+		return rv;
 	}
 
 private:
@@ -327,7 +354,7 @@ private:
 
 		virtual size_t size() const
 		{
-			return last - first;
+			return std::distance(first, last);
 		}
 
 		virtual std::pair<size_t, size_t> location(
@@ -335,10 +362,13 @@ private:
 		) const
 		{
 			auto &x_iter(*reinterpret_cast<iterator const *>(iter));
-			return std::make_pair(x_iter - first, last - x_iter);
+			return std::make_pair(
+				std::distance(first, x_iter),
+				std::distance(x_iter, last)
+			);
 		}
 
-		virtual ssize_t distance_to(
+		virtual ptrdiff_t distance_to(
 			typename slice_base::storage_type const *iter,
 			typename slice_base::storage_type const *other
 		) const
@@ -350,7 +380,25 @@ private:
 				*reinterpret_cast<iterator const *>(other)
 			);
 
-			return x_other - x_iter;
+			return std::distance(x_iter, x_other);
+		}
+
+		virtual ptrdiff_t advance(
+			typename slice_base::storage_type *iter, ptrdiff_t n
+		)
+		{
+			auto &x_iter(
+				*reinterpret_cast<iterator *>(iter)
+			);
+			if (n >= 0) {
+				ptrdiff_t x_n(std::distance(x_iter, last));
+				std::advance(x_iter, std::min(n, x_n));
+				return n - std::min(n, x_n);
+			} else {
+				ptrdiff_t x_n(std::distance(x_iter, first));
+				std::advance(x_iter, std::max(n, x_n));
+				return n - std::max(n, x_n);
+			}
 		}
 
 		iterator first;

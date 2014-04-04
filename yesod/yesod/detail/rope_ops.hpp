@@ -92,7 +92,7 @@ auto rope<ValueType, Policy>::node::leaf::substring(
 		return node::make_substr(r, begin, adj_end - begin);
 	else
 		return node::make_leaf(
-			r, extra(r) + begin, extra(r) + begin + res_len
+			r, res_len, extra(r) + begin
 		);
 }
 
@@ -352,8 +352,8 @@ auto rope<ValueType, Policy>::leaf_concat_value_iter(
 	auto v_range(yesod::iterator::make_joined_range(
 		l->leaf_range(), yesod::iterator::make_range(iter, n)
 	));
-
-	return node::make_leaf(l, v_range.begin(), v_range.end());
+	
+	return node::make_leaf(l, v_range.size(), v_range.begin());
 }
 
 template <typename ValueType, typename Policy>
@@ -379,7 +379,7 @@ auto rope<ValueType, Policy>::concat_value_iter(
 		}
 	}
 
-	return tree_concat(l, node::make_leaf(l, iter, n));
+	return tree_concat(l, node::make_leaf(l, n, iter));
 }
 
 template <typename ValueType, typename Policy>
@@ -391,13 +391,12 @@ auto rope<ValueType, Policy>::flatten(
 	size_type end(offset + std::min(n, r->size));
 
 	apply(
-		r, [&offset](ValueType const *in, size_type in_sz) -> bool {
+		r, [&iter](ValueType const *in, size_type in_sz) -> bool {
 			std::copy_n(in, in_sz, iter);
 			iter += in_sz;
 			return true;
 		}, offset, end
 	);
-	//return first + (end - begin);
 	return iter;
 }
 
@@ -765,12 +764,12 @@ rope<ValueType, Policy>::rope(
 	node_ptr remainder;
 
 	if (rest)
-		remainder = node::make_leaf(a, v, rest);
+		remainder = node::make_leaf(a, rest, v);
 
 	rope_type remainder_rope(remainder), rv;
 
 	if (exponent) {
-		auto base_leaf(node::make_leaf(a, v, exponentiate_threshold));
+		auto base_leaf(node::make_leaf(a, exponentiate_threshold, v));
 		rope_type base_rope(base_leaf);
 
 		rv = base_rope;
