@@ -346,14 +346,16 @@ auto rope<ValueType, Policy>::tree_concat(
 template <typename ValueType, typename Policy>
 template <typename Iterator>
 auto rope<ValueType, Policy>::leaf_concat_value_iter(
-	node_ptr const &l, Iterator iter, size_type n
+	node_ptr const &l, Iterator first, size_type n
 ) -> node_ptr
 {
-	auto v_range(yesod::iterator::make_joined_range(
-		l->leaf_range(), yesod::iterator::make_range(iter, n)
-	));
-	
-	return node::make_leaf(l, v_range.size(), v_range.begin());
+	auto rv(node::make_leaf(l, l->size + n));
+	auto s(node::leaf::extra(rv));
+
+	std::copy_n(node::leaf::extra(l), l->size, s);
+	s += l->size;
+	std::copy_n(first, n, s);
+	return rv;
 }
 
 template <typename ValueType, typename Policy>

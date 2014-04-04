@@ -37,10 +37,7 @@
 #include <yesod/counted_ptr.hpp>
 #include <yesod/mpl/value_cast.hpp>
 #include <yesod/mpl/fibonacci_c.hpp>
-
-#include <yesod/iterator/range.hpp>
-#include <yesod/iterator/joined_range.hpp>
-
+#include <yesod/iterator/facade.hpp>
 #include <yesod/detail/allocator_utils.hpp>
 
 namespace ucpf { namespace yesod {
@@ -502,34 +499,6 @@ protected:
 			detail::allocator_array_helper<
 				node, Alloc
 			>::destroy(a, p, 1, false);
-		}
-
-		yesod::iterator::range<value_type *> leaf_range()
-		{
-			if (tag == rope_tag::leaf)
-				return yesod::iterator::make_range(
-					reinterpret_cast<value_type *>(
-						self->get_extra()
-					), size
-				);
-			else
-				return yesod::iterator::make_range<
-					value_type *
-				>(nullptr, size_t(0));
-		}
-
-		yesod::iterator::range<value_type const *> leaf_range() const
-		{
-			if (tag == rope_tag::leaf)
-				return yesod::iterator::make_range(
-					reinterpret_cast<value_type const *>(
-						self->get_extra()
-					), size
-				);
-			else
-				return yesod::iterator::make_range<
-					value_type const *
-				>(nullptr, size_t(0));
 		}
 
 		struct alloc_wrapper {

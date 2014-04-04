@@ -21,8 +21,8 @@ BOOST_AUTO_TEST_CASE(rope_0)
 	output_test_stream out("ref/rope/append.00.out", true);
 	output_test_stream h1("ref/rope/append.01.out", false);
 
-	crope a("aaaa");
-	crope b("bbbb");
+	crope a(std::string("aaaa"));
+	crope b(std::string("bbbb"));
 
 	crope c(a + b);
 	out << c << std::endl;
