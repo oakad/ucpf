@@ -28,11 +28,10 @@ BOOST_AUTO_TEST_CASE(range_0)
 
 BOOST_AUTO_TEST_CASE(range_1)
 {
-	char const *s0 = "abcd";
+	auto s0(str("abcd"));
 	std::string s1("efgh");
 
-	auto r0(make_range(s0, std::strlen(s0)));
-	auto j0(make_joined_range(r0, s1));
+	auto j0(make_joined_range(s0, s1));
 
 	std::string ref0("abcdefgh");
 

@@ -77,10 +77,12 @@ private:
 		virtual std::pair<size_t, size_t> location(
 			storage_type const *iter
 		) const = 0;
-		virtual ptrdiff_t distance_to(
+		virtual std::ptrdiff_t distance_to(
 			storage_type const *iter, storage_type const *other
 		) const = 0;
-		virtual ptrdiff_t advance(storage_type *iter, ptrdiff_t n) = 0;
+		virtual std::pair<std::ptrdiff_t, int> advance(
+			storage_type *iter, std::ptrdiff_t n
+		) = 0;
 	};
 public:
 	typedef typename base_iterator_traits::value_type value_type;
@@ -159,20 +161,37 @@ public:
 
 		void advance(typename iterator_base::difference_type n)
 		{
+			int carry;
 			while (true) {
-				n = r->s_access[slice_pos]->advance(&iter, n);
+				std::tie(n, carry) = r->s_access[
+					slice_pos
+				]->advance(&iter, n);
 
-				if (n > 0) {
+				if (n > 0 || carry > 0) {
+					r->s_access[slice_pos]->put(&iter);
 					++slice_pos;
-					if (slice_pos >= r->s_access.size())
-						break;
-				} else if (n < 0) {
-					if (!slice_pos)
-						break;
-					--slice_pos;
+
+					if (slice_pos < r->s_access.size()) {
+						r->s_access[
+							slice_pos
+						]->get_first(&iter);
+					}
+				} else if (n < 0 || carry < 0) {
+					if (slice_pos) {
+						r->s_access[
+							slice_pos
+						]->put(&iter);
+						--slice_pos;
+						r->s_access[
+							slice_pos
+						]->get_last(&iter);
+					}
 				} else
 					break;
-			};
+
+				if (!n)
+					break;
+			}
 		}
 
 		template <typename ValueType1>
@@ -189,26 +208,28 @@ public:
 			auto l_pos(std::max(slice_pos, other.slice_pos));
 			typename iterator_base::difference_type rv(0);
 
-			for (auto pos(l_pos + 1); pos < f_pos; ++pos)
+			for (auto pos(f_pos + 1); pos < l_pos; ++pos)
 				rv += r->s_access[pos]->size();
 
 			if (other.slice_pos > slice_pos) {
-				rv += r->s_access[other.slice_pos]->location(
-					&other.iter
-				).first;
+				if (other.slice_pos < other.r->s_access.size())
+					rv += r->s_access[
+						other.slice_pos
+					]->location(&other.iter).first;
 
-				rv += r->s_access[slice_pos]->location(
-					&iter
-				).second;
+					rv += r->s_access[slice_pos]->location(
+						&iter
+					).second;
 			} else {
 				rv = -rv;
 				rv -= r->s_access[other.slice_pos]->location(
 					&other.iter
 				).second;
 
-				rv -= r->s_access[slice_pos]->location(
-					&iter
-				).first;
+				if (slice_pos < r->s_access.size())
+					rv -= r->s_access[slice_pos]->location(
+						&iter
+					).first;
 			}
 			return rv;
 		}
@@ -368,7 +389,7 @@ private:
 			);
 		}
 
-		virtual ptrdiff_t distance_to(
+		virtual std::ptrdiff_t distance_to(
 			typename slice_base::storage_type const *iter,
 			typename slice_base::storage_type const *other
 		) const
@@ -383,21 +404,30 @@ private:
 			return std::distance(x_iter, x_other);
 		}
 
-		virtual ptrdiff_t advance(
-			typename slice_base::storage_type *iter, ptrdiff_t n
+		virtual std::pair<std::ptrdiff_t, int> advance(
+			typename slice_base::storage_type *iter,
+			std::ptrdiff_t n
 		)
 		{
 			auto &x_iter(
 				*reinterpret_cast<iterator *>(iter)
 			);
 			if (n >= 0) {
-				ptrdiff_t x_n(std::distance(x_iter, last));
+				std::ptrdiff_t x_n(std::distance(x_iter, last));
 				std::advance(x_iter, std::min(n, x_n));
-				return n - std::min(n, x_n);
+				return std::make_pair(
+					n - std::min(n, x_n),
+					x_iter == last ? 1 : 0
+				);
 			} else {
-				ptrdiff_t x_n(std::distance(x_iter, first));
+				std::ptrdiff_t x_n(
+					std::distance(x_iter, first)
+				);
 				std::advance(x_iter, std::max(n, x_n));
-				return n - std::max(n, x_n);
+				return std::make_pair(
+					n - std::max(n, x_n),
+					x_iter == first ? -1 : 0
+				);
 			}
 		}
 

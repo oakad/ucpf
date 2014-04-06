@@ -57,6 +57,7 @@ struct ss {
 
 void t1()
 {
+/*
 	ss<int, short, float> aa;
 	std::get<0>(aa.pack).print();
 	std::get<1>(aa.pack).print();
@@ -67,6 +68,17 @@ void t1()
 	std::vector<int> zz = {7, 8, 9};
 
 	auto xr(make_joined_range(xx, yy, zz));
+*/
+	auto s0(str("abcd"));
+	std::string s1("efgh");
+
+	auto j0(make_joined_range(s0, s1));
+
+	for (auto cc: j0)
+		std::cout << cc;
+//	std::cout << *(j0.begin() + 5) << '\n';
+	std::string ref0(j0.begin(), j0.end());
+	std::cout << "s " << j0.size() << " " << ref0.size() << " " << j0.end() - j0.begin() << " " << ref0 << '\n';
 }
 
 }}}

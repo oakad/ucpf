@@ -92,7 +92,7 @@ template <
 			.reader = this
 		};
 		c.access_allocator(&w);
-		return w.rv;
+		return w.r;
 	}
 
 private:
@@ -127,12 +127,12 @@ private:
 
 		void read(CharType *buf, size_t count, size_t offset)
 		{
-			fseek(fd, count * sizeof(CharType), SEEK_SET);
+			fseek(fd, offset * sizeof(CharType), SEEK_SET);
 
 			auto rv(fread(
 				buf, sizeof(CharType), count, fd
 			));
-
+			printf("zz off %zd, count %zd, sz %zd\n", offset, count, rv);
 			if (rv < ssize_t(count)) {
 				if (rv < 0)
 					rv = 0;
@@ -142,13 +142,8 @@ private:
 
 		size_t size() const
 		{
-			struct stat s;
-			auto rv(fstat(fd, &s));
-
-			if (rv < 0)
-				return 0;
-
-			return s.st_size / sizeof(CharType);
+			fseek(fd, 0, SEEK_END);
+			return ftell(fd) / sizeof(CharType);
 		}
 
 		template <typename Alloc>
@@ -157,8 +152,8 @@ private:
 		)
 		{
 			auto w(reinterpret_cast<wrapper *>(data));
-			w->rv = rope_type(
-				*(w->reader), w->reader.c->size(), a
+			w->r = rope_type(
+				*(w->reader), w->reader->c->size(), a
 			);
 		}
 
@@ -178,7 +173,7 @@ typedef rope_file_reader<wchar_t> wrope_file_reader;
 namespace std
 {
 
-template<>
+template <>
 struct hash<ucpf::yesod::crope>
 {
 	size_t operator()(ucpf::yesod::crope const &str) const
@@ -190,7 +185,7 @@ struct hash<ucpf::yesod::crope>
 	}
 };
 
-template<>
+template <>
 struct hash<ucpf::yesod::wrope>
 {
 	size_t operator()(ucpf::yesod::wrope const &str) const

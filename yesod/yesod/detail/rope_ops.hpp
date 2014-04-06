@@ -1,30 +1,33 @@
 /*
- * Copyright (C) 2010 - 2014 Alex Dubov <oakad@yahoo.com>
+ * Copyright (c) 2010-2014 Alex Dubov <oakad@yahoo.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
- *
- * ***
- *
- * Derived from original implementation
- * Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
- * Free Software Foundation, Inc.
- *
- * ***
- *
- * May contain parts
- * Copyright (c) 1997
- * Silicon Graphics Computer Systems, Inc.
- *
- * Permission to use, copy, modify, distribute and sell this software
- * and its documentation for any purpose is hereby granted without fee,
- * provided that the above copyright notice appear in all copies and
- * that both that copyright notice and this permission notice appear
- * in supporting documentation. Silicon Graphics makes no representations
- * about the suitability of this software for any purpose. It is provided
- * "as is" without express or implied warranty.
  */
+
+/*=============================================================================
+    Based on original implementation of __gnu_cxx::rope:
+
+    Copyright (c) 2001-2013 Free Software Foundation, Inc.
+
+    This file is part of the GNU ISO C++ Library.  This library is free
+    software; you can redistribute it and/or modify it under the
+    terms of the GNU General Public License as published by the
+    Free Software Foundation; either version 3, or (at your option)
+    any later version.
+
+
+    Copyright (c) 1997 Silicon Graphics Computer Systems, Inc.
+
+    Permission to use, copy, modify, distribute and sell this software
+    and its documentation for any purpose is hereby granted without fee,
+    provided that the above copyright notice appear in all copies and
+    that both that copyright notice and this permission notice appear
+    in supporting documentation.  Silicon Graphics makes no
+    representations about the suitability of this software for any
+    purpose.  It is provided "as is" without express or implied warranty.
+==============================================================================*/
 
 #if !defined(UCPF_YESOD_DETAIL_ROPE_OPS_OCT_31_2013_1840)
 #define UCPF_YESOD_DETAIL_ROPE_OPS_OCT_31_2013_1840
@@ -158,7 +161,7 @@ auto rope<ValueType, Policy>::node::substr::apply(
 	auto s(extra(r));
 	return rope_type::apply(
 		s->base, std::forward<apply_func_t>(f), begin + s->offset,
-		std::min(r->size, end)
+		std::min(s->base->size, end + s->offset)
 	);
 }
 
@@ -176,11 +179,12 @@ auto rope<ValueType, Policy>::node::substr::substring(
 
 	if (res_len > Policy::lazy_threshold)
 		return node::make_substr(
-			c->base, begin + c->offset, adj_end - begin
+			c->base, begin + c->offset, res_len
 		);
 	else
 		return rope_type::substring(
-			c->base, begin + c->offset, adj_end - begin
+			c->base, begin + c->offset, begin + c->offset + res_len
+
 		);
 }
 
@@ -390,7 +394,7 @@ auto rope<ValueType, Policy>::flatten(
 	node_ptr const &r, size_type offset, size_type n, Iterator iter
 ) -> Iterator
 {
-	size_type end(offset + std::min(n, r->size));
+	size_type end(std::min(offset + n, r->size));
 
 	apply(
 		r, [&iter](ValueType const *in, size_type in_sz) -> bool {
@@ -420,7 +424,7 @@ auto rope<ValueType, Policy>::fetch(
 }
 
 template <typename ValueType, typename Policy>
-void rope<ValueType, Policy>::iterator_base::setbuf(iterator_base &iter)
+void rope<ValueType, Policy>::iterator_base::set_buf(iterator_base &iter)
 {
 	size_type leaf_pos(iter.leaf_pos);
 	size_type pos(iter.current_pos);
@@ -450,16 +454,16 @@ void rope<ValueType, Policy>::iterator_base::setbuf(iterator_base &iter)
 			[&iter](
 				value_type const *in, size_type in_sz
 			) -> bool {
-				std::copy_n(in, in_sz, iter.tmp_buf);
+				std::copy_n(in, in_sz, iter.tmp_buf.begin());
 				return true;
 			},
 			buf_start_pos - leaf_pos,
 			buf_start_pos - leaf_pos + len
 		);
 
-		iter.buf_cur = iter.tmp_buf + (pos - buf_start_pos);
-		iter.buf_begin = iter.tmp_buf;
-		iter.buf_end = iter.tmp_buf + len;
+		iter.buf_cur = &iter.tmp_buf[pos - buf_start_pos];
+		iter.buf_begin = &iter.tmp_buf[0];
+		iter.buf_end = &iter.tmp_buf[len];
 	}
 }
 
@@ -603,7 +607,7 @@ auto rope<ValueType, Policy>::iterator_base::incr(size_type n) -> void
 			buf_cur += n;
 		else if (chars_left == n) {
 			buf_cur += n;
-			setcache_for_incr(*this);
+			set_cache_for_incr(*this);
 		} else
 			buf_cur = 0;
 	}

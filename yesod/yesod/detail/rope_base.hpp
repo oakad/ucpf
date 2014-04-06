@@ -1,30 +1,33 @@
 /*
- * Copyright (c) 2010 - 2014 Alex Dubov <oakad@yahoo.com>
+ * Copyright (c) 2010-2014 Alex Dubov <oakad@yahoo.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
- *
- * ***
- *
- * Derived from original implementation
- * Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
- * Free Software Foundation, Inc.
- *
- * ***
- *
- * May contain parts
- * Copyright (c) 1997
- * Silicon Graphics Computer Systems, Inc.
- *
- * Permission to use, copy, modify, distribute and sell this software
- * and its documentation for any purpose is hereby granted without fee,
- * provided that the above copyright notice appear in all copies and
- * that both that copyright notice and this permission notice appear
- * in supporting documentation.  Silicon Graphics makes no
- * representations about the suitability of this software for any
- * purpose.  It is provided "as is" without express or implied warranty.
  */
+
+/*=============================================================================
+    Based on original implementation of __gnu_cxx::rope:
+
+    Copyright (c) 2001-2013 Free Software Foundation, Inc.
+
+    This file is part of the GNU ISO C++ Library.  This library is free
+    software; you can redistribute it and/or modify it under the
+    terms of the GNU General Public License as published by the
+    Free Software Foundation; either version 3, or (at your option)
+    any later version.
+
+
+    Copyright (c) 1997 Silicon Graphics Computer Systems, Inc.
+
+    Permission to use, copy, modify, distribute and sell this software
+    and its documentation for any purpose is hereby granted without fee,
+    provided that the above copyright notice appear in all copies and
+    that both that copyright notice and this permission notice appear
+    in supporting documentation.  Silicon Graphics makes no
+    representations about the suitability of this software for any
+    purpose.  It is provided "as is" without express or implied warranty.
+==============================================================================*/
 
 #if !defined(UCPF_YESOD_DETAIL_ROPE_BASE_OCT_31_2013_1840)
 #define UCPF_YESOD_DETAIL_ROPE_BASE_OCT_31_2013_1840
@@ -411,7 +414,7 @@ protected:
 
 		template <typename Alloc>
 		static node_ptr make_func(
-			Alloc const &a, typename func::func_type &&f,
+			Alloc const &a, typename func::func_type const &f,
 			size_type n
 		)
 		{
@@ -424,7 +427,7 @@ protected:
 			));
 			rv->self = rv.get_value_container();
 			func::construct(a, rv);
-			rv->fn = f;
+			func::extra(rv)->fn = f;
 			return rv;
 		}
 
@@ -601,7 +604,7 @@ protected:
 		 */
 		std::array<value_type, Policy::iterator_buf_len> tmp_buf;
 
-		static void setbuf(iterator_base &iter);
+		static void set_buf(iterator_base &iter);
 
 		static void set_cache(iterator_base &iter);
 
@@ -619,7 +622,7 @@ protected:
 		{}
 
 		iterator_base(node_ptr const &root_, size_type pos)
-		: current_pos(pos), root(root_), buf_cur(0)
+		: current_pos(pos), root(root_), buf_cur(nullptr)
 		{}
 
 		iterator_base(iterator_base const &iter)
@@ -629,7 +632,7 @@ protected:
 			else {
 				current_pos = iter.current_pos;
 				root = iter.root;
-				buf_cur = 0;
+				buf_cur = nullptr;
 			}
 		}
 	};
@@ -919,7 +922,7 @@ public:
 		value_type const &dereference() const
 		{
 			if (!this->buf_cur)
-				this->setcache(
+				this->set_cache(
 					*const_cast<const_iterator *>(this)
 				);
 
@@ -951,14 +954,14 @@ public:
 		: iterator_base(std::get<0>(r->treeplus), pos_), root_rope(r)
 		{
 			if (!r->empty())
-				setcache(*this);
+				set_cache(*this);
 		}
 
 		void check()
 		{
-			if (std::get<0>(root_rope->treeplus) != this->root) {
-				this->root = std::get<0>(root_rope->treeplus);
-				this->buf_cur = 0;
+			if (root_rope->root_node != this->root) {
+				this->root = root_rope->root_node;
+				this->buf_cur = nullptr;
 			}
 		}
 
@@ -1000,8 +1003,10 @@ public:
 			if (!this->buf_cur)
 				return reference(*root_rope, this->current_pos);
 			else
-				return reference(*root_rope, this->current_pos,
-						 *this->buf_cur);
+				return reference(
+					*root_rope, this->current_pos,
+					*this->buf_cur
+				);
 		}
 
 		rope_type *root_rope;
@@ -1044,6 +1049,13 @@ public:
 	template <typename Alloc = std::allocator<void>>
 	rope(size_type n, value_type const &v, Alloc const &a = Alloc());
 
+	typedef typename node::func::func_type generator_type;
+
+	template <typename Alloc = std::allocator<void>>
+	rope(generator_type const &fn, size_type n, Alloc const &a = Alloc())
+	: root_node(node::make_func(a, fn, n))
+	{}
+
 	template <typename Range, typename Alloc = std::allocator<void>>
 	rope(Range const &r, Alloc const &a = Alloc())
 	: root_node(node::make_leaf(
@@ -1052,15 +1064,6 @@ public:
 	{}
 
 	rope() = default;
-
-	template <typename Alloc = std::allocator<void>>
-	rope(
-		typename node::func::func_type &&fn, size_type n,
-		Alloc const &a = Alloc()
-	) : root_node(node::make_func(
-		std::forward<typename node::func::func_type>(fn), n, a
-	))
-	{}
 
 	rope(rope const &r)
 	: root_node(r.root_node)

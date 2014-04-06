@@ -149,5 +149,13 @@ auto make_range(Range const &r) -> range<
 	>(std::begin(r), std::end(r));
 }
 
+template <typename CharType>
+auto str(CharType const *s) -> range<CharType const *>
+{
+	return range<CharType const *>(
+		s, s + std::char_traits<CharType>::length(s)
+	);
+}
+
 }}}
 #endif
