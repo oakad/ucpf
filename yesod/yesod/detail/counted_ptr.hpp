@@ -243,7 +243,7 @@ size_t const counted_ptr_extra_b::h_size = sizeof(
 );
 
 template <typename ValueType>
-struct counted_ptr_val {
+struct alignas(void *) counted_ptr_val {
 	typedef ValueType value_type;
 
 	counted_ptr_val(counted_ptr_val const &) = delete;

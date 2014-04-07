@@ -132,7 +132,7 @@ private:
 			auto rv(fread(
 				buf, sizeof(CharType), count, fd
 			));
-			printf("zz off %zd, count %zd, sz %zd\n", offset, count, rv);
+
 			if (rv < ssize_t(count)) {
 				if (rv < 0)
 					rv = 0;

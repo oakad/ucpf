@@ -1592,26 +1592,24 @@ rope<ValueType, Policy> &operator+=(
 	l.append(r);
 	return l;
 }
-/*
+
+/* Implicitly uses default allocator if no current */
 template <typename ValueType, typename Policy, typename Range>
 rope<ValueType, Policy> operator+(
 	rope<ValueType, Policy>  const &l, Range const &r
 )
 {
 	typedef rope<ValueType, Policy> rope_type;
-	typedef typename rope_type::size_type size_type;
 
-	size_type s_len(rope_type::traits_type::length(s));
-
-	if (std::get<0>(l.treeplus))
-		return rope_type(
-			l.concat_value_iter(std::get<0>(l.treeplus), s, s_len),
-			std::get<1>(l.treeplus)
-		);
+	if (l.root_node)
+		return rope_type(l.concat_value_iter(
+				l.root_node, std::begin(r),
+				std::distance(std::begin(r), std::end(r))
+		));
 	else
-		return rope_type(s, std::get<1>(l.treeplus));
+		return rope_type(std::begin(r), std::end(r));
 }
-*/
+
 template <typename ValueType, typename Policy, typename Range>
 rope<ValueType, Policy> &operator+=(
 	rope<ValueType, Policy> &l, Range const &r
