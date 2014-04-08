@@ -17,6 +17,7 @@ namespace ucpf { namespace yesod { namespace coder {
 struct blowfish {
 	static constexpr size_t rounds = 16;
 	static constexpr size_t s_offset = rounds + 2;
+	static constexpr size_t key_box_size = s_offset + 1024;
 
 	uint32_t f_func(uint32_t v)
 	{
@@ -97,7 +98,7 @@ struct blowfish {
 		}
 	}
 
-	std::array<uint32_t, s_offset + 1024> k_box;
+	std::array<uint32_t, key_box_size> k_box;
 };
 
 }}}
