@@ -107,6 +107,19 @@ struct base86 {
 	}
 
 	template <typename Iter>
+	static bool decode(uint64_t &out, Iter &in)
+	{
+		uint32_t dh, dl;
+		if (decode(dl, in) && decode(dh, in)) {
+			out = dh;
+			out <<= 32;
+			out |= dl;
+			return true;
+		} else
+			return false;
+	}
+
+	template <typename Iter>
 	static void encode(Iter &out, uint32_t in)
 	{
 		uint8_t tail(0);
@@ -119,6 +132,13 @@ struct base86 {
 		}
 		*out = enc_tab_r[tail];
 		++out;
+	}
+
+	template <typename Iter>
+	static void encode(Iter &out, uint64_t in)
+	{
+		encode(out, static_cast<uint32_t>(in));
+		encode(out, static_cast<uint32_t>(in >> 32));
 	}
 };
 
