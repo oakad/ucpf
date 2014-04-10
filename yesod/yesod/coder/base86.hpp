@@ -77,21 +77,29 @@ struct base86 {
 		constexpr static uint32_t d_offset[3] = {
 			0x00000000, 0x00000056, 0x000000ac
 		};
-		std::array<uint8_t, 5> tok = {{
-			*in, *(++in), *(++in), *(++in), *(++in)
-		}};
 
-		for (auto &d: tok) {
-			if (d < dec_offset)
+		std::array<uint8_t, 5> tok;
+
+		for (auto c(0); c < 4; ++c) {
+			tok[c] = *in;
+			if (tok[c] < dec_offset)
 				return false;
-			d -= dec_offset;
-			if (d >= dec_tab.size())
+			tok[c] -= dec_offset;
+			if (tok[c] >= dec_tab.size())
 				return false;
-			d = dec_tab[d];
-			if (d == 0xff)
+			tok[c] = dec_tab[tok[c]];
+			if (tok[c] == 0xff)
 				return false;
+			++in;
 		}
 
+		tok[4] = *in;
+		if (tok[4] < dec_offset)
+			return false;
+		tok[4] -= dec_offset;
+		if (tok[4] >= dec_tab.size())
+			return false;
+		tok[4] = dec_tab[tok[4]];
 		if (tok[4] >= ternary_exp_tab.size())
 			return false;
 

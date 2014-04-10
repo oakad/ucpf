@@ -9,51 +9,46 @@
 #define BOOST_TEST_MODULE yesod
 #include <boost/test/included/unit_test.hpp>
 
-#include <yesod/coder/base86.hpp>
+#include <yesod/coder/base32.hpp>
 
 namespace ucpf { namespace yesod { namespace coder {
 
-BOOST_AUTO_TEST_CASE(base86_0)
+BOOST_AUTO_TEST_CASE(base32_0)
 {
-	auto *in(reinterpret_cast<uint8_t const *>(
-		"HelloWorld"
+	auto const *in(reinterpret_cast<uint8_t const *>(
+		"He11oWor1dUgy"
 	)), *in_p(in);
-	uint32_t v1(0), v2(0);
-	uint32_t v3(0x15c1ba2b), v4(0x6b716e3a);
-	base86::decode(v1, in_p);
-	base86::decode(v2, in_p);
-	BOOST_CHECK_EQUAL(v1, v3);
-	BOOST_CHECK_EQUAL(v2, v4);
+	uint64_t v1(0), v2(0x34c72242909491cull);
+	base32::decode(v1, in_p);
+	BOOST_CHECK_EQUAL(v1, v2);
 
-	uint8_t out[11] = {0};
+	uint8_t out[13] = {0};
 	uint8_t *out_p(&out[0]);
-	base86::encode(out_p, v3);
-	base86::encode(out_p, v4);
-	BOOST_CHECK(0 == std::strcmp(
+	base32::encode(out_p, v2);
+	BOOST_CHECK(0 == strcasecmp(
 		reinterpret_cast<char const *>(out),
 		reinterpret_cast<char const *>(in)
 	));
 }
 
-BOOST_AUTO_TEST_CASE(base86_1)
+BOOST_AUTO_TEST_CASE(base32_1)
 {
 	static std::random_device src;
 	std::mt19937 gen(src());
-	std::uniform_int_distribution<uint32_t> dis;
+	std::uniform_int_distribution<uint64_t> dis;
 	constexpr static int count = 10000;
-	std::array<uint8_t, 6> buf;
-	uint8_t *p;
-	buf[5] = 0;
+	std::array<uint8_t, 13> buf;
+	unsigned char *p;
+	buf[12] = 0;
 
 	for (int c(0); c < count; ++c) {
-		uint32_t d_r(dis(gen));
+		uint64_t d_r(dis(gen));
 		p = &buf.front();
-		base86::encode(p, d_r);
-		uint32_t d_d(0);
+		base32::encode(p, d_r);
+		uint64_t d_d(0);
 		p = &buf.front();
-		base86::decode(d_d, p);
+		base32::decode(d_d, p);
 		BOOST_CHECK_EQUAL(d_r, d_d);
 	}
 }
-
 }}}
