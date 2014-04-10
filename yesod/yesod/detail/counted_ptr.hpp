@@ -498,10 +498,7 @@ auto counted_ptr_val<ValueType>::construct(
 
 	construct_alloc(a, p, a_size);
 
-	std::unique_ptr<
-		container_type, std::function<void (container_type *p)>
-	> up(p, [&a, a_size](container_type *p) -> void {
-
+	auto deleter([&a, a_size](container_type *p) -> void {
 		typename aw_t::allocator_type aw_alloc(a);
 
 		if (p->extra_disp == &disp_a) {
@@ -527,6 +524,8 @@ auto counted_ptr_val<ValueType>::construct(
 		);
 	});
 
+	std::unique_ptr<container_type, decltype(deleter)> up(p, deleter);
+
 	typename aw_t::value_allocator_type value_alloc(a);
 	aw_t::value_allocator_traits::construct(
 		value_alloc, reinterpret_cast<ValueType *>(&p->val),
@@ -548,16 +547,15 @@ void counted_ptr_val<ValueType>::construct_alloc(
 		sizeof(aw_t), std::alignment_of<aw_t>::value
 	>::type aw_st;
 
-	std::unique_ptr<
-		container_type, std::function<void (container_type *p)>
-	> up(p, [&a, a_size](container_type *p) -> void {
-		typename aw_t::byte_allocator_type byte_alloc(a);	
+	auto deleter([&a, a_size](container_type *p) -> void {
+		typename aw_t::byte_allocator_type byte_alloc(a);
+
 		aw_t::byte_allocator_traits::deallocate(
-			byte_alloc,
-			reinterpret_cast<uint8_t *>(p),
-			a_size
+			byte_alloc, reinterpret_cast<uint8_t *>(p), a_size
 		);
 	});
+
+	std::unique_ptr<container_type, decltype(deleter)> up(p, deleter);
 
 	typename aw_t::allocator_type aw_alloc(a);
 

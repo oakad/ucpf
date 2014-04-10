@@ -8,8 +8,6 @@
 #if !defined(UCPF_YESOD_ITERATOR_JOINED_RANGE_MAR_27_2014_1630)
 #define UCPF_YESOD_ITERATOR_JOINED_RANGE_MAR_27_2014_1630
 
-#include <functional>
-
 #include <yesod/mpl/min_max.hpp>
 #include <yesod/mpl/common_base.hpp>
 #include <yesod/mpl/package_range_c.hpp>

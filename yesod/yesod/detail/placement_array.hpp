@@ -242,20 +242,18 @@ template <
 		}
 
 		int restore_mode(0);
-		std::function<void (value_type *)> backup_deleter(
-			[&a, &restore_mode, p](value_type *bp) {
-				switch (restore_mode) {
-				case 2:
-					allocator_traits::construct(
-						a, p, std::move(*bp)
-					);
-				case 1:
-					allocator_traits::destroy(a, bp);
-				case 0:
-					allocator_traits::deallocate(a, bp, 1);
-				}
+		auto backup_deleter([&a, &restore_mode, p](value_type *bp) {
+			switch (restore_mode) {
+			case 2:
+				allocator_traits::construct(
+					a, p, std::move(*bp)
+				);
+			case 1:
+				allocator_traits::destroy(a, bp);
+			case 0:
+				allocator_traits::deallocate(a, bp, 1);
 			}
-		);
+		});
 
 		std::unique_ptr<value_type, decltype(backup_deleter)> bp(
 			allocator_traits::allocate(a, 1), backup_deleter
@@ -284,30 +282,28 @@ template <
 		return pos;
 	}
 
+	template <typename Pred>
 	bool for_each_above(
-		size_type pos,
-		std::function<bool (size_type, reference)> &&f,
-		size_type base_offset = 0
+		size_type pos, Pred &&pred, size_type base_offset = 0
 	)
 	{
 		for (; pos < items.size(); ++pos) {
 			if (this->test_valid(&(*this)[pos], pos)) {
-				if (!f(pos + base_offset, (*this)[pos]))
+				if (!pred(pos + base_offset, (*this)[pos]))
 					return false;
 			}
 		}
 		return true;
 	}
 
+	template <typename Pred>
 	bool for_each_above(
-		size_type pos,
-		std::function<bool (size_type, const_reference)> &&f,
-		size_type base_offset = 0
+		size_type pos, Pred &&pred, size_type base_offset = 0
 	) const
 	{
 		for (; pos < items.size(); ++pos) {
 			if (this->test_valid(&(*this)[pos], pos)) {
-				if (!f(pos + base_offset, (*this)[pos]))
+				if (!pred(pos + base_offset, (*this)[pos]))
 					return false;
 			}
 		}

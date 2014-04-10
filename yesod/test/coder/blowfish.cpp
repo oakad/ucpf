@@ -10,6 +10,7 @@
 #include <boost/test/included/unit_test.hpp>
 
 #include <yesod/coder/blowfish.hpp>
+#include <yesod/coder/detail/pi_word.hpp>
 
 namespace ucpf { namespace yesod { namespace coder {
 
@@ -30,7 +31,7 @@ BOOST_AUTO_TEST_CASE(blowfish_0)
 	uint8_t key[] = "any key 1 2 3";
 
 	blowfish cd;
-	cd.set_key(key, sizeof(key) - 1);
+	cd.set_key(key, sizeof(key) - 1, detail::bellard_pi_word);
 	std::transform(
 		in.begin(), in.end(), out_enc.begin(), std::bind(
 			&blowfish::encrypt, std::ref(cd),

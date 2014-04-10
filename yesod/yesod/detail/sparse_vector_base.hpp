@@ -99,14 +99,11 @@ template <
 		return !height;
 	}
 
-	bool for_each_above(
-		size_type pos, std::function<bool (size_type, reference)> &&f
-	);
+	template <typename Pred>
+	bool for_each_above(size_type pos, Pred &&pred);
 
-	bool for_each_above(
-		size_type pos,
-		std::function<bool (size_type, const_reference)> &&f
-	) const;
+	template <typename Pred>
+	bool for_each_above(size_type pos, Pred &&pred) const;
 
 	template <typename Pred>
 	void remove_if(Pred pred);

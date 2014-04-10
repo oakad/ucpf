@@ -1,7 +1,7 @@
-Concatenation 0x1cdac90 (rc = 1, depth = 2, size = 663, not balanced)
-  Concatenation 0x1cdac40 (rc = 1, depth = 1, size = 643, not balanced)
-    Leaf 0x1cdab50 (rc = 2, depth = 0, size = 20) A novice asked the M
-    Substring 0x1cdaba0 (rc = 2, depth = 0, size = 623) aster: "Here is a programmer that never ...
-  Leaf 0x1cdabf0 (rc = 2, depth = 0, size = 20) he mystery of Tao."
+Concatenation 0x16fcc90 (rc = 1, depth = 2, size = 663, not balanced)
+  Concatenation 0x16fcc40 (rc = 1, depth = 1, size = 643, not balanced)
+    Leaf 0x16fcb50 (rc = 2, depth = 0, size = 20) A novice asked the M
+    Substring 0x16fcba0 (rc = 2, depth = 0, size = 623) aster: "Here is a programmer that never ...
+  Leaf 0x16fcbf0 (rc = 2, depth = 0, size = 20) he mystery of Tao."
 
 

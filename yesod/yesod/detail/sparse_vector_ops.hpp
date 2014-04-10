@@ -11,8 +11,9 @@
 namespace ucpf { namespace yesod {
 
 template <typename ValueType, typename Policy>
+template <typename Pred>
 bool sparse_vector<ValueType, Policy>::for_each_above(
-	size_type pos, std::function<bool (size_type, reference)> &&f
+	size_type pos, Pred &&pred
 )
 {
 	loc_pair tree_loc[height];
@@ -26,7 +27,7 @@ bool sparse_vector<ValueType, Policy>::for_each_above(
 			));
 			if (!node->for_each_above(
 				tree_loc[height - 1].off,
-				std::forward<decltype(f)>(f),
+				std::forward<Pred>(pred),
 				pos - tree_loc[height - 1].off
 			))
 				return false;
@@ -39,8 +40,9 @@ bool sparse_vector<ValueType, Policy>::for_each_above(
 }
 
 template <typename ValueType, typename Policy>
+template <typename Pred>
 bool sparse_vector<ValueType, Policy>::for_each_above(
-	size_type pos, std::function<bool (size_type, const_reference)> &&f
+	size_type pos, Pred &&pred
 ) const
 {
 	loc_pair tree_loc[height];
@@ -54,7 +56,7 @@ bool sparse_vector<ValueType, Policy>::for_each_above(
 			));
 			if (!node->for_each_above(
 				tree_loc[height - 1].off,
-				std::forward<decltype(f)>(f),
+				std::forward<Pred>(pred),
 				pos - tree_loc[height - 1].off
 			))
 				return false;

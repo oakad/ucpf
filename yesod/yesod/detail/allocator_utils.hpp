@@ -36,14 +36,15 @@ struct allocator_array_helper {
 		allocator_type x_alloc(a);
 		size_type init_length(0);
 
-		std::unique_ptr<T[], std::function<void (T *)>> s_ptr(
-			reinterpret_cast<T *>(up),
-			[&x_alloc, &init_length, n](T *p) -> void {
-				for (; init_length > 0; --init_length)
-					allocator_traits::destroy(
-						x_alloc, &p[init_length - 1]
-					);
-			}
+		auto deleter([&x_alloc, &init_length, n](T *p) -> void {
+			for (; init_length > 0; --init_length)
+				allocator_traits::destroy(
+					x_alloc, &p[init_length - 1]
+				);
+		});
+
+		std::unique_ptr<T[], decltype(deleter)> s_ptr(
+			reinterpret_cast<T *>(up), deleter
 		);
 
 		for (; init_length < n; ++init_length)
@@ -60,11 +61,13 @@ struct allocator_array_helper {
 	{
 		allocator_type x_alloc(a);
 
-		std::unique_ptr<T[], std::function<void (T *)>> s_ptr(
-			allocator_traits::allocate(x_alloc, n),
-			[&x_alloc, n](T *p) -> void {
-				allocator_traits::deallocate(x_alloc, p, n);
-			}
+		auto deleter([&x_alloc, n](T *p) -> void {
+			allocator_traits::deallocate(x_alloc, p, n);
+		});
+
+		std::unique_ptr<T[], decltype(deleter)> s_ptr(
+			allocator_traits::allocate(x_alloc, n), deleter
+			
 		);
 
 		make(a, s_ptr.get(), n, std::forward<Args>(args)...);
@@ -78,14 +81,15 @@ struct allocator_array_helper {
 		size_type n(last - first);
 		size_type init_length(0);
 
-		std::unique_ptr<T[], std::function<void (T *)>> s_ptr(
-			reinterpret_cast<T *>(up),
-			[&x_alloc, &init_length, n](T *p) -> void {
-				for (; init_length > 0; --init_length)
-					allocator_traits::destroy(
-						x_alloc, &p[init_length - 1]
-					);
-			}
+		auto deleter([&x_alloc, &init_length, n](T *p) -> void {
+			for (; init_length > 0; --init_length)
+				allocator_traits::destroy(
+					x_alloc, &p[init_length - 1]
+				);
+		});
+		std::unique_ptr<T[], decltype(deleter)> s_ptr(
+			reinterpret_cast<T *>(up), deleter
+			
 		);
 
 		for (; first != last; ++first)
@@ -102,11 +106,12 @@ struct allocator_array_helper {
 		allocator_type x_alloc(a);
 		size_type n(last - first);
 
-		std::unique_ptr<T[], std::function<void (T *)>> s_ptr(
-			allocator_traits::allocate(x_alloc, n),
-			[&x_alloc, n](T *p) -> void {
-				allocator_traits::deallocate(x_alloc, p, n);
-			}
+		auto deleter([&x_alloc, n](T *p) -> void {
+			allocator_traits::deallocate(x_alloc, p, n);
+		});
+
+		std::unique_ptr<T[], decltype(deleter)> s_ptr(
+			allocator_traits::allocate(x_alloc, n), deleter
 		);
 
 		make(a, s_ptr.get(), first, last);

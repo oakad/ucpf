@@ -189,11 +189,13 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 ) -> std::pair<pair_type *, uintptr_t>
 {
 	size_type shrink(0);
-	std::unique_ptr<value_pair, std::function<void (value_pair *)>> v_ptr(
-		p->leaf_ptr(), [&shrink, this](value_pair *v) -> void {
-			if (shrink)
-				v->shrink_suffix(trie.get_allocator(), shrink);
-		}
+	auto deleter([&shrink, this](value_pair *v) -> void {
+		if (shrink)
+			v->shrink_suffix(trie.get_allocator(), shrink);
+	});
+
+	std::unique_ptr<value_pair, decltype(deleter)> v_ptr(
+		p->leaf_ptr(), deleter
 	);
 
 	auto suffix(v_ptr->suffix());
@@ -417,19 +419,19 @@ auto string_map<CharType, ValueType, Policy>::value_pair::construct(
 	auto suffix_length(last - first);
 	decltype(suffix_length) init_length(0);
 
-	std::unique_ptr<char_type[], std::function<void (char_type *)>> s_ptr(
-		nullptr, [
-			&ca, &init_length, suffix_length
-		](char_type *p) -> void {
+	auto s_deleter(
+		[&ca, &init_length, suffix_length](char_type *p) -> void {
 			for (; init_length > 0; --init_length)
 				char_allocator_traits::destroy(
 					ca, &p[init_length - 1]
 				);
 
-			char_allocator_traits::deallocate(
-				ca, p, suffix_length
-			);
+			char_allocator_traits::deallocate(ca, p, suffix_length);
 		}
+	);
+
+	std::unique_ptr<char_type[], decltype(s_deleter)> s_ptr(
+		nullptr, s_deleter
 	);
 
 	if (suffix_length > Policy::short_suffix_length) {
@@ -446,11 +448,12 @@ auto string_map<CharType, ValueType, Policy>::value_pair::construct(
 	}
 
 	pair_allocator_type pa(a_);
-	std::unique_ptr<value_pair, std::function<void (value_pair *)>> p_ptr(
-		pair_allocator_traits::allocate(pa, 1),
-		[&pa](value_pair *p) -> void {
-			pair_allocator_traits::deallocate(pa, p, 1);
-		}
+	auto p_deleter([&pa](value_pair *p) -> void {
+		pair_allocator_traits::deallocate(pa, p, 1);
+	});
+
+	std::unique_ptr<value_pair, decltype(p_deleter)> p_ptr(
+		pair_allocator_traits::allocate(pa, 1), p_deleter
 	);
 
 	pair_allocator_traits::construct(
@@ -459,15 +462,15 @@ auto string_map<CharType, ValueType, Policy>::value_pair::construct(
 	if (s_ptr)
 		p_ptr->long_suffix.data = s_ptr.release();
 	else {
-		decltype(s_ptr) ss_ptr(
-			p_ptr->suffix(), [
-				&ca, &init_length
-			](char_type *p) -> void {
-				for (; init_length > 0; --init_length)
-					char_allocator_traits::destroy(
-						ca, &p[init_length - 1]
-					);
-			}
+		auto ss_deleter([&ca, &init_length](char_type *p) -> void {
+			for (; init_length > 0; --init_length)
+				char_allocator_traits::destroy(
+					ca, &p[init_length - 1]
+				);
+		});
+
+		std::unique_ptr<char_type[], decltype(ss_deleter)> ss_ptr(
+			p_ptr->suffix(), ss_deleter
 		);
 
 		for (; init_length < suffix_length; ++init_length) {

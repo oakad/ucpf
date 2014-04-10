@@ -1,8 +1,9 @@
 #include <cstdio>
 #include <array>
 #include <chrono>
-#include <yesod/coder/blowfish.hpp>
 #include <yesod/coder/base86.hpp>
+#include <yesod/coder/blowfish.hpp>
+#include <yesod/coder/detail/pi_word.hpp>
 
 #include <openssl/blowfish.h>
 
@@ -16,7 +17,7 @@ int main()
 	};
 	blowfish cd;
 
-	cd.set_key(x_key, 16);
+	cd.set_key(x_key, 16, ucpf::yesod::coder::detail::bellard_pi_word);
 
 	std::array<uint64_t, 4> in = {{
 		0x12345678ull, 0x984674ull, 0x34985ull, 0x348573908ull

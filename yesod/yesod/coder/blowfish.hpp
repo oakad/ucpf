@@ -9,8 +9,7 @@
 #if !defined(UCPF_YESOD_CODER_BLOWFISH_MAR_13_2014_1630)
 #define UCPF_YESOD_CODER_BLOWFISH_MAR_13_2014_1630
 
-#include <yesod/coder/detail/pi_word.hpp>
-#include <functional>
+#include <array>
 
 namespace ucpf { namespace yesod { namespace coder {
 
@@ -59,12 +58,8 @@ struct blowfish {
 		return (uint64_t(lv) << 32) + rv;
 	}
 
-	void set_key(
-		uint8_t *key, size_t key_length,
-		std::function<
-			uint32_t (uint32_t)
-		> init_gen = detail::bellard_pi_word
-	)
+	template <typename InitGen>
+	void set_key(uint8_t *key, size_t key_length, InitGen &&init_gen)
 	{
 		size_t c(0), k(0);
 		for (; c < s_offset; ++c) {
