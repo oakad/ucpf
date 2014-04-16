@@ -122,6 +122,13 @@ struct range {
 		return std::distance(first, last);
 	}
 
+	reference operator[](difference_type pos) const
+	{
+		auto iter(first);
+		std::advance(iter, pos);
+		return *iter;
+	}
+
 private:
 	Iterator first;
 	Iterator last;

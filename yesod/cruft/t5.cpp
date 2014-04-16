@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <array>
+#include <vector>
 #include <chrono>
 #include <yesod/coder/base86.hpp>
 #include <yesod/coder/blowfish.hpp>
@@ -11,20 +12,20 @@ using namespace ucpf::yesod::coder;
 
 int main()
 {
-	uint8_t x_key[] = {
+	std::vector<uint8_t> x_key({
 		0x1a, 0xbe, 0x1b, 0x99, 0xf1, 0x36, 0xc1, 0x27,
 		0x60, 0x53, 0xaf, 0x3e, 0xed, 0x6b, 0x10, 0x51
-	};
+	});
 	blowfish cd;
 
-	cd.set_key(x_key, 16, ucpf::yesod::coder::detail::bellard_pi_word);
+	cd.set_key(x_key, ucpf::yesod::coder::detail::bellard_pi_word);
 
 	std::array<uint64_t, 4> in = {{
 		0x12345678ull, 0x984674ull, 0x34985ull, 0x348573908ull
 	}};
 
 	BF_KEY r_key;
-	BF_set_key(&r_key, 16, x_key);
+	BF_set_key(&r_key, 16, &x_key.front());
 
 	for (auto c(0); c < 18; ++c) {
 		printf("m %08x, s %08x, eq %d\n", cd.k_box[c], r_key.P[c], cd.k_box[c] == r_key.P[c]);

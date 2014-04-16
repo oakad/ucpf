@@ -28,10 +28,10 @@ BOOST_AUTO_TEST_CASE(blowfish_0)
 	}};
 	std::array<uint64_t, 16> out_enc, out_dec;
 
-	uint8_t key[] = "any key 1 2 3";
+	std::string key("any key 1 2 3");
 
 	blowfish cd;
-	cd.set_key(key, sizeof(key) - 1, detail::bellard_pi_word);
+	cd.set_key(key, detail::bellard_pi_word);
 	std::transform(
 		in.begin(), in.end(), out_enc.begin(), std::bind(
 			&blowfish::encrypt, std::ref(cd),

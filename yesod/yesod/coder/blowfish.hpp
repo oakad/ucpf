@@ -58,9 +58,10 @@ struct blowfish {
 		return (uint64_t(lv) << 32) + rv;
 	}
 
-	template <typename InitGen>
-	void set_key(uint8_t *key, size_t key_length, InitGen &&init_gen)
+	template <typename Range, typename InitGen>
+	void set_key(Range const &key, InitGen &&init_gen)
 	{
+		auto key_length(key.size());
 		size_t c(0), k(0);
 		for (; c < s_offset; ++c) {
 			k_box[c] = key[k % key_length];
