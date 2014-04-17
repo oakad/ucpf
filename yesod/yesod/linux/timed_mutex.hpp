@@ -20,16 +20,26 @@ extern "C" {
 
 namespace ucpf { namespace yesod {
 
+template <bool Interprocess = false, int SpinCount = 100>
 struct timed_mutex {
+	template <bool>
 	friend struct condition_variable;
 
-	timed_mutex()
-	: state(0)
-	{}
+	static void init(timed_mutex &m)
+	{
+		__atomic_store_n(&m.state, 0, __ATOMIC_SEQ_CST);
+	}
+
+	timed_mutex(
+		typename std::enable_if<!Interprocess>::type * = nullptr
+	)
+	{
+		init(*this);
+	}
 
 	void lock()
 	{
-		for (auto cnt(0); cnt < spin_count; ++cnt) {
+		for (auto cnt(0); cnt < SpinCount; ++cnt) {
 			if (locked & __atomic_fetch_or(
 				&state, locked, __ATOMIC_SEQ_CST
 			))
@@ -54,7 +64,7 @@ struct timed_mutex {
 
 		__atomic_and_fetch(&state, ~locked, __ATOMIC_SEQ_CST);
 
-		for (auto cnt(0); cnt < spin_count; ++cnt) {
+		for (auto cnt(0); cnt < SpinCount; ++cnt) {
 			if (locked & __atomic_load_4(&state, __ATOMIC_SEQ_CST))
 				return;
 
@@ -63,7 +73,10 @@ struct timed_mutex {
 
 		__atomic_and_fetch(&state, ~busy, __ATOMIC_SEQ_CST);
 
-		futex(&state, FUTEX_WAKE_PRIVATE, 1, nullptr, nullptr, 0);
+		futex(
+			&state, FUTEX_WAKE | futex_op_flags, 1, nullptr,
+			nullptr, 0
+		);
 	}
 
 	bool try_lock()
@@ -102,8 +115,8 @@ struct timed_mutex {
 			std::chrono::nanoseconds ns(rel_time - s);
 			struct timespec ts = { s, ns };
 			futex(
-				&state, FUTEX_WAIT_PRIVATE, locked | busy,
-				&ts, nullptr, 0
+				&state, FUTEX_WAIT | futex_op_flags,
+				locked | busy, &ts, nullptr, 0
 			);
 		}
 		return true;
@@ -121,14 +134,14 @@ private:
 			&state, locked | busy, __ATOMIC_SEQ_CST
 		))
 			futex(
-				&state, FUTEX_WAIT_PRIVATE, locked | busy,
-				nullptr, nullptr, 0
+				&state, FUTEX_WAIT | futex_op_flags,
+				locked | busy, nullptr, nullptr, 0
 			);
 	}
 
 	static int futex(
-		int *uaddr, int op, int val, struct timespec const *timeout,
-		int *uaddr2, int val3
+		int volatile *uaddr, int op, int val,
+		struct timespec const *timeout, int volatile *uaddr2, int val3
 	)
 	{
 		return syscall(
@@ -136,10 +149,11 @@ private:
 		);
 	}
 
-	constexpr static int spin_count = 100;
+	constexpr static int futex_op_flags
+	= Interprocess ? 0 : FUTEX_PRIVATE_FLAG;
 	constexpr static int locked = 1;
 	constexpr static int busy = 2;
-	alignas(8) int state;
+	alignas(8) int volatile state;
 };
 
 }}

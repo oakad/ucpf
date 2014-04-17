@@ -20,10 +20,19 @@ extern "C" {
 
 namespace ucpf { namespace yesod {
 
+template <bool Interprocess = false>
 struct event_variable {
-	event_variable()
-	: seq_count(0)
-	{}
+	static void init(event_variable &ev)
+	{
+		__atomic_store_n(&ev.seq_count, 0, __ATOMIC_SEQ_CST);
+	}
+
+	event_variable(
+		typename std::enable_if<!Interprocess>::type * = nullptr
+	)
+	{
+		init(*this);
+	}
 
 	void notify_one()
 	{
@@ -39,7 +48,7 @@ struct event_variable {
 	{
 		__atomic_add_fetch(&seq_count, 1, __ATOMIC_SEQ_CST);
 		futex(
-			&seq_count, FUTEX_WAKE_PRIVATE, cnt,
+			&seq_count, FUTEX_WAKE | futex_op_flags, cnt,
 			nullptr, nullptr, 0
 		);
 	}
@@ -48,7 +57,7 @@ struct event_variable {
 	{
 		int c_seq(__atomic_load_4(&seq_count, __ATOMIC_SEQ_CST));
 		futex(
-			&seq_count, FUTEX_WAIT_PRIVATE, c_seq,
+			&seq_count, FUTEX_WAIT | futex_op_flags, c_seq,
 			nullptr, nullptr, 0
 		);
 	}
@@ -62,14 +71,15 @@ struct event_variable {
 
 		int c_seq(__atomic_load_4(&seq_count, __ATOMIC_SEQ_CST));
 		return 0 == futex(
-			&seq_count, FUTEX_WAIT_PRIVATE, c_seq, &ts, nullptr, 0
+			&seq_count, FUTEX_WAIT | futex_op_flags, c_seq, &ts,
+			nullptr, 0
 		);
 	}
 
 private:
 	static int futex(
-		int *uaddr, int op, int val, struct timespec const *timeout,
-		int *uaddr2, int val3
+		int volatile *uaddr, int op, int val,
+		struct timespec const *timeout, int volatile *uaddr2, int val3
 	)
 	{
 		return syscall(
@@ -77,7 +87,9 @@ private:
 		);
 	}
 
-	alignas(8) int seq_count;
+	constexpr static int futex_op_flags
+	= Interprocess ? 0 : FUTEX_PRIVATE_FLAG;
+	alignas(8) int volatile seq_count;
 };
 
 }}

@@ -17,13 +17,15 @@
 namespace ucpf { namespace yesod {
 
 struct shared_mutex {
+	typedef timed_mutex<> base_mutex_type;
+
 	shared_mutex()
 	: write_lock(false), reader_count(0)
 	{}
 
 	void lock()
 	{
-		std::unique_lock<timed_mutex> l_g(state_lock);
+		std::unique_lock<base_mutex_type> l_g(state_lock);
 
 		while (write_lock.test_and_set())
 			ev.wait();
@@ -31,7 +33,7 @@ struct shared_mutex {
 
 	void lock_shared()
 	{
-		std::unique_lock<timed_mutex> l_g(state_lock);
+		std::unique_lock<base_mutex_type> l_g(state_lock);
 
 		if (!reader_count.fetch_add(1)) {
 			while (write_lock.test_and_set())
@@ -53,7 +55,9 @@ struct shared_mutex {
 
 	bool try_lock()
 	{
-		std::unique_lock<timed_mutex> l_g(state_lock, std::try_to_lock);
+		std::unique_lock<base_mutex_type> l_g(
+			state_lock, std::try_to_lock
+		);
 		if (!l_g.owns_lock())
 			return false;
 
@@ -62,7 +66,9 @@ struct shared_mutex {
 
 	bool try_lock_shared()
 	{
-		std::unique_lock<timed_mutex> l_g(state_lock, std::try_to_lock);
+		std::unique_lock<base_mutex_type> l_g(
+			state_lock, std::try_to_lock
+		);
 		if (!l_g.owns_lock())
 			return false;
 
@@ -80,8 +86,8 @@ struct shared_mutex {
 	}
 
 private:
-	event_variable ev;
-	timed_mutex state_lock;
+	event_variable<> ev;
+	base_mutex_type state_lock;
 	std::atomic_flag write_lock;
 	std::atomic_ulong reader_count;
 };

@@ -14,67 +14,52 @@
 namespace ucpf { namespace yesod {
 namespace detail {
 
+struct value_wrapper<typename T>
+
 template <
 	typename KeyType, typename ValueType, typename CompareF, typename Alloc
 > struct flat_map_impl {
 	typedef KeyType   key_type;
-	typedef ValueType value_type;
+	typedef std::tuple<KeyType, ValueType> value_type;
 	typedef CompareF  key_compare;
-
-	typedef typename std::allocator_traits<
-		Alloc
-	>::template rebind_alloc<key_type> key_allocator_type;
-
-	typedef typename std::allocator_traits<
-		Alloc
-	>::template rebind_traits<key_type> key_allocator_traits;
-
-	typedef typename key_allocator_type::reference       key_reference;
-	typedef typename key_allocator_type::const_reference const_key_reference;
-	typedef typename key_allocator_traits::pointer       key_pointer;
-	typedef typename key_allocator_traits::const_pointer const_key_pointer;
-
-	typedef typename std::allocator_traits<
-		Alloc
-	>::template rebind_alloc<value_type> allocator_type;
-
-	typedef typename std::allocator_traits<
-		Alloc
-	>::template rebind_traits<value_type> allocator_traits;
-
-	typedef typename allocator_type::reference       reference;
-	typedef typename allocator_type::const_reference const_reference;
-	typedef typename allocator_traits::size_type     size_type;
-	typedef typename allocator_traits::pointer       pointer;
-	typedef typename allocator_traits::const_pointer const_pointer;
 
 	flat_map_impl()
 	: valid_pos(nullptr), keys(nullptr), values(nullptr), alloc_length(0)
 	{}
 
 private:
-	typedef unsigned long bitset_type;
+	typedef aligned_storage_t<value_type> value_storage_type;
 
-	typedef typename std::allocator_traits<
-		Alloc
-	>::template rebind_alloc<bitmap_type> bitset_allocator_type;
+	typedef allocator_array_helper<
+		value_storage_type, Alloc
+	> value_alloc;
 
-	typedef typename std::allocator_traits<
-		Alloc
-	>::template rebind_traits<bitmap_type> bitset_allocator_traits;
-
-	bitset_type *valid_pos;
-	detail::aligned_storage_t<
-		typename std::conditional<
-			std::is_same<ValueType, void>::value,
-			std::tuple<key_type>,
-			std::tuple<key_type, value_type>
-		>::type
-	> *items;
+	dynamic_bitset<Alloc> valid;
+	value_storage_type *values;
 	size_type alloc_length;
 };
 
 }
+
+template <
+	typename KeyType, typename ValueType, typename CompareF, typename Alloc
+> struct flat_map {
+
+private:
+	detail::flat_map_impl<
+		KeyType, ValueType, CompareF, Alloc
+	> base_map;
+};
+
+template <
+	typename KeyType, typename CompareF, typename Alloc
+> struct flat_set {
+
+private:
+	detail::flat_map_impl<
+		KeyType, mpl::void_, CompareF, Alloc
+	> base_map;
+};
 
 }}
 #endif
