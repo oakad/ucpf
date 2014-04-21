@@ -17,14 +17,25 @@ namespace detail {
 struct value_wrapper<typename T>
 
 template <
-	typename KeyType, typename ValueType, typename CompareF, typename Alloc
+	typename KeyType, typename ValueType, typename KeyOfValue,
+	typename CompareF, typename Alloc
 > struct flat_map_impl {
 	typedef KeyType   key_type;
-	typedef std::tuple<KeyType, ValueType> value_type;
+	typedef ValueType value_type;
 	typedef CompareF  key_compare;
 
-	flat_map_impl()
-	: valid_pos(nullptr), keys(nullptr), values(nullptr), alloc_length(0)
+	template <typename ValueType1>
+	struct iterator_base : iterator::facade<
+		iterator_base<ValueType1>, ValueType1,
+		std::random_access_iterator_tag
+	> {
+	};
+
+	typedef iterator_base<value_type> iterator;
+	typedef iterator_base<value_type const> const_iterator;
+
+	flat_map_impl(Alloc const &a = Alloc())
+	: data_valid(a), data_first(nullptr), data_last(nullptr)
 	{}
 
 private:
@@ -34,20 +45,29 @@ private:
 		value_storage_type, Alloc
 	> value_alloc;
 
-	dynamic_bitset<Alloc> valid;
-	value_storage_type *values;
-	size_type alloc_length;
+	dynamic_bitset<Alloc> data_valid;
+	value_storage_type *data_first;
+	size_type data_size;
 };
 
 }
 
 template <
-	typename KeyType, typename ValueType, typename CompareF, typename Alloc
+	typename KeyType, typename T, typename CompareF, typename Alloc
 > struct flat_map {
-
+	typedef KeyType key_type;
+	typedef T       mapped_type;
+	typedef std::pair<key_type const, mapped_type> value_type;
 private:
+	struct select_first {
+		static key_type const &apply(value_type const &p)
+		{
+			return std::get<0>(p);
+		}
+	};
+
 	detail::flat_map_impl<
-		KeyType, ValueType, CompareF, Alloc
+		key_type, value_type, select_first, CompareF, Alloc
 	> base_map;
 };
 
@@ -56,8 +76,15 @@ template <
 > struct flat_set {
 
 private:
+	struct identity {
+		static key_type const &apply(key_type const &k)
+		{
+			return k;
+		}
+	};
+
 	detail::flat_map_impl<
-		KeyType, mpl::void_, CompareF, Alloc
+		key_type, key_type, identity, CompareF, Alloc
 	> base_map;
 };
 

@@ -11,7 +11,7 @@
 #include <yesod/mpl/at.hpp>
 #include <yesod/mpl/map.hpp>
 #include <yesod/mpl/has_key.hpp>
-#include <yesod/static_log2.hpp>
+#include <yesod/log2.hpp>
 
 #include <boost/operators.hpp>
 
@@ -23,11 +23,10 @@ struct float_tag {};
 template <
 	typename StorageType, typename MachineType = StorageType,
 	unsigned int MantissaBits = std::numeric_limits<MachineType>::digits,
-	unsigned int ExponentBits = static_log2<
-		uint32_t,
+	unsigned int ExponentBits = order_base_2(uint32_t(
 		std::numeric_limits<MachineType>::max_exponent
 		- std::numeric_limits<MachineType>::min_exponent
-	>::value
+	))
 > struct storable_float_traits {
 	typedef StorageType storage_type;
 	typedef MachineType machine_type;

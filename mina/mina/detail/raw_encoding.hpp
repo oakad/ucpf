@@ -10,7 +10,7 @@
 
 #include <array>
 #include <cstdint>
-#include <yesod/static_log2.hpp>
+#include <yesod/log2.hpp>
 
 namespace ucpf { namespace mina { namespace detail {
 
@@ -38,7 +38,7 @@ struct scalar_rank {
 	{
 		typedef typename std::remove_reference<T>::type Tr;
 		typedef std::integral_constant<
-			int, yesod::static_log2<uint32_t, sizeof(Tr)>::value + 1
+			int, yesod::order_base_2(sizeof(Tr)) + 1
 		> rv_type;
 
 		return rv_type::value <= i128 ? rv_type::value : ie;
