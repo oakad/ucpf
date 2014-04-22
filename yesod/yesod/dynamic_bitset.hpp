@@ -9,6 +9,8 @@
 #if !defined(UCPF_YESOD_DYNAMIC_BITSET_20140417T2300)
 #define UCPF_YESOD_DYNAMIC_BITSET_20140417T2300
 
+#include <limits>
+#include <algorithm>
 #include <yesod/detail/allocator_utils.hpp>
 
 namespace ucpf { namespace yesod {
@@ -70,10 +72,11 @@ template <
 	bool test(size_type n) const
 	{
 		auto s(get());
-
-		if (std::get<1>(s) < n) {
+		printf("test %zd, %zd\n", n, std::get<1>(s));
+		if (n < std::get<1>(s)) {
 			auto w_off(n / word_bits);
 			auto b_off(n % word_bits);
+			printf("fgf %zx, %zx\n", w_off, std::get<0>(s)[w_off]);
 			return std::get<0>(s)[w_off] & (base_bit >> b_off);
 		} else
 			return std::get<2>(s);
@@ -85,10 +88,14 @@ template <
 		auto w_off(n / word_bits);
 		auto b_off(n % word_bits);
 
-		if (std::get<1>(s) < n)
+		printf("set %zd, %zd, %zd\n", n, w_off, b_off);
+		printf("xx set %zd, %zx\n", std::get<1>(s), base_bit);
+		if (n < std::get<1>(s))
 			std::get<0>(s)[w_off] |= (base_bit >> b_off);
 		else if (!std::get<2>(s)) {
-			s = grow_set(w_off);
+			printf("aa %p\n", std::get<0>(s));
+			s = grow_set(w_off + 1);
+			printf("bb %p\n", std::get<0>(s));
 			std::get<0>(s)[w_off] |= (base_bit >> b_off);
 		}
 
@@ -101,10 +108,10 @@ template <
 		auto w_off(n / word_bits);
 		auto b_off(n % word_bits);
 
-		if (std::get<1>(s) < n)
+		if (n < std::get<1>(s))
 			std::get<0>(s)[w_off] &= ~(base_bit >> b_off);
 		else if (std::get<2>(s)) {
-			s = grow_set(w_off);
+			s = grow_set(w_off + 1);
 			std::get<0>(s)[w_off] &= ~(base_bit >> b_off);
 		}
 
@@ -137,12 +144,13 @@ private:
 
 	std::tuple<word_type *, size_type, bool> get()
 	{
-		if (std::get<0>(bset) & 1)
+		if (std::get<0>(bset) & 1) {
+			printf("get xx\n");
 			return std::make_tuple(
 				&std::get<0>(bset), word_bits - 2,
 				bool(std::get<0>(bset) & 2)
 			);
-		else {
+		} else {
 			auto ptr(reinterpret_cast<word_type *>(
 				std::get<0>(bset)
 			));
@@ -158,6 +166,7 @@ private:
 		auto sz(AllocPolicy::best_size(word_sz + 1));
 		auto n_ptr(allocator_helper_type::alloc(std::get<1>(bset), sz));
 
+		printf("grow %zd, %zd\n", word_sz, sz);
 		if (std::get<0>(bset) & 1) {
 			n_ptr[1] = std::get<0>(bset);
 			n_ptr[0] = ((sz - 1) << 1)

@@ -23,7 +23,7 @@ constexpr int ilog2(uint64_t v)
 }
 
 template <typename T>
-constexpr T order_base_2(T v)
+constexpr int order_base_2(T v)
 {
 	return v > (T(1) << ilog2(v)) ? ilog2(v) + 1 : ilog2(v);
 }

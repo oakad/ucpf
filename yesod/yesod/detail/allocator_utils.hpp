@@ -10,6 +10,7 @@
 #define UCPF_YESOD_DETAIL_ALLOCATOR_UTILS_20140324T1330
 
 #include <memory>
+#include <yesod/log2.hpp>
 
 namespace ucpf { namespace yesod { namespace detail {
 
@@ -17,6 +18,13 @@ template <typename T>
 using aligned_storage_t = typename std::aligned_storage<
 	sizeof(T), std::alignment_of<T>::value
 >::type;
+
+struct pow2_alloc_policy {
+	static size_t best_size(size_t sz)
+	{
+		return size_t(1) << order_base_2(sz);
+	}
+};
 
 template <typename T, typename Alloc>
 struct allocator_array_helper {
@@ -30,8 +38,8 @@ struct allocator_array_helper {
 
 	typedef typename allocator_traits::size_type size_type;
 
-	template <typename U, typename... Args>
-	static T *make(Alloc const &a, U *up, size_type n, Args&&... args)
+	template <typename Alloc1, typename U, typename... Args>
+	static T *make(Alloc1 const &a, U *up, size_type n, Args&&... args)
 	{
 		allocator_type x_alloc(a);
 		size_type init_length(0);
@@ -56,8 +64,8 @@ struct allocator_array_helper {
 		return s_ptr.release();
 	}
 
-	template <typename... Args>
-	static T *alloc(Alloc const &a, size_type n, Args&&... args)
+	template <typename Alloc1, typename... Args>
+	static T *alloc(Alloc1 const &a, size_type n, Args&&... args)
 	{
 		allocator_type x_alloc(a);
 
@@ -74,8 +82,8 @@ struct allocator_array_helper {
 		return s_ptr.release();
 	}
 
-	template <typename U, typename Iterator>
-	static T *make(Alloc const &a, U *up, Iterator first, Iterator last)
+	template <typename Alloc1, typename U, typename Iterator>
+	static T *make(Alloc1 const &a, U *up, Iterator first, Iterator last)
 	{
 		allocator_type x_alloc(a);
 		size_type n(last - first);
@@ -100,8 +108,8 @@ struct allocator_array_helper {
 		return s_ptr.release();
 	}
 
-	template <typename Iterator>
-	static T *alloc(Alloc const &a, Iterator first, Iterator last)
+	template <typename Alloc1, typename Iterator>
+	static T *alloc(Alloc1 const &a, Iterator first, Iterator last)
 	{
 		allocator_type x_alloc(a);
 		size_type n(last - first);
@@ -118,7 +126,8 @@ struct allocator_array_helper {
 		return s_ptr.release();
 	}
 
-	static void destroy(Alloc const &a, T *p, size_type n, bool d)
+	template <typename Alloc1>
+	static void destroy(Alloc1 const &a, T *p, size_type n, bool d)
 	{
 		allocator_type x_alloc(a);
 		for (size_type c(0); c < n; ++c)
