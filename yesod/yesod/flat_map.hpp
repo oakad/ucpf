@@ -23,31 +23,45 @@ template <
 	typedef KeyType   key_type;
 	typedef ValueType value_type;
 	typedef CompareF  key_compare;
+	typedef aligned_storage_t<value_type> value_storage_type;
 
 	template <typename ValueType1>
 	struct iterator_base : iterator::facade<
 		iterator_base<ValueType1>, ValueType1,
 		std::random_access_iterator_tag
 	> {
+	private:
+		value_storage_type *ptr;
 	};
 
 	typedef iterator_base<value_type> iterator;
 	typedef iterator_base<value_type const> const_iterator;
 
 	flat_map_impl(Alloc const &a = Alloc())
-	: data_valid(a), data_first(nullptr), data_last(nullptr)
+	: bit_index(a), data(nullptr), lower(nullptr), upper(nullptr),
+	  alloc_size(nullptr)
 	{}
 
-private:
-	typedef aligned_storage_t<value_type> value_storage_type;
+	const_iterator find(key_type const &key) const
+	{
+	}
 
+	iterator find(key_type const &key)
+	{
+		const_iterator iter(find(key));
+		return
+	}
+
+private:
 	typedef allocator_array_helper<
 		value_storage_type, Alloc
 	> value_alloc;
 
-	dynamic_bitset<Alloc> data_valid;
-	value_storage_type *data_first;
-	size_type data_size;
+	dynamic_bitset<Alloc> bit_index;
+	value_storage_type *data;
+	value_storage_type *lower;
+	value_storage_type *upper;
+	size_type alloc_size;
 };
 
 }

@@ -69,14 +69,61 @@ template <
 		return std::get<1>(s);
 	}
 
+	std::ostream &dump(std::ostream &os) const
+	{
+		constexpr static char const *z_str = "000000";
+		constexpr static char const *o_str = "111111";
+
+		auto s(get());
+		size_type last_run(1);
+		bool l_bit(std::get<0>(s)[0] & base_bit);
+
+		for (size_type n(1); n < std::get<1>(s); ++n) {
+			auto w_off(n / word_bits);
+			auto b_off(n % word_bits);
+			bool c_bit(std::get<0>(s)[w_off] & (base_bit >> b_off));
+
+			if (l_bit == c_bit)
+				++last_run;
+			else {
+				if (last_run < 6)
+					os.write(
+						l_bit ? o_str : z_str, last_run
+					);
+				else {
+					os << '<' << (l_bit ? '1' : '0') << ':';
+					os << last_run << '>';
+				}
+
+				last_run = 1;
+				l_bit = c_bit;
+			}
+		}
+
+		if (l_bit == std::get<2>(s)) {
+			os << '<' << (l_bit ? '1' : '0') << ':';
+			os << last_run << "...>";
+		} else {
+			if (last_run < 6)
+				os.write(l_bit ? o_str : z_str, last_run);
+			else {
+				os << '<' << (l_bit ? '1' : '0') << ':';
+				os << last_run << '>';
+			}
+
+			os << '<' << (l_bit ? '0' : '1') << "...>";
+		}
+		os << std::endl;
+		return os;
+	}
+
 	bool test(size_type n) const
 	{
 		auto s(get());
-		printf("test %zd, %zd\n", n, std::get<1>(s));
+
 		if (n < std::get<1>(s)) {
 			auto w_off(n / word_bits);
 			auto b_off(n % word_bits);
-			printf("fgf %zx, %zx\n", w_off, std::get<0>(s)[w_off]);
 			return std::get<0>(s)[w_off] & (base_bit >> b_off);
 		} else
 			return std::get<2>(s);
@@ -88,14 +135,10 @@ template <
 		auto w_off(n / word_bits);
 		auto b_off(n % word_bits);
 
-		printf("set %zd, %zd, %zd\n", n, w_off, b_off);
-		printf("xx set %zd, %zx\n", std::get<1>(s), base_bit);
 		if (n < std::get<1>(s))
 			std::get<0>(s)[w_off] |= (base_bit >> b_off);
 		else if (!std::get<2>(s)) {
-			printf("aa %p\n", std::get<0>(s));
 			s = grow_set(w_off + 1);
-			printf("bb %p\n", std::get<0>(s));
 			std::get<0>(s)[w_off] |= (base_bit >> b_off);
 		}
 
@@ -145,7 +188,6 @@ private:
 	std::tuple<word_type *, size_type, bool> get()
 	{
 		if (std::get<0>(bset) & 1) {
-			printf("get xx\n");
 			return std::make_tuple(
 				&std::get<0>(bset), word_bits - 2,
 				bool(std::get<0>(bset) & 2)
@@ -166,7 +208,6 @@ private:
 		auto sz(AllocPolicy::best_size(word_sz + 1));
 		auto n_ptr(allocator_helper_type::alloc(std::get<1>(bset), sz));
 
-		printf("grow %zd, %zd\n", word_sz, sz);
 		if (std::get<0>(bset) & 1) {
 			n_ptr[1] = std::get<0>(bset);
 			n_ptr[0] = ((sz - 1) << 1)
@@ -194,7 +235,7 @@ private:
 			);
 		}
 		return std::make_tuple(
-			n_ptr, (sz - 1) * word_bits, bool(n_ptr[0] & 1)
+			n_ptr + 1, (sz - 1) * word_bits, bool(n_ptr[0] & 1)
 		);
 	}
 
