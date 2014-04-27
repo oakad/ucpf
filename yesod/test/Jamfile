@@ -12,7 +12,7 @@ run dynamic_bitset.cpp : : test_case ;
 run compressed_index_map.cpp : : test_case ;
 run float.cpp : : test_case ;
 run is_sequence.cpp : : test_case ;
-run log2.cpp : : test_case ;
+run bitops.cpp : : test_case ;
 run rope.cpp : : test_case ;
 run shared_mutex.cpp : : test_case ;
 run sparse_vector.cpp : : test_case ;

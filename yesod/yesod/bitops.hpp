@@ -5,19 +5,19 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_YESOD_LOG2_NOV_17_2013_1945)
-#define UCPF_YESOD_LOG2_NOV_17_2013_1945
+#if !defined(UCPF_YESOD_BITOPS_NOV_17_2013_1945)
+#define UCPF_YESOD_BITOPS_NOV_17_2013_1945
 
 #include <type_traits>
 
 namespace ucpf { namespace yesod {
 
-constexpr int ilog2(uint32_t v)
+constexpr int fls(uint32_t v)
 {
 	return 31 - __builtin_clz(v);
 }
 
-constexpr int ilog2(uint64_t v)
+constexpr int fls(uint64_t v)
 {
 	return 63 - __builtin_clzll(v);
 }
@@ -25,7 +25,17 @@ constexpr int ilog2(uint64_t v)
 template <typename T>
 constexpr int order_base_2(T v)
 {
-	return v > (T(1) << ilog2(v)) ? ilog2(v) + 1 : ilog2(v);
+	return v > (T(1) << fls(v)) ? fls(v) + 1 : fls(v);
+}
+
+constexpr int ffs(uint32_t v)
+{
+	return __builtin_ffs(v) - 1;
+}
+
+constexpr int ffs(uint64_t v)
+{
+	return __builtin_ffsll(v) - 1;
 }
 
 }}

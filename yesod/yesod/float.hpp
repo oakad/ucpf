@@ -11,7 +11,7 @@
 #include <yesod/mpl/at.hpp>
 #include <yesod/mpl/map.hpp>
 #include <yesod/mpl/has_key.hpp>
-#include <yesod/log2.hpp>
+#include <yesod/bitops.hpp>
 
 #include <boost/operators.hpp>
 

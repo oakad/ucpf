@@ -10,7 +10,7 @@
 #define UCPF_YESOD_DETAIL_ALLOCATOR_UTILS_20140324T1330
 
 #include <memory>
-#include <yesod/log2.hpp>
+#include <yesod/bitops.hpp>
 
 namespace ucpf { namespace yesod { namespace detail {
 

@@ -25,6 +25,7 @@ template <
 	> allocator_helper_type;
 	typedef typename allocator_helper_type::allocator_type allocator_type;
 	typedef typename allocator_helper_type::size_type size_type;
+	constexpr static size_type npos = ~size_type(0);
 
 	static std::pair<word_type, word_type> split(
 		word_type in, unsigned int pos, bool hl, bool lh
@@ -161,6 +162,78 @@ template <
 		return *this;
 	}
 
+	size_type find_set_below(size_type n) const
+	{
+		auto s(get());
+
+		if ((n > std::get<1>(s)) && std::get<2>(s))
+			return n - 1;
+
+		if (!n)
+			return npos;
+
+		--n;
+		auto w_off(n / word_bits);
+		auto b_off(n % word_bits);
+		auto w(std::get<0>(s)[w_off]);
+
+		w &= ~((base_bit >> b_off) - 1);
+
+		if (w)
+			return w_off * word_bits + (word_bits - ffs(w) - 1);
+		else if (!w_off)
+			return npos;
+
+		do {
+			--w_off;
+			n = w_off * word_bits + (word_bits - 1);
+			w = std::get<0>(s)[w_off];
+			if (w)
+				return n - ffs(w);
+		} while (w_off);
+
+		return npos;
+	}
+
+	size_type find_set_above(size_type n) const
+	{
+		auto s(get());
+
+		++n;
+		if (n >= std::get<1>(s))
+			return std::get<2>(s) ? n : npos;
+
+		auto w_off(n / word_bits);
+		auto b_off(n % word_bits);
+		auto w(std::get<0>(s)[w_off]);
+
+		w &= (((base_bit >> b_off) - 1) << 1) | 1;
+
+		if (w) {
+
+			n = w_off * word_bits + (word_bits - fls(w) - 1);
+			if (n < std::get<1>(s) || std::get<2>(s))
+				return n;
+			else
+				return npos;
+		}
+		
+		++w_off;
+		while ((w_off * word_bits) < std::get<1>(s)) {
+			auto w(std::get<0>(s)[w_off]);
+			if (!w)
+				continue;
+
+			n = w_off * word_bits + (word_bits - fls(w) - 1);
+			if (n < std::get<1>(s))
+				return n;
+
+			++w_off;
+		}
+
+		return std::get<2>(s) ? std::get<1>(s) : npos;
+	}
+
 private:
 	constexpr static unsigned int word_bits
 	= std::numeric_limits<word_type>::digits;
@@ -241,6 +314,11 @@ private:
 
 	std::tuple<word_type, allocator_type> bset;
 };
+
+template <typename Alloc, typename AllocPolicy>
+constexpr typename dynamic_bitset<
+	Alloc, AllocPolicy
+>::size_type dynamic_bitset<Alloc, AllocPolicy>::npos;
 
 }}
 #endif

@@ -10,7 +10,7 @@
 
 #include <array>
 #include <cstdint>
-#include <yesod/log2.hpp>
+#include <yesod/bitops.hpp>
 
 namespace ucpf { namespace mina { namespace detail {
 

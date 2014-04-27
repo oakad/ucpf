@@ -38,18 +38,29 @@ template <
 	typedef iterator_base<value_type const> const_iterator;
 
 	flat_map_impl(Alloc const &a = Alloc())
-	: bit_index(a), data(nullptr), lower(nullptr), upper(nullptr),
+	: bit_index(a), data(nullptr), begin_ptr(nullptr), end_ptr(nullptr),
 	  alloc_size(nullptr)
 	{}
 
 	const_iterator find(key_type const &key) const
 	{
+		auto c_pos((begin_pos + end_pos) >> 1);
+		auto cr(range_for_pos(c_pos));
+		if (cr.first == cr.second) {
+			auto p(ptr_at(cr.first));
+			if (!p)
+				return const_iterator(data + end_pos);
+
+			
+		} else {
+			auto pb(ptr_at(cr.first)), pe(ptr_at(cr.end));
+		}
 	}
 
 	iterator find(key_type const &key)
 	{
 		const_iterator iter(find(key));
-		return
+		return iterator(iter.ptr);
 	}
 
 private:
@@ -57,10 +68,29 @@ private:
 		value_storage_type, Alloc
 	> value_alloc;
 
+	value_storage_type const *ptr_at(size_type pos) const
+	{
+		if (((data + pos) >= begin_ptr) && ((data + pos) < end_ptr))
+			return data + pos;
+		else
+			return nullptr;
+	}
+
+	std::pair<size_type, size_type> range_for_pos(size_type pos) const
+	{
+		if (bit_index.test(pos))
+			return std::make_pair(pos, pos);
+		else
+			return std::make_pair(
+				bit_index.find_set_below(pos),
+				bit_index.find_set_above(pos)
+			);
+	}
+
 	dynamic_bitset<Alloc> bit_index;
 	value_storage_type *data;
-	value_storage_type *lower;
-	value_storage_type *upper;
+	size_type begin_pos;
+	size_type end_pos;
 	size_type alloc_size;
 };
 
