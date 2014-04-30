@@ -26,6 +26,20 @@ struct pow2_alloc_policy {
 	}
 };
 
+struct fibonacci_alloc_policy {
+	constexpr static double phi = 0x1.9E3779B97F4A7C15F39;
+	constexpr static size_t min_size = 8;
+	constexpr static size_t min_index = 4;
+
+	static size_t best_size(size_t sz)
+	{
+		if (sz > min_size) {
+			return (size_t(1) << (order_base_2(sz) + 3)) / 5;
+		} else
+			return min_size;
+	}
+};
+
 template <typename T, typename Alloc>
 struct allocator_array_helper {
 	typedef typename std::allocator_traits<

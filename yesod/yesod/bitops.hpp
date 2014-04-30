@@ -38,5 +38,15 @@ constexpr int ffs(uint64_t v)
 	return __builtin_ffsll(v) - 1;
 }
 
+constexpr int popcount(uint32_t v)
+{
+	return __builtin_popcount(v);
+}
+
+constexpr int popcount(uint64_t v)
+{
+	return __builtin_popcountll(v);
+}
+
 }}
 #endif

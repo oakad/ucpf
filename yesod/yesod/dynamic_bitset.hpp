@@ -162,14 +162,59 @@ template <
 		return *this;
 	}
 
-	size_type find_set_below(size_type n) const
+	size_type count(
+		size_type begin_pos = 0, size_type end_pos = npos
+	) const
 	{
 		auto s(get());
 
-		if ((n > std::get<1>(s)) && std::get<2>(s))
-			return n - 1;
+		auto x_end_pos(std::min(end_pos, std::get<1>(s)));
 
-		if (!n)
+		if (begin_pos >= x_end_pos) {
+			if (std::get<2>(s) && (end_pos > begin_pos))
+				return end_pos - begin_pos;
+
+			return 0;
+		}
+
+		auto w_off(begin_pos / word_bits);
+		auto b_off(begin_pos % word_bits);
+		auto ew_off(x_end_pos / word_bits);
+		auto eb_off(x_end_pos % word_bits);
+
+		auto w(std::get<0>(s)[w_off]);
+		if (b_off)
+			w &= (base_bit >> (b_off - 1)) - 1;
+
+		size_type rv(0);
+
+		while (w_off != ew_off) {
+			rv += popcount(w);
+			++w_off;
+			w = std::get<0>(s)[w_off];
+		}
+
+		if (eb_off) {
+			w &= ~((base_bit >> (eb_off - 1)) - 1);
+			rv += popcount(w);
+		}
+
+		if ((end_pos > x_end_pos) && std::get<2>(s))
+			rv += end_pos - x_end_pos;
+
+		return rv;
+	}
+
+	size_type find_below(size_type n, size_type min_n = 0) const
+	{
+		auto s(get());
+
+		if ((n > std::get<1>(s)) && std::get<2>(s)) {
+			n -= 1;
+			return n >= min_n ? n : npos;
+		}
+
+		if (n < min_n)
 			return npos;
 
 		--n;
@@ -179,29 +224,36 @@ template <
 
 		w &= ~((base_bit >> b_off) - 1);
 
-		if (w)
-			return w_off * word_bits + (word_bits - ffs(w) - 1);
-		else if (!w_off)
+		if (w) {
+			n = w_off * word_bits + (word_bits - ffs(w) - 1);
+			return n >= min_n ? n : npos;
+		} else if (!w_off)
 			return npos;
 
 		do {
 			--w_off;
 			n = w_off * word_bits + (word_bits - 1);
 			w = std::get<0>(s)[w_off];
-			if (w)
-				return n - ffs(w);
+			if (w) {
+				n -= ffs(w);
+				return n >= min_n ? n : npos;
+			}
 		} while (w_off);
 
 		return npos;
 	}
 
-	size_type find_set_above(size_type n) const
+	size_type find_above(size_type n, size_type max_n = npos) const
 	{
 		auto s(get());
 
 		++n;
-		if (n >= std::get<1>(s))
-			return std::get<2>(s) ? n : npos;
+		if (n >= std::get<1>(s)) {
+			if (std::get<2>(s) && (n < max_n))
+				return n;
+			else
+				return npos;
+		}
 
 		auto w_off(n / word_bits);
 		auto b_off(n % word_bits);
@@ -212,26 +264,39 @@ template <
 		if (w) {
 
 			n = w_off * word_bits + (word_bits - fls(w) - 1);
-			if (n < std::get<1>(s) || std::get<2>(s))
+			if (((n < std::get<1>(s)) || (std::get<2>(s)))
+			    && (n < max_n))
 				return n;
 			else
 				return npos;
 		}
 		
 		++w_off;
-		while ((w_off * word_bits) < std::get<1>(s)) {
+		while (true) {
+			n = w_off * word_bits;
+
+			if (n >= max_n)
+				return npos;
+
+			if (n >= std::get<1>(s))
+				return std::get<2>(s) ? std::get<1>(s) : npos;
+
 			auto w(std::get<0>(s)[w_off]);
 			if (!w)
 				continue;
 
-			n = w_off * word_bits + (word_bits - fls(w) - 1);
+			n += (word_bits - fls(w) - 1);
+
+			if (n >= max_n)
+				return npos;
+
 			if (n < std::get<1>(s))
 				return n;
+			else
+				return std::get<2>(s) ? std::get<1>(s) : npos;
 
 			++w_off;
 		}
-
-		return std::get<2>(s) ? std::get<1>(s) : npos;
 	}
 
 private:
