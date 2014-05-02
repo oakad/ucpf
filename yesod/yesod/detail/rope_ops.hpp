@@ -44,7 +44,7 @@ rope<ValueType, Policy>::node::concat::ref_tag;
 
 template <typename ValueType, typename Policy>
 size_t const rope<ValueType, Policy>::node::concat::extra_size = sizeof(
-	detail::aligned_storage_t<
+	allocator::aligned_storage_t<
 		typename rope<ValueType, Policy>::node::concat
 	>
 );
@@ -55,7 +55,7 @@ rope<ValueType, Policy>::node::substr::ref_tag;
 
 template <typename ValueType, typename Policy>
 size_t const rope<ValueType, Policy>::node::substr::extra_size = sizeof(
-	detail::aligned_storage_t<
+	allocator::aligned_storage_t<
 		typename rope<ValueType, Policy>::node::substr
 	>
 );
@@ -66,7 +66,7 @@ rope<ValueType, Policy>::node::func::ref_tag;
 
 template <typename ValueType, typename Policy>
 size_t const rope<ValueType, Policy>::node::func::extra_size = sizeof(
-	detail::aligned_storage_t<
+	allocator::aligned_storage_t<
 		typename rope<ValueType, Policy>::node::func
 	>
 );

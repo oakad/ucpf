@@ -11,16 +11,17 @@
 
 #include <limits>
 #include <algorithm>
-#include <yesod/detail/allocator_utils.hpp>
+#include <yesod/allocator/array_helper.hpp>
+#include <yesod/allocator/policy/power2.hpp>
 
 namespace ucpf { namespace yesod {
 
 template <
 	typename Alloc = std::allocator<void>,
-	typename AllocPolicy = detail::pow2_alloc_policy
+	typename AllocPolicy = allocator::policy::power2
 > struct dynamic_bitset {
 	typedef uintptr_t word_type;
-	typedef detail::allocator_array_helper<
+	typedef allocator::array_helper<
 		word_type, Alloc
 	> allocator_helper_type;
 	typedef typename allocator_helper_type::allocator_type allocator_type;

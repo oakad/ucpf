@@ -41,7 +41,7 @@
 #include <yesod/mpl/value_cast.hpp>
 #include <yesod/mpl/fibonacci_c.hpp>
 #include <yesod/iterator/facade.hpp>
-#include <yesod/detail/allocator_utils.hpp>
+#include <yesod/allocator/array_helper.hpp>
 
 namespace ucpf { namespace yesod {
 
@@ -117,7 +117,7 @@ protected:
 				Alloc const &a, node_ptr const &p
 			)
 			{
-				detail::allocator_array_helper<
+				allocator::array_helper<
 					value_type, Alloc
 				>::make(a, p.get_extra(), p->size);
 			}
@@ -125,7 +125,7 @@ protected:
 			template <typename Alloc>
 			static void destroy(Alloc const &a, node *p)
 			{
-				detail::allocator_array_helper<
+				allocator::array_helper<
 					value_type, Alloc
 				>::destroy(
 					a, reinterpret_cast<value_type *>(
@@ -159,20 +159,19 @@ protected:
 			template <typename Alloc>
 			static void construct(Alloc const &a, node_ptr const &p)
 			{
-				detail::allocator_array_helper<
-					concat, Alloc
-				>::make(a, p.get_extra(), 1);
+				allocator::array_helper<concat, Alloc>::make(
+					a, p.get_extra(), 1
+				);
 			}
 
 			template <typename Alloc>
 			static void destroy(Alloc const &a, node *p)
 			{
-				detail::allocator_array_helper<
-					concat, Alloc
-				>::destroy(
+				allocator::array_helper<concat, Alloc>::destroy(
 					a, reinterpret_cast<concat *>(
 						p->self->get_extra()
-					), 1, false);
+					), 1, false
+				);
 			}
 
 			static concat *extra(node_ptr const &p)
@@ -203,7 +202,7 @@ protected:
 			template <typename Alloc>
 			static void construct(Alloc const &a, node_ptr const &p)
 			{
-				detail::allocator_array_helper<
+				allocator::array_helper<
 					substr, Alloc
 				>::make(a, p.get_extra(), 1);
 			}
@@ -211,7 +210,7 @@ protected:
 			template <typename Alloc>
 			static void destroy(Alloc const &a, node *p)
 			{
-				detail::allocator_array_helper<
+				allocator::array_helper<
 					substr, Alloc
 				>::destroy(
 					a, reinterpret_cast<substr *>(
@@ -253,7 +252,7 @@ protected:
 			template <typename Alloc>
 			static void construct(Alloc const &a, node_ptr const &p)
 			{
-				detail::allocator_array_helper<
+				allocator::array_helper<
 					func, Alloc
 				>::make(a, p.get_extra(), 1);
 			}
@@ -261,7 +260,7 @@ protected:
 			template <typename Alloc>
 			static void destroy(Alloc const &a, node *p)
 			{
-				detail::allocator_array_helper<
+				allocator::array_helper<
 					func, Alloc
 				>::destroy(
 					a, reinterpret_cast<func *>(
@@ -499,7 +498,7 @@ protected:
 			};
 
 			(*disp[int(p->tag)])(a, p);
-			detail::allocator_array_helper<
+			allocator::array_helper<
 				node, Alloc
 			>::destroy(a, p, 1, false);
 		}

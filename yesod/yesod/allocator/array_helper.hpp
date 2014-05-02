@@ -6,42 +6,20 @@
  * shed by the Free Software Foundation.
  */
 
-#if !defined(UCPF_YESOD_DETAIL_ALLOCATOR_UTILS_20140324T1330)
-#define UCPF_YESOD_DETAIL_ALLOCATOR_UTILS_20140324T1330
+#if !defined(UCPF_YESOD_ALLOCATOR_ARRAY_HELPER_20140324T1330)
+#define UCPF_YESOD_ALLOCATOR_ARRAY_HELPER_20140324T1330
 
 #include <memory>
-#include <yesod/bitops.hpp>
 
-namespace ucpf { namespace yesod { namespace detail {
+namespace ucpf { namespace yesod { namespace allocator {
 
 template <typename T>
 using aligned_storage_t = typename std::aligned_storage<
 	sizeof(T), std::alignment_of<T>::value
 >::type;
 
-struct pow2_alloc_policy {
-	static size_t best_size(size_t sz)
-	{
-		return size_t(1) << order_base_2(sz);
-	}
-};
-
-struct fibonacci_alloc_policy {
-	constexpr static double phi = 0x1.9E3779B97F4A7C15F39;
-	constexpr static size_t min_size = 8;
-	constexpr static size_t min_index = 4;
-
-	static size_t best_size(size_t sz)
-	{
-		if (sz > min_size) {
-			return (size_t(1) << (order_base_2(sz) + 3)) / 5;
-		} else
-			return min_size;
-	}
-};
-
 template <typename T, typename Alloc>
-struct allocator_array_helper {
+struct array_helper {
 	typedef typename std::allocator_traits<
 		Alloc
 	>::template rebind_alloc<T> allocator_type;
@@ -154,4 +132,3 @@ struct allocator_array_helper {
 
 }}}
 #endif
-
