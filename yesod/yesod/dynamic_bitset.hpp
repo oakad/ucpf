@@ -28,24 +28,91 @@ template <
 	typedef typename allocator_helper_type::size_type size_type;
 	constexpr static size_type npos = ~size_type(0);
 
-	static std::pair<word_type, word_type> split(
-		word_type in, unsigned int pos, bool hl, bool lh
-	) {
-		auto rv(std::make_pair(
-			in & ((base_bit >> pos) - 1),
-			in & ~((base_bit >> pos) - 1)
-		));
-		if (hl)
-			rv.second >>= (word_bits - pos);
-		if (lh)
-			rv.first <<= pos;
-
-		return rv;
-	}
-
 	dynamic_bitset(Alloc const &a = Alloc())
 	: bset(word_type(1), allocator_type(a))
 	{}
+
+	dynamic_bitset(dynamic_bitset const &other)
+	: bset(other.bset)
+	{
+		if (!(std::get<0>(bset) & 1)) {
+			auto ptr(reinterpret_cast<word_type *>(
+				std::get<0>(bset)
+			));
+			auto sz((ptr[0] >> 1) + 1);
+			auto n_ptr(allocator_helper_type::alloc(
+				std::get<1>(bset), ptr, ptr + sz
+			));
+			std::get<0>(bset) = reinterpret_cast<word_type>(n_ptr);
+		}
+	}
+
+	dynamic_bitset(
+		dynamic_bitset const &other, size_type left_reserve,
+		size_type right_reserve
+	): bset(other.bset)
+	{
+		auto sc(short_count());
+		if (sc != npos) {
+			sc += left_reserve + right_reserve;
+			if (sc < (word_bits - 2)) {
+				auto w(std::get<0>(bset));
+				if (!(w & 2)) {
+					w &= ~word_type(1);
+					w >>= left_reserve;
+					std::get<0>(bset) = ~w;
+				} else {
+					w = ~w;
+					w >>= left_reserve;
+					std::get<0>(bset) = ~w;
+				}
+			}
+		}
+
+		auto s(get());
+		auto b_sz(std::get<1>(s) + left_reserve + right_reserve);
+		size_type w_sz(AllocPolicy::best_size((b_sz / word_bits) + 2));
+		auto n_ptr(allocator_helper_type::alloc_n(
+			std::get<1>(bset), w_sz,
+			std::get<2>(s) ? ~word_type(0) : word_type(0)
+		));
+		n_ptr[0] = (w_sz - 1) << 1;
+
+		auto w_pos(left_reserve / word_bits);
+		auto b_pos(left_reserve % word_bits);
+		auto w_end((left_reserve + std::get<1>(s)) / word_bits);
+		size_type o_pos(0);
+
+		for (; w_pos < w_end; ++w_pos) {
+			auto w(std::get<0>(s)[o_pos]);
+			if (!std::get<2>(s)) {
+				n_ptr[w_pos + 1] |= w >> b_pos;
+				n_ptr[w_pos + 2] |= w << (word_bits - b_pos);
+			} else {
+				w = ~w;
+				n_ptr[w_pos + 1] &= w >> b_pos;
+				n_ptr[w_pos + 2] &= w << (word_bits - b_pos);
+			}
+			++o_pos;
+		}
+
+		auto end_mask(~((word_type(1) << (
+			word_bits - (std::get<1>(s) % word_bits)
+		)) - 1));
+		auto w(std::get<0>(s)[o_pos]);
+
+		if (!std::get<2>(s)) {
+			w &= end_mask;
+			n_ptr[w_end + 1] |= w << (word_bits - b_pos);
+		} else {
+			n_ptr[0] |= 1;
+			w = ~w;
+			w &= end_mask;
+			n_ptr[w_end + 1] &= w << (word_bits - b_pos);
+		}
+
+		std::get<0>(bset) = reinterpret_cast<word_type>(n_ptr);
+	}
 
 	~dynamic_bitset()
 	{
@@ -147,6 +214,19 @@ template <
 		return *this;
 	}
 
+	dynamic_bitset &set()
+	{
+		auto s(get());
+		auto w_off((std::get<1>(s) - 1) / word_bits);
+		auto b_off((std::get<1>(s) - 1) % word_bits);
+
+		for (size_type n(0); n < w_off; ++n)
+			std::get<0>(s)[n] = ~word_type(0);
+
+		std::get<0>(s)[w_off] |= ~((base_bit >> b_off) - 1);
+		set_fill_bit(true);
+	}
+
 	dynamic_bitset &reset(size_type n)
 	{
 		auto s(get());
@@ -163,6 +243,20 @@ template <
 		return *this;
 	}
 
+	dynamic_bitset &reset()
+	{
+		auto s(get());
+		auto w_off((std::get<1>(s) - 1) / word_bits);
+		auto b_off((std::get<1>(s) - 1) % word_bits);
+
+		for (size_type n(0); n < w_off; ++n)
+			std::get<0>(s)[n] = 0;
+
+		std::get<0>(s)[w_off] &= (base_bit >> b_off) - 1;
+		set_fill_bit(false);
+	}
+
+	template <bool CountOne>
 	size_type count(
 		size_type begin_pos = 0, size_type end_pos = npos
 	) const
@@ -172,7 +266,10 @@ template <
 		auto x_end_pos(std::min(end_pos, std::get<1>(s)));
 
 		if (begin_pos >= x_end_pos) {
-			if (std::get<2>(s) && (end_pos > begin_pos))
+			if (
+				(std::get<2>(s) == CountOne)
+				&& (end_pos > begin_pos)
+			)
 				return end_pos - begin_pos;
 
 			return 0;
@@ -184,6 +281,9 @@ template <
 		auto eb_off(x_end_pos % word_bits);
 
 		auto w(std::get<0>(s)[w_off]);
+		if (!CountOne)
+			w = ~w;
+
 		if (b_off)
 			w &= (base_bit >> (b_off - 1)) - 1;
 
@@ -193,6 +293,8 @@ template <
 			rv += popcount(w);
 			++w_off;
 			w = std::get<0>(s)[w_off];
+			if (!CountOne)
+				w = ~w;
 		}
 
 		if (eb_off) {
@@ -200,17 +302,18 @@ template <
 			rv += popcount(w);
 		}
 
-		if ((end_pos > x_end_pos) && std::get<2>(s))
+		if ((end_pos > x_end_pos) && (std::get<2>(s) == CountOne))
 			rv += end_pos - x_end_pos;
 
 		return rv;
 	}
 
+	template <bool FindOne>
 	size_type find_below(size_type n, size_type min_n = 0) const
 	{
 		auto s(get());
 
-		if ((n > std::get<1>(s)) && std::get<2>(s)) {
+		if ((n > std::get<1>(s)) && (std::get<2>(s) == FindOne)) {
 			n -= 1;
 			return n >= min_n ? n : npos;
 		}
@@ -224,6 +327,8 @@ template <
 		auto w(std::get<0>(s)[w_off]);
 
 		w &= ~((base_bit >> b_off) - 1);
+		if (!FindOne)
+			w = ~w;
 
 		if (w) {
 			n = w_off * word_bits + (word_bits - ffs(w) - 1);
@@ -235,6 +340,9 @@ template <
 			--w_off;
 			n = w_off * word_bits + (word_bits - 1);
 			w = std::get<0>(s)[w_off];
+			if (!FindOne)
+				w = ~w;
+
 			if (w) {
 				n -= ffs(w);
 				return n >= min_n ? n : npos;
@@ -244,13 +352,14 @@ template <
 		return npos;
 	}
 
+	template <bool FindOne>
 	size_type find_above(size_type n, size_type max_n = npos) const
 	{
 		auto s(get());
 
 		++n;
 		if (n >= std::get<1>(s)) {
-			if (std::get<2>(s) && (n < max_n))
+			if ((std::get<2>(s) == FindOne) && (n < max_n))
 				return n;
 			else
 				return npos;
@@ -262,11 +371,15 @@ template <
 
 		w &= (((base_bit >> b_off) - 1) << 1) | 1;
 
-		if (w) {
+		if (!FindOne)
+			w = ~w;
 
+		if (w) {
 			n = w_off * word_bits + (word_bits - fls(w) - 1);
-			if (((n < std::get<1>(s)) || (std::get<2>(s)))
-			    && (n < max_n))
+			if ((
+				(n < std::get<1>(s))
+				|| (std::get<2>(s) == FindOne)
+			) && (n < max_n))
 				return n;
 			else
 				return npos;
@@ -280,9 +393,13 @@ template <
 				return npos;
 
 			if (n >= std::get<1>(s))
-				return std::get<2>(s) ? std::get<1>(s) : npos;
+				return (std::get<2>(s) == FindOne)
+				       ? std::get<1>(s) : npos;
 
 			auto w(std::get<0>(s)[w_off]);
+			if (!FindOne)
+				w = ~w;
+
 			if (!w)
 				continue;
 
@@ -294,10 +411,16 @@ template <
 			if (n < std::get<1>(s))
 				return n;
 			else
-				return std::get<2>(s) ? std::get<1>(s) : npos;
+				return (std::get<2>(s) == FindOne)
+				       ? std::get<1>(s) : npos;
 
 			++w_off;
 		}
+	}
+
+	void swap(dynamic_bitset &other)
+	{
+		std::swap(bset, other.bset);
 	}
 
 private:
@@ -305,6 +428,25 @@ private:
 	= std::numeric_limits<word_type>::digits;
 	constexpr static word_type base_bit
 	= (~word_type(0)) ^ (~word_type(0) >> 1);
+
+	size_type short_count() const
+	{
+		auto w(std::get<0>(bset));
+
+		if (!(w & 1))
+			return npos;
+
+		if (w & 2)
+			w = ~w;
+		else
+			w &= ~word_type(1);
+
+		if (!w)
+			return 0;
+		auto p1(fls(w));
+		auto p2(ffs(w));
+		return p1 - p2;
+	}
 
 	std::tuple<word_type const *, size_type, bool> get() const
 	{
@@ -345,7 +487,9 @@ private:
 	std::tuple<word_type *, size_type, bool> grow_set(size_type word_sz)
 	{
 		auto sz(AllocPolicy::best_size(word_sz + 1));
-		auto n_ptr(allocator_helper_type::alloc(std::get<1>(bset), sz));
+		auto n_ptr(allocator_helper_type::alloc_n(
+			std::get<1>(bset), sz
+		));
 
 		if (std::get<0>(bset) & 1) {
 			n_ptr[1] = std::get<0>(bset);
@@ -376,6 +520,24 @@ private:
 		return std::make_tuple(
 			n_ptr + 1, (sz - 1) * word_bits, bool(n_ptr[0] & 1)
 		);
+	}
+
+	void set_fill_bit(bool b)
+	{
+		if (std::get<0>(bset) & 1) {
+			if (b)
+				std::get<0>(bset) |= word_type(2);
+			else
+				std::get<0>(bset) &= ~word_type(2);
+		} else {
+			auto ptr(reinterpret_cast<word_type *>(
+				std::get<0>(bset)
+			));
+			if (b)
+				ptr[0] |= word_type(1);
+			else
+				ptr[0] &= ~word_type(1);
+		}
 	}
 
 	std::tuple<word_type, allocator_type> bset;

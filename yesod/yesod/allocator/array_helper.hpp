@@ -30,8 +30,34 @@ struct array_helper {
 
 	typedef typename allocator_traits::size_type size_type;
 
+	typedef typename std::aligned_storage<
+		sizeof(T), std::alignment_of<T>::value
+	>::type storage_type;
+
+	typedef typename std::allocator_traits<
+		Alloc
+	>::template rebind_alloc<storage_type> storage_allocator_type;
+
+	typedef typename std::allocator_traits<
+		Alloc
+	>::template rebind_traits<storage_type> storage_allocator_traits;
+
+	template <typename Alloc1>
+	static storage_type *alloc_s(Alloc1 const &a, size_type n)
+	{
+		storage_allocator_type x_alloc(a);
+		return storage_allocator_traits::allocate(x_alloc, n);
+	}
+
+	template <typename Alloc1>
+	static void free_s(Alloc1 const &a, storage_type *p, size_type n)
+	{
+		storage_allocator_type x_alloc(a);
+		storage_allocator_traits::deallocate(x_alloc, p, n);
+	}
+
 	template <typename Alloc1, typename U, typename... Args>
-	static T *make(Alloc1 const &a, U *up, size_type n, Args&&... args)
+	static T *make_n(Alloc1 const &a, U *up, size_type n, Args&&... args)
 	{
 		allocator_type x_alloc(a);
 		size_type init_length(0);
@@ -57,7 +83,7 @@ struct array_helper {
 	}
 
 	template <typename Alloc1, typename... Args>
-	static T *alloc(Alloc1 const &a, size_type n, Args&&... args)
+	static T *alloc_n(Alloc1 const &a, size_type n, Args&&... args)
 	{
 		allocator_type x_alloc(a);
 
@@ -70,7 +96,7 @@ struct array_helper {
 			
 		);
 
-		make(a, s_ptr.get(), n, std::forward<Args>(args)...);
+		make_n(a, s_ptr.get(), n, std::forward<Args>(args)...);
 		return s_ptr.release();
 	}
 

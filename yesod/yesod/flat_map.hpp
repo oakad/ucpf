@@ -13,7 +13,7 @@
 #include <yesod/detail/flat_map_ops.hpp>
 
 namespace ucpf { namespace yesod {
-
+/*
 template <
 	typename KeyType, typename T, typename CompareF, typename Alloc
 > struct flat_map {
@@ -49,6 +49,6 @@ private:
 		key_type, key_type, identity, CompareF, Alloc
 	> base_map;
 };
-
+*/
 }}
 #endif
