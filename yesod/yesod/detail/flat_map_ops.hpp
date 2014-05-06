@@ -12,18 +12,18 @@
 namespace ucpf { namespace yesod { namespace detail {
 
 template <
-	typename KeyType, typename ValueType, typename KeyOfValue,
+	typename ValueType, typename KeyOfValue,
 	typename CompareF, typename Alloc, typename AllocPolicy
 > void flat_map_impl<
-	KeyType, ValueType, KeyOfValue, CompareF, Alloc, AllocPolicy
+	ValueType, KeyOfValue, CompareF, Alloc, AllocPolicy
 >::reserve(size_type cnt)
 {
-	if (cnt <= alloc_size)
+	if (cnt <= alloc_size())
 		return;
 
 	auto sz(AllocPolicy::best_size(cnt));
-	auto n_begin((sz - alloc_size) / 2);
-	auto n_end(n_begin + alloc_size);
+	auto n_begin((sz - alloc_size()) / 2);
+	auto n_end(n_begin + alloc_size());
 
 	decltype(bit_index) n_index(bit_index, n_begin, sz - n_end);
 
@@ -34,7 +34,7 @@ template <
 		bit_index.swap(n_index);
 		begin_pos = n_begin;
 		end_pos = n_end;
-		alloc_size = sz;
+		std::get<0>(aux) = sz;
 		return;
 	}
 
@@ -76,19 +76,19 @@ template <
 	}
 
 	clear_data();
-	value_alloc::free_s(alloc, data, alloc_size);
+	value_alloc::free_s(alloc, data, alloc_size());
 	data = n_data;
 	bit_index.swap(n_index);
 	begin_pos = n_begin;
 	end_pos = n_end;
-	alloc_size = sz;
+	std::get<0>(aux) = sz;
 }
 
 template <
-	typename KeyType, typename ValueType, typename KeyOfValue,
+	typename ValueType, typename KeyOfValue,
 	typename CompareF, typename Alloc, typename AllocPolicy
 > auto flat_map_impl<
-	KeyType, ValueType, KeyOfValue, CompareF, Alloc, AllocPolicy
+	ValueType, KeyOfValue, CompareF, Alloc, AllocPolicy
 >::lower_bound(key_type const &key) const -> const_iterator
 {
 	if (end_pos <= begin_pos)
@@ -144,12 +144,12 @@ template <
 }
 
 template <
-	typename KeyType, typename ValueType, typename KeyOfValue,
+	typename ValueType, typename KeyOfValue,
 	typename CompareF, typename Alloc, typename AllocPolicy
 >
 template <typename... Args>
 auto flat_map_impl<
-	KeyType, ValueType, KeyOfValue, CompareF, Alloc, AllocPolicy
+	ValueType, KeyOfValue, CompareF, Alloc, AllocPolicy
 >::emplace_unique(Args&&... args) -> std::pair<iterator, bool>
 {
 	reserve(size() + 1);

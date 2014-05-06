@@ -15,14 +15,13 @@
 namespace ucpf { namespace yesod { namespace detail {
 
 template <
-	typename KeyType, typename ValueType, typename KeyOfValue,
+	typename ValueType, typename KeyOfValue,
 	typename CompareF, typename Alloc, typename AllocPolicy
 > struct flat_map_impl {
 	typedef allocator::array_helper<ValueType, Alloc> value_alloc;
 
-	typedef KeyType   key_type;
+	typedef typename KeyOfValue::result_type key_type;
 	typedef ValueType value_type;
-	typedef CompareF  key_compare;
 	typedef typename value_alloc::allocator_type allocator_type;
 	typedef typename value_alloc::size_type size_type;
 
@@ -52,8 +51,8 @@ template <
 	typedef iterator_base<value_type> iterator;
 	typedef iterator_base<value_type const> const_iterator;
 
-	flat_map_impl(Alloc const &a = Alloc())
-	: bit_index(a), data(nullptr), begin_pos(0), end_pos(0), alloc_size(0)
+	flat_map_impl(CompareF &const comp, Alloc const &a)
+	: bit_index(a), data(nullptr), aux(0, comp), begin_pos(0), end_pos(0)
 	{}
 
 	~flat_map_impl()
@@ -61,7 +60,8 @@ template <
 		if (data) {
 			clear_data();
 			value_alloc::free_s(
-				bit_index.get_allocator(), data, alloc_size
+				bit_index.get_allocator(), data,
+				std::get<0>(aux)
 			);
 		}
 	}
@@ -88,7 +88,9 @@ private:
 		typename value_alloc::storage_type const *p
 	)
 	{
-		return KeyOfValue()(*reinterpret_cast<value_type const *>(p));
+		return KeyOfValue::apply(
+			*reinterpret_cast<value_type const *>(p)
+		);
 	}
 
 	typename value_alloc::storage_type const *ptr_at(size_type pos) const
@@ -119,11 +121,21 @@ private:
 		bit_index.reset();
 	}
 
+	size_type alloc_size() const
+	{
+		return std::get<0>(aux);
+	}
+
+	bool key_compare(key_type const &l, key_type const &r) const
+	{
+		return std::get<1>(aux)(l, r);
+	}
+
 	dynamic_bitset<Alloc, AllocPolicy> bit_index;
 	typename value_alloc::storage_type *data;
+	std::tuple<size_type, CompareF> aux;
 	size_type begin_pos;
 	size_type end_pos;
-	size_type alloc_size;
 };
 
 }}}
