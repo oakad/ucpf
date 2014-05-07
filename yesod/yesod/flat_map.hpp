@@ -11,15 +11,23 @@
 
 #include <yesod/detail/flat_map_base.hpp>
 #include <yesod/detail/flat_map_ops.hpp>
+#include <yesod/allocator/policy/fibonacci.hpp>
 
 namespace ucpf { namespace yesod {
 
 template <
-	typename KeyType, typename T, typename CompareF, typename Alloc
+	typename KeyType, typename T,
+	typename CompareF = std::less<KeyType>,
+	typename Alloc = std::allocator<void>
 > struct flat_map {
+	typedef KeyType key_type;
+	typedef T mapped_type;
+	typedef std::tuple<key_type const, mapped_type> value_type;
+
 private:
-	struct select_first {
-		typedef key_type result_type;
+	struct extract_key {
+		typedef flat_map::value_type value_type;
+		typedef flat_map::key_type result_type;
 
 		static key_type const &apply(value_type const &p)
 		{
@@ -28,13 +36,10 @@ private:
 	};
 
 	typedef detail::flat_map_impl<
-		value_type, select_first, CompareF, Alloc,
-		allocator::policy::fibonacci
+		extract_key, CompareF, Alloc, allocator::policy::fibonacci
 	> map_impl_type;
+
 public:
-	typedef KeyType key_type;
-	typedef T mapped_type;
-	typedef std::pair<key_type const, mapped_type> value_type;
 	typedef typename map_impl_type::const_iterator const_iterator;
 	typedef typename map_impl_type::iterator iterator;
 	typedef typename map_impl_type::allocator_type allocator_type;
@@ -57,12 +62,6 @@ public:
 		Iterator first, Iterator last,
 		Alloc const &a = Alloc()
 	) : flat_map(first, last, CompareF(), a)
-	{}
-
-	flat_map(
-		std::initializer_list<value_type> init,
-		Alloc const &a = Alloc()
-	) : flat_map(init.begin(), init.end(), CompareF(), a)
 	{}
 
 	flat_map(
@@ -124,8 +123,25 @@ public:
 	mapped_type &at(key_type const &key);
 	mapped_type const &at(key_type const &key) const;
 
-	mapped_type &operator[](key_type const &key);
-	mapped_type &operator[](key_type &&key);
+	mapped_type &operator[](key_type const &key)
+	{
+		auto iter_p(impl.emplace_unique(
+			impl.lower_bound(key),
+			value_type(key, mapped_type{})
+		));
+
+		return std::get<1>(*iter_p.first);
+	}
+
+	mapped_type &operator[](key_type &&key)
+	{
+		auto iter_p(impl.emplace_unique(
+			impl.lower_bound(key),
+			value_type(key, mapped_type{})
+		));
+
+		return std::get<1>(*iter_p.first);
+	}
 
 	iterator begin()
 	{
@@ -172,12 +188,28 @@ public:
 		impl.clear();
 	}
 
-	std::pair<iterator, bool> insert(value_type const &value);
+	std::pair<iterator, bool> insert(value_type const &value)
+	{
+		return impl.emplace_unique(
+			impl.lower_bound(std::get<0>(value)), value
+		);
+	}
 
-	iterator insert(const_iterator hint, value_type const &value);
+	std::pair<iterator, bool> insert(
+		const_iterator hint, value_type const &value
+	)
+	{
+		return impl.emplace_unique(hint, value);
+	}
 
 	template <typename Iterator>
-	void insert(Iterator first, Iterator last);
+	void insert(Iterator first, Iterator last)
+	{
+		for (; first != last; ++first)
+			impl.emplace_unique(
+				impl.lower_bound(std::get<0>(*first)), *first
+			);
+	}
 
 	void insert(std::initializer_list<value_type> init)
 	{
@@ -185,10 +217,20 @@ public:
 	}
 
 	template <typename... Args>
-	std::pair<iterator, bool> emplace(Args&&... args);
+	std::pair<iterator, bool> emplace(Args&&... args)
+	{
+		return impl.emplace_unique(
+			impl.cend(), std::forward<Args>(args)...
+		);
+	}
 
 	template <typename... Args>
-	std::pair<iterator, bool> emplace(const_iterator hint, Args&&... args);
+	std::pair<iterator, bool> emplace_hint(
+		const_iterator hint, Args&&... args
+	)
+	{
+		return impl.emplace_unique(hint, std::forward<Args>(args)...);
+	}
 
 	iterator erase(const_iterator pos)
 	{
@@ -215,11 +257,25 @@ public:
 		impl.swap(other.impl);
 	}
 
-	iterator find(key_type const &key);
-	const_iterator find(key_type const &key) const;
+	iterator find(key_type const &key)
+	{
+		return impl.find(key);
+	}
 
-	iterator lower_bound(key_type const &key);
-	const_iterator lower_bound(key_type const &key) const;
+	const_iterator find(key_type const &key) const
+	{
+		return impl.find(key);
+	}
+
+	iterator lower_bound(key_type const &key)
+	{
+		return impl.lower_bound(key);
+	}
+
+	const_iterator lower_bound(key_type const &key) const
+	{
+		return impl.lower_bound(key);
+	}
 
 	iterator upper_bound(key_type const &key);
 	const_iterator upper_bound(key_type const &key) const;

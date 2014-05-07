@@ -29,6 +29,7 @@ struct array_helper {
 	>::template rebind_traits<T> allocator_traits;
 
 	typedef typename allocator_traits::size_type size_type;
+	typedef typename allocator_traits::difference_type difference_type;
 
 	typedef typename std::aligned_storage<
 		sizeof(T), std::alignment_of<T>::value

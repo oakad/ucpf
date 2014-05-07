@@ -225,6 +225,8 @@ template <
 
 		std::get<0>(s)[w_off] |= ~((base_bit >> b_off) - 1);
 		set_fill_bit(true);
+
+		return *this;
 	}
 
 	dynamic_bitset &reset(size_type n)
@@ -254,6 +256,7 @@ template <
 
 		std::get<0>(s)[w_off] &= (base_bit >> b_off) - 1;
 		set_fill_bit(false);
+		return *this;
 	}
 
 	template <bool CountOne>
@@ -318,7 +321,7 @@ template <
 			return n >= min_n ? n : npos;
 		}
 
-		if (n < min_n)
+		if (n <= min_n)
 			return npos;
 
 		--n;
@@ -421,6 +424,12 @@ template <
 	void swap(dynamic_bitset &other)
 	{
 		std::swap(bset, other.bset);
+	}
+
+	bool valid(size_type n) const
+	{
+		auto s(get());
+		return n < std::get<1>(s);
 	}
 
 private:
