@@ -22,7 +22,7 @@ template <
 > struct flat_map {
 	typedef KeyType key_type;
 	typedef T mapped_type;
-	typedef std::tuple<key_type const, mapped_type> value_type;
+	typedef std::tuple<key_type, mapped_type> value_type;
 
 private:
 	struct extract_key {
@@ -125,20 +125,22 @@ public:
 
 	mapped_type &operator[](key_type const &key)
 	{
-		auto iter_p(impl.emplace_unique(
-			impl.lower_bound(key),
-			value_type(key, mapped_type{})
-		));
+		auto iter_p(find_impl(key));
+		if (!iter_p.second)
+			iter_p = impl.emplace_unique(
+				iter_p.first, value_type(key, mapped_type{})
+			);
 
 		return std::get<1>(*iter_p.first);
 	}
 
 	mapped_type &operator[](key_type &&key)
 	{
-		auto iter_p(impl.emplace_unique(
-			impl.lower_bound(key),
-			value_type(key, mapped_type{})
-		));
+		auto iter_p(find_impl(key));
+		if (!iter_p.second)
+			iter_p = impl.emplace_unique(
+				iter_p.first, value_type(key, mapped_type{})
+			);
 
 		return std::get<1>(*iter_p.first);
 	}
@@ -190,14 +192,17 @@ public:
 
 	std::pair<iterator, bool> insert(value_type const &value)
 	{
-		return impl.emplace_unique(
-			impl.lower_bound(std::get<0>(value)), value
-		);
+		auto iter_p(find_impl(extract_key::apply(value)));
+
+		if (iter_p.second) {
+			iter_p.second = false;
+			return iter_p;
+		}
+
+		return impl.emplace_unique(iter_p.first, value);
 	}
 
-	std::pair<iterator, bool> insert(
-		const_iterator hint, value_type const &value
-	)
+	iterator insert(const_iterator hint, value_type const &value)
 	{
 		return impl.emplace_unique(hint, value);
 	}
@@ -205,10 +210,10 @@ public:
 	template <typename Iterator>
 	void insert(Iterator first, Iterator last)
 	{
+		auto iter_p(std::make_pair(cend(), false));;
+
 		for (; first != last; ++first)
-			impl.emplace_unique(
-				impl.lower_bound(std::get<0>(*first)), *first
-			);
+			iter_p = impl.emplace_unique(iter_p.first, *first);
 	}
 
 	void insert(std::initializer_list<value_type> init)
@@ -244,9 +249,9 @@ public:
 
 	size_type erase(key_type const &key)
 	{
-		auto p(impl.find(key));
-		if (p != impl.end()) {
-			impl.erase(p, p + 1);
+		auto p(find(key));
+		if (p != end()) {
+			erase(p, p + 1);
 			return 1;
 		} else
 			return 0;
@@ -259,12 +264,14 @@ public:
 
 	iterator find(key_type const &key)
 	{
-		return impl.find(key);
+		auto iter_p(find_impl(key));
+		return iter_p.second ? iter_p.first : end();
 	}
 
 	const_iterator find(key_type const &key) const
 	{
-		return impl.find(key);
+		auto iter_p(find_impl(key));
+		return iter_p.second ? iter_p.first : cend();
 	}
 
 	iterator lower_bound(key_type const &key)
@@ -281,6 +288,26 @@ public:
 	const_iterator upper_bound(key_type const &key) const;
 
 private:
+	std::pair<iterator, bool> find_impl(key_type const &key)
+	{
+		auto iter(impl.lower_bound(key));
+		if (iter != end()) {
+			if (!impl.key_comp()(key, std::get<0>(*iter)))
+				return std::make_pair(iter, true);
+		}
+		return std::make_pair(iter, false);
+	}
+
+	std::pair<const_iterator, bool> find_impl(key_type const &key) const
+	{
+		auto iter(impl.lower_bound(key));
+		if (iter != cend()) {
+			if (!impl.key_comp()(key, std::get<0>(*iter)))
+				return std::make_pair(iter, true);
+		}
+		return std::make_pair(iter, false);
+	}
+
 	map_impl_type impl;
 };
 

@@ -56,4 +56,23 @@ BOOST_AUTO_TEST_CASE(dynamic_bitset_2)
 	BOOST_CHECK_EQUAL(b.count<true>(12, 21), 1);
 }
 
+BOOST_AUTO_TEST_CASE(dynamic_bitset_3)
+{
+	dynamic_bitset<> b;
+
+	b.set();
+	b.reset(10);
+	b.reset(20);
+	b.reset(30);
+	BOOST_CHECK_EQUAL(b.find_below<false>(40), 30);
+	BOOST_CHECK_EQUAL(b.find_below<false>(30), 20);
+	BOOST_CHECK_EQUAL(b.find_below<false>(20), 10);
+	BOOST_CHECK_EQUAL(b.find_below<false>(10), decltype(b)::npos);
+	BOOST_CHECK_EQUAL(b.find_above<false>(10), 20);
+	b.reset(105);
+	BOOST_CHECK_EQUAL(b.find_above<false>(30), 105);
+	b.set(30);
+	BOOST_CHECK_EQUAL(b.find_below<false>(105), 20);
+}
+
 }}

@@ -329,9 +329,10 @@ template <
 		auto b_off(n % word_bits);
 		auto w(std::get<0>(s)[w_off]);
 
-		w &= ~((base_bit >> b_off) - 1);
 		if (!FindOne)
 			w = ~w;
+
+		w &= ~((base_bit >> b_off) - 1);
 
 		if (w) {
 			n = w_off * word_bits + (word_bits - ffs(w) - 1);
@@ -372,10 +373,11 @@ template <
 		auto b_off(n % word_bits);
 		auto w(std::get<0>(s)[w_off]);
 
-		w &= (((base_bit >> b_off) - 1) << 1) | 1;
-
 		if (!FindOne)
 			w = ~w;
+
+		w &= (((base_bit >> b_off) - 1) << 1) | 1;
+
 
 		if (w) {
 			n = w_off * word_bits + (word_bits - fls(w) - 1);
@@ -504,23 +506,26 @@ private:
 			n_ptr[1] = std::get<0>(bset);
 			n_ptr[0] = ((sz - 1) << 1)
 				   | ((n_ptr[1] >> 1) & word_type(1));
-			n_ptr[1] &= ~word_type(1);
-			n_ptr[1] |= (n_ptr[1] >> 1) & word_type(1);
+			auto w(n_ptr[1] & 2 ? ~word_type(0) : word_type(0));
+			if (!w)
+				n_ptr[1] &= ~word_type(1);
+
+			std::fill_n(n_ptr + 2, sz - 2, w);
 			std::get<0>(bset) = reinterpret_cast<word_type>(n_ptr);
 		} else {
 			auto ptr(reinterpret_cast<word_type *>(
 				std::get<0>(bset)
 			));
 			auto o_sz(ptr[0] >> 1);
-			word_type fill_v(0);
+			word_type w(0);
 
 			n_ptr[0] = (sz - 1) << 1;
 			if (ptr[0] & 1) {
 				n_ptr[0] |= word_type(1);
-				fill_v = ~fill_v;
+				w = ~w;
 			}
 			std::copy_n(ptr + 1, o_sz, n_ptr + 1);
-			std::fill_n(n_ptr + o_sz + 1, sz - o_sz - 1, fill_v);
+			std::fill_n(n_ptr + o_sz + 1, sz - o_sz - 1, w);
 			std::get<0>(bset) = reinterpret_cast<word_type>(n_ptr);
 			allocator_helper_type::destroy(
 				std::get<1>(bset), ptr, o_sz + 1, true

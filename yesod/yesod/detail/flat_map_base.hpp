@@ -24,6 +24,7 @@ template <
 	typedef typename value_alloc::allocator_type allocator_type;
 	typedef typename value_alloc::size_type size_type;
 	typedef typename value_alloc::difference_type difference_type;
+	typedef CompareF key_compare;
 
 	template <typename ValueType>
 	struct iterator_base : iterator::facade<
@@ -136,7 +137,7 @@ template <
 	~flat_map_impl()
 	{
 		if (data) {
-			clear_data();
+			destroy_all();
 			value_alloc::free_s(
 				bit_index.get_allocator(), data,
 				std::get<0>(aux)
@@ -184,32 +185,17 @@ template <
 		return iterator(this, iter.pos);
 	}
 
-	iterator find(key_type const &key)
-	{
-		iterator iter(this, lower_bound(key).pos);
-		if (iter != end()) {
-			if (!key_compare(key, key_ref(data + iter.pos)))
-				return iter;
-		}
-		return end();
-	}
-
-	const_iterator find(key_type const &key) const
-	{
-		const_iterator iter(this, lower_bound(key).pos);
-		if (iter != end()) {
-			if (!key_compare(key, key_ref(data[iter.pos])))
-				return iter;
-		}
-		return end();
-	}
-
 	template <typename... Args>
 	std::pair<iterator, bool> emplace_unique(
 		const_iterator hint, Args&&... args
 	);
 
 	iterator erase(const_iterator first, const_iterator last);
+
+	key_compare key_comp() const
+	{
+		return std::get<1>(aux);
+	}
 
 private:
 	static key_type const &key_ref(
@@ -229,7 +215,43 @@ private:
 			return nullptr;
 	}
 
-	void clear_data()
+	size_type alloc_size() const
+	{
+		return std::get<0>(aux);
+	}
+
+	bool compare_keys(key_type const &l, key_type const &r) const
+	{
+		return std::get<1>(aux)(l, r);
+	}
+
+	template <typename... Args>
+	void emplace_at(size_type pos, Args&&... args)
+	{
+		typename value_alloc::allocator_type alloc(
+			bit_index.get_allocator()
+		);
+
+		value_alloc::allocator_traits::construct(
+			alloc, reinterpret_cast<value_type *>(data + pos),
+			std::forward<Args>(args)...
+		);
+		bit_index.set(pos);
+	}
+
+	void destroy_at(size_type pos)
+	{
+		typename value_alloc::allocator_type alloc(
+			bit_index.get_allocator()
+		);
+
+		value_alloc::allocator_traits::destroy(
+			alloc, reinterpret_cast<value_type *>(data + pos)
+		);
+		bit_index.reset(pos);
+	}
+
+	void destroy_all()
 	{
 		typename value_alloc::allocator_type alloc(
 			bit_index.get_allocator()
@@ -242,27 +264,27 @@ private:
 		)
 			value_alloc::allocator_traits::destroy(
 				alloc,
-				reinterpret_cast<value_type *>(&data[pos])
+				reinterpret_cast<value_type *>(data + pos)
 			);
 
 		bit_index.reset();
 	}
 
-	size_type alloc_size() const
+	void swap_pos(size_type l, size_type r)
 	{
-		return std::get<0>(aux);
+		std::swap(
+			reinterpret_cast<value_type &>(data[l]),
+			reinterpret_cast<value_type &>(data[r])
+		);
 	}
 
-	bool key_compare(key_type const &l, key_type const &r) const
-	{
-		return std::get<1>(aux)(l, r);
-	}
+	std::pair<iterator, bool> restore_order_unique(size_type pos);
 
 	difference_type adjust_reserve(size_type cnt);
 
 	dynamic_bitset<Alloc, AllocPolicy> bit_index;
 	typename value_alloc::storage_type *data;
-	std::tuple<size_type, CompareF> aux;
+	std::tuple<size_type, key_compare> aux;
 	size_type begin_pos;
 	size_type end_pos;
 };

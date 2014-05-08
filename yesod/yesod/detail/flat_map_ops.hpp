@@ -81,7 +81,7 @@ template <
 	}
 
 	difference_type r_off(n_begin - begin_pos);
-	clear_data();
+	destroy_all();
 	value_alloc::free_s(alloc, data, alloc_size());
 	data = n_data.release();
 	bit_index.swap(n_index);
@@ -113,7 +113,7 @@ template <
 			auto p(ptr_at(x_pos));
 
 			if (p) {
-				if (key_compare(key_ref(p), key)) {
+				if (compare_keys(key_ref(p), key)) {
 					c_begin = x_pos;
 					continue;
 				}
@@ -123,7 +123,7 @@ template <
 					c_pos, begin_pos
 				);
 				auto q(ptr_at(x_pos));
-				if (!q || key_compare(key_ref(q), key))
+				if (!q || compare_keys(key_ref(q), key))
 					return const_iterator(
 						this, c_end
 					);
@@ -134,14 +134,14 @@ template <
 					c_pos, begin_pos
 				);
 				p = ptr_at(x_pos);
-				if (!p || key_compare(key_ref(p), key))
+				if (!p || compare_keys(key_ref(p), key))
 					return cend();
 
 				c_end = x_pos;
 			}
 		} else {
 			auto p(ptr_at(c_pos));
-			if (key_compare(key_ref(p), key))
+			if (compare_keys(key_ref(p), key))
 				c_begin = c_pos;
 			else
 				c_end = c_pos;
@@ -163,7 +163,119 @@ auto flat_map_impl<
 	const_iterator hint, Args&&... args
 ) -> std::pair<iterator, bool>
 {
-#error
+	if (begin_pos != end_pos) {
+		if (!ptr_at(hint.pos))
+			hint.pos = end_pos;
+	} else {
+		if (!alloc_size())
+			adjust_reserve(4);
+
+		printf("aa %zd\n", alloc_size());
+		begin_pos = alloc_size() / 2;
+		end_pos = begin_pos;
+		emplace_at(begin_pos, std::forward<Args>(args)...);
+		++end_pos;
+		return std::make_pair(iterator(this, begin_pos), true);
+	}
+
+	printf("eu1 %zd, %zd, %zd\n", hint.pos, begin_pos, end_pos);
+
+	auto l_pos(bit_index.template find_below<false>(hint.pos + 1));
+	printf("eu_l %zd\n", l_pos);
+	if (bit_index.valid(l_pos) && ((hint.pos - l_pos) <= 1)) {
+		if (l_pos < begin_pos)
+			begin_pos = l_pos;
+
+		emplace_at(l_pos, std::forward<Args>(args)...);
+		return restore_order_unique(l_pos);
+	}
+
+	auto h_pos(bit_index.template find_above<false>(hint.pos + 1));
+	printf("eu_h %zd\n", h_pos);
+	if (h_pos > l_pos) {
+		if (l_pos < begin_pos)
+			begin_pos = l_pos;
+
+		emplace_at(l_pos, std::forward<Args>(args)...);
+		return restore_order_unique(l_pos);
+	}
+
+	if (h_pos > alloc_size()) {
+		hint = const_iterator(
+			this, hint.pos + adjust_reserve(alloc_size() + 1)
+		);
+		return emplace_unique(
+			hint, std::forward<Args>(args)...
+		);
+	} else if (h_pos >= end_pos)
+		end_pos = h_pos + 1;
+
+	emplace_at(h_pos, std::forward<Args>(args)...);
+	return restore_order_unique(h_pos);
+}
+
+template <
+	typename KeyOfValue, typename CompareF, typename Alloc,
+	typename AllocPolicy
+> auto flat_map_impl<
+	KeyOfValue, CompareF, Alloc, AllocPolicy
+>::restore_order_unique(size_type pos) -> std::pair<iterator, bool>
+{
+	auto x_pos(bit_index.template find_below<true>(pos, begin_pos));
+	bool p_ok(!bit_index.valid(x_pos) || compare_keys(
+		key_ref(data + x_pos), key_ref(data + pos)
+	));
+
+	if (p_ok) {
+		x_pos = bit_index.template find_above<true>(pos, end_pos);
+		p_ok = !bit_index.valid(x_pos) || compare_keys(
+			key_ref(data + pos), key_ref(data + x_pos)
+		);
+	}
+
+	if (x_pos < pos) {
+		while (!p_ok) {
+			if (!compare_keys(
+				key_ref(data + pos), key_ref(data + x_pos)
+			)) {
+				destroy_at(pos);
+				return std::make_pair(
+					iterator(this, x_pos), false
+				);
+			}
+
+			swap_pos(x_pos, pos);
+			pos = x_pos;
+			x_pos = bit_index.template find_below<true>(
+				pos, begin_pos
+			);
+			p_ok = !bit_index.valid(x_pos) || compare_keys(
+				key_ref(data + x_pos), key_ref(data + pos)
+			);
+		}
+	} else {
+		while (!p_ok) {
+			if (!compare_keys(
+				key_ref(data + x_pos), key_ref(data + pos)
+			)) {
+				destroy_at(pos);
+				return std::make_pair(
+					iterator(this, x_pos), false
+				);
+			}
+
+			swap_pos(x_pos, pos);
+			pos = x_pos;
+			x_pos = bit_index.template find_above<true>(
+				pos, end_pos
+			);
+			p_ok = !bit_index.valid(x_pos) || compare_keys(
+				key_ref(data + pos), key_ref(data + x_pos)
+			);
+		}
+	}
+
+	return std::make_pair(iterator(this, pos), true);
 }
 
 template <
@@ -173,7 +285,6 @@ template <
 	KeyOfValue, CompareF, Alloc, AllocPolicy
 >::erase(const_iterator first, const_iterator last) -> iterator
 {
-	typename value_alloc::allocator_type alloc(bit_index.get_allocator());
 	auto c_begin(std::max(begin_pos, first.pos));
 	auto c_end(std::min(end_pos, last.pos));
 
@@ -186,10 +297,7 @@ template <
 		pos < c_end;
 		pos = bit_index.template find_above<true>(pos, c_end)
 	) {
-		value_alloc::allocator_traits::destroy(
-			alloc, reinterpret_cast<value_type *>(&data[pos])
-		);
-		bit_index.reset(pos);
+		destroy_at(pos);
 	}
 
 	if (!bit_index.test(begin_pos)) {
