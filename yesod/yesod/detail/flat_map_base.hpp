@@ -145,9 +145,29 @@ template <
 		}
 	}
 
+	iterator begin()
+	{
+		return iterator(this, begin_pos);
+	}
+
+	const_iterator begin() const
+	{
+		return cbegin();
+	}
+
+	const_iterator cbegin() const
+	{
+		return const_iterator(this, begin_pos);
+	}
+
 	iterator end()
 	{
 		return iterator(this, end_pos);
+	}
+
+	const_iterator end() const
+	{
+		return cend();
 	}
 
 	const_iterator cend() const
@@ -160,10 +180,7 @@ template <
 		return bit_index.template count<true>(begin_pos, end_pos);
 	}
 
-	void reserve(size_type cnt)
-	{
-		adjust_reserve(cnt);
-	}
+	void reserve(size_type cnt);
 
 	const_iterator lower_bound(key_type const &key) const;
 
@@ -279,8 +296,6 @@ private:
 	}
 
 	std::pair<iterator, bool> restore_order_unique(size_type pos);
-
-	difference_type adjust_reserve(size_type cnt);
 
 	dynamic_bitset<Alloc, AllocPolicy> bit_index;
 	typename value_alloc::storage_type *data;

@@ -14,12 +14,12 @@ namespace ucpf { namespace yesod { namespace detail {
 template <
 	typename KeyOfValue, typename CompareF, typename Alloc,
 	typename AllocPolicy
-> auto flat_map_impl<
+> void flat_map_impl<
 	KeyOfValue, CompareF, Alloc, AllocPolicy
->::adjust_reserve(size_type cnt) -> difference_type
+>::reserve(size_type cnt)
 {
 	if (cnt <= alloc_size())
-		return 0;
+		return;
 
 	auto sz(AllocPolicy::best_size(cnt));
 	auto n_begin((sz - alloc_size()) / 2);
@@ -35,7 +35,7 @@ template <
 		begin_pos = n_begin;
 		end_pos = n_end;
 		std::get<0>(aux) = sz;
-		return n_begin;
+		return;
 	}
 
 	auto init_pos(n_begin);
@@ -80,7 +80,6 @@ template <
 		);
 	}
 
-	difference_type r_off(n_begin - begin_pos);
 	destroy_all();
 	value_alloc::free_s(alloc, data, alloc_size());
 	data = n_data.release();
@@ -88,7 +87,7 @@ template <
 	begin_pos = n_begin;
 	end_pos = n_end;
 	std::get<0>(aux) = sz;
-	return r_off;
+	return;
 }
 
 template <
@@ -101,7 +100,7 @@ template <
 	if (end_pos <= begin_pos)
 		return cend();
 
-	auto c_begin(begin_pos), c_end(end_pos - 1);
+	auto c_begin(begin_pos), c_end(end_pos);
 
 	do {
 		auto c_pos((c_begin + c_end) >> 1);
@@ -118,7 +117,7 @@ template <
 					continue;
 				}
 
-				c_end = x_pos;
+				c_end = x_pos + 1;
 				x_pos = bit_index.template find_below<true>(
 					c_pos, begin_pos
 				);
@@ -128,7 +127,7 @@ template <
 						this, c_end
 					);
 
-				c_end = x_pos;
+				c_end = x_pos + 1;
 			} else {
 				x_pos = bit_index.template find_below<true>(
 					c_pos, begin_pos
@@ -137,16 +136,18 @@ template <
 				if (!p || compare_keys(key_ref(p), key))
 					return cend();
 
-				c_end = x_pos;
+				c_end = x_pos + 1;
 			}
 		} else {
 			auto p(ptr_at(c_pos));
 			if (compare_keys(key_ref(p), key))
 				c_begin = c_pos;
-			else
+			else if (compare_keys(key, key_ref(p)))
 				c_end = c_pos;
+			else
+				return const_iterator(this, c_pos);
 		}
-	} while (c_begin != c_end);
+	} while (c_end > (c_begin + 1));
 
 	auto p(ptr_at(c_begin));
 	return p ? const_iterator(this, c_begin) : cend();
@@ -168,9 +169,8 @@ auto flat_map_impl<
 			hint.pos = end_pos;
 	} else {
 		if (!alloc_size())
-			adjust_reserve(4);
+			reserve(4);
 
-		printf("aa %zd\n", alloc_size());
 		begin_pos = alloc_size() / 2;
 		end_pos = begin_pos;
 		emplace_at(begin_pos, std::forward<Args>(args)...);
@@ -178,40 +178,38 @@ auto flat_map_impl<
 		return std::make_pair(iterator(this, begin_pos), true);
 	}
 
-	printf("eu1 %zd, %zd, %zd\n", hint.pos, begin_pos, end_pos);
+	auto pos(bit_index.template find_below<false>(hint.pos + 1));
+	if (bit_index.valid(pos)) {
+		if ((hint.pos - pos) <= 1) {
+			if (pos < begin_pos)
+				begin_pos = pos;
 
-	auto l_pos(bit_index.template find_below<false>(hint.pos + 1));
-	printf("eu_l %zd\n", l_pos);
-	if (bit_index.valid(l_pos) && ((hint.pos - l_pos) <= 1)) {
-		if (l_pos < begin_pos)
-			begin_pos = l_pos;
+			emplace_at(pos, std::forward<Args>(args)...);
+			return restore_order_unique(pos);
+		}
 
-		emplace_at(l_pos, std::forward<Args>(args)...);
-		return restore_order_unique(l_pos);
-	}
+		auto h_pos(bit_index.template find_above<false>(
+			hint.pos ? hint.pos - 1 : 0
+		));
 
-	auto h_pos(bit_index.template find_above<false>(hint.pos + 1));
-	printf("eu_h %zd\n", h_pos);
-	if (h_pos > l_pos) {
-		if (l_pos < begin_pos)
-			begin_pos = l_pos;
-
-		emplace_at(l_pos, std::forward<Args>(args)...);
-		return restore_order_unique(l_pos);
-	}
-
-	if (h_pos > alloc_size()) {
-		hint = const_iterator(
-			this, hint.pos + adjust_reserve(alloc_size() + 1)
+		if ((h_pos - hint.pos) < (hint.pos - pos))
+			pos = h_pos;
+	} else
+		pos = bit_index.template find_above<false>(
+			hint.pos ? hint.pos - 1 : 0
 		);
-		return emplace_unique(
-			hint, std::forward<Args>(args)...
-		);
-	} else if (h_pos >= end_pos)
-		end_pos = h_pos + 1;
 
-	emplace_at(h_pos, std::forward<Args>(args)...);
-	return restore_order_unique(h_pos);
+	if (pos >= alloc_size()) {
+		reserve(alloc_size() + 1);
+		pos = end_pos;
+		emplace_at(end_pos, std::forward<Args>(args)...);
+		++end_pos;
+		return restore_order_unique(pos);
+	} else if (pos >= end_pos)
+		end_pos = pos + 1;
+
+	emplace_at(pos, std::forward<Args>(args)...);
+	return restore_order_unique(pos);
 }
 
 template <

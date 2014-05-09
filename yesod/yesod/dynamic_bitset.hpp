@@ -265,7 +265,6 @@ template <
 	) const
 	{
 		auto s(get());
-
 		auto x_end_pos(std::min(end_pos, std::get<1>(s)));
 
 		if (begin_pos >= x_end_pos) {
@@ -292,7 +291,7 @@ template <
 
 		size_type rv(0);
 
-		while (w_off != ew_off) {
+		while (w_off <= ew_off) {
 			rv += popcount(w);
 			++w_off;
 			w = std::get<0>(s)[w_off];
