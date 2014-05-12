@@ -98,59 +98,104 @@ template <
 >::lower_bound(key_type const &key) const -> const_iterator
 {
 	if (end_pos <= begin_pos)
-		return cend();
+		return const_iterator(this, end_pos);
 
 	auto c_begin(begin_pos), c_end(end_pos);
 
-	do {
-		auto c_pos((c_begin + c_end) >> 1);
-
-		if (!bit_index.test(c_pos)) {
-			auto x_pos(bit_index.template find_above<true>(
-				c_pos, end_pos
-			));
-			auto p(ptr_at(x_pos));
-
-			if (p) {
-				if (compare_keys(key_ref(p), key)) {
-					c_begin = x_pos;
-					continue;
-				}
-
-				c_end = x_pos + 1;
-				x_pos = bit_index.template find_below<true>(
-					c_pos, begin_pos
-				);
-				auto q(ptr_at(x_pos));
-				if (!q || compare_keys(key_ref(q), key))
-					return const_iterator(
-						this, c_end
-					);
-
-				c_end = x_pos + 1;
-			} else {
-				x_pos = bit_index.template find_below<true>(
-					c_pos, begin_pos
-				);
-				p = ptr_at(x_pos);
-				if (!p || compare_keys(key_ref(p), key))
-					return cend();
-
-				c_end = x_pos + 1;
-			}
-		} else {
-			auto p(ptr_at(c_pos));
-			if (compare_keys(key_ref(p), key))
-				c_begin = c_pos;
-			else if (compare_keys(key, key_ref(p)))
-				c_end = c_pos;
+	while (true) {
+		if ((c_begin + 1) == c_end) {
+			if (compare_keys(key_ref(data + c_begin), key))
+				return cend();
 			else
-				return const_iterator(this, c_pos);
+				return const_iterator(this, c_begin);
 		}
-	} while (c_end > (c_begin + 1));
 
-	auto p(ptr_at(c_begin));
-	return p ? const_iterator(this, c_begin) : cend();
+		auto c_pos(c_begin + c_end);
+		if (c_pos & 1)
+			c_pos = (c_pos / 2) + 1;
+		else
+			c_pos = c_pos / 2;
+
+		auto x_end(bit_index.template find_below<true>(
+			c_pos, c_begin
+		));
+
+		if (!bit_index.valid(x_end)) {
+			c_begin = bit_index.template find_above<true>(
+				c_pos - 1, c_end
+			);
+
+			if (!bit_index.valid(c_begin))
+				return cend();
+
+			continue;
+		}
+
+		if (compare_keys(key_ref(data + x_end), key)) {
+			c_begin = bit_index.template find_above<true>(
+				c_pos - 1, c_end
+			);
+
+			if (!bit_index.valid(c_begin))
+				return cend();
+		} else
+			c_end = x_end + 1;
+	}
+}
+
+template <
+	typename KeyOfValue, typename CompareF, typename Alloc,
+	typename AllocPolicy
+> auto flat_map_impl<
+	KeyOfValue, CompareF, Alloc, AllocPolicy
+>::upper_bound(key_type const &key) const -> const_iterator
+{
+	if (end_pos <= begin_pos)
+		return const_iterator(this, end_pos);
+
+	auto c_begin(begin_pos), c_end(end_pos);
+
+	while (true) {
+		if ((c_begin + 1) == c_end) {
+			if (compare_keys(key, key_ref(data + c_begin)))
+				return const_iterator(this, c_begin);
+			else
+				return cend();
+		}
+
+		auto c_pos(c_begin + c_end);
+		if (c_pos & 1)
+			c_pos = (c_pos / 2) + 1;
+		else
+			c_pos = c_pos / 2;
+
+		auto x_end(bit_index.template find_below<true>(
+			c_pos, c_begin
+		));
+
+		if (!bit_index.valid(x_end)) {
+			c_begin = bit_index.template find_above<true>(
+				c_pos - 1, c_end
+			);
+
+			if (!bit_index.valid(c_begin))
+				return cend();
+
+			continue;
+		}
+
+		if (compare_keys(key, key_ref(data + x_end)))
+			c_end = x_end + 1;
+		else {
+			
+			c_begin = bit_index.template find_above<true>(
+				c_pos - 1, c_end
+			);
+
+			if (!bit_index.valid(c_begin))
+				return cend();
+		}
+	}
 }
 
 template <

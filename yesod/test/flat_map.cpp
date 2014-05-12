@@ -37,6 +37,7 @@ BOOST_AUTO_TEST_CASE(flat_map_0)
 	}
 
 	BOOST_CHECK(*m0.find(1) == std::make_tuple(1, 10));
+	BOOST_CHECK(*m0.upper_bound(3) == std::make_tuple(4, 40));
 	m0.erase(1);
 	BOOST_CHECK(m0.find(1) == m0.end());
 }

@@ -286,8 +286,15 @@ public:
 		return impl.lower_bound(key);
 	}
 
-	iterator upper_bound(key_type const &key);
-	const_iterator upper_bound(key_type const &key) const;
+	iterator upper_bound(key_type const &key)
+	{
+		return impl.upper_bound(key);
+	}
+
+	const_iterator upper_bound(key_type const &key) const
+	{
+		return impl.upper_bound(key);
+	}
 
 private:
 	std::pair<iterator, bool> find_impl(key_type const &key)
