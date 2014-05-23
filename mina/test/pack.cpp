@@ -10,10 +10,10 @@
 #include <boost/test/included/unit_test.hpp>
 #include <boost/test/output_test_stream.hpp>
 
-#include <mina/pack.hpp>
+#include <mina/mbp/pack.hpp>
 #include <string>
 
-namespace ucpf { namespace mina {
+namespace ucpf { namespace mina { namespace mbp {
 namespace test {
 
 struct a {
@@ -28,7 +28,7 @@ template <typename OutputIterator>
 struct custom<OutputIterator, test::a> {
 	static void pack(OutputIterator &&sink, test::a &&va)
 	{
-		mina::pack(
+		mbp::pack(
 			std::forward<OutputIterator>(sink), va.x, va.y, va.z
 		);
 	}
@@ -60,4 +60,4 @@ BOOST_AUTO_TEST_CASE(pack_1)
 	BOOST_CHECK(false);
 }
 
-}}
+}}}

@@ -5,17 +5,17 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_MINA_DETAIL_PACK_NOV_07_2013_1700)
-#define UCPF_MINA_DETAIL_PACK_NOV_07_2013_1700
+#if !defined(UCPF_MINA_MBP_DETAIL_PACK_20131107T1700)
+#define UCPF_MINA_MBP_DETAIL_PACK_20131107T1700
 
 #include <cstdint>
 #include <array>
 #include <yesod/float.hpp>
 #include <yesod/is_sequence.hpp>
 #include <yesod/compose_bool.hpp>
-#include <mina/detail/raw_encoding.hpp>
+#include <mina/mbp/detail/raw_encoding.hpp>
 
-namespace ucpf { namespace mina {
+namespace ucpf { namespace mina { namespace mbp {
 
 template <typename OutputIterator, typename T>
 struct custom {
@@ -271,5 +271,5 @@ void pack(OutputIterator &&sink, T &&v, Tn &&...vn)
 }
 
 }
-}}
+}}}
 #endif

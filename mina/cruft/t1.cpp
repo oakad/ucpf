@@ -1,11 +1,11 @@
 
-#include <mina/pack.hpp>
+#include <mina/mbp/pack.hpp>
 #include <iterator>
 #include <vector>
 
 int main(int argc, char **argv)
 {
-	using ucpf::mina::pack;
+	using ucpf::mina::mbp::pack;
 
 	std::vector<unsigned char> out;
 	uint64_t a(0x12ULL);

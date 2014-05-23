@@ -10,13 +10,63 @@
 #define UCPF_MINA_NP_PACKAGER_20140522T1620
 
 #include <initializer_list>
+#include <mina/detail/is_composite.hpp>
 
 namespace ucpf { namespace mina {
 
-template <typename StoreType, typename TempStoreType>
+template <typename StoreType>
 struct np_packager {
 	typedef std::initializer_list<char const *> name_pack_type;
 
+	template <typename ...Args>
+	np_packager(Args &&...args)
+	: store(std::forward<Args>(args)...)
+	{}
+
+	template <typename ...Args>
+	bool save(name_pack_type &&names, Args &&...args)
+	{
+		if (store.start_save()) {
+			unpack = false;
+			inspect(
+				names.begin(),
+				std::forward<name_pack_type>(names),
+				std::forward<Args>(args)...
+			);
+			store.end_save();
+			return true;
+		}
+		return false;
+	}
+
+	template <typename ...Args>
+	bool restore(name_pack_type &&names, Args &&...args)
+	{
+		if (store.start_scan()) {
+			unpack = false;
+			inspect(
+				names.begin(),
+				std::forward<name_pack_type>(names),
+				std::forward<Args>(args)...
+			);
+			store.merge_scan();
+		}
+
+		if (store.start_restore()) {
+			unpack = true;
+			inspect(
+				names.begin(),
+				std::forward<name_pack_type>(names),
+				std::forward<Args>(args)...
+			);
+			store.end_restore();
+			return true;
+		}
+		return false;
+	}
+
+	/* Will be nice to edit calls to this method via compiler plugin
+	 * and get rid of MINA_NPP macro below. */
 	template <typename ...Args>
 	np_packager &operator()(name_pack_type &&names, Args &&...args)
 	{
@@ -28,6 +78,28 @@ struct np_packager {
 	}
 
 private:
+	template <typename T, bool Composite = true>
+	struct cls
+	{
+		static void apply(
+			np_packager &self, char const *name, T &&value
+		)
+		{
+			self.inspect_c(name, std::forward<T>(value));
+		}
+	};
+
+	template <typename T>
+	struct cls<T, false>
+	{
+		static void apply(
+			np_packager &self, char const *name, T &&value
+		)
+		{
+			self.inspect_s(name, std::forward<T>(value));
+		}
+	};
+
 	void inspect(
 		typename name_pack_type::iterator iter,
 		name_pack_type &&names
@@ -40,17 +112,40 @@ private:
 		name_pack_type &&names, T0 &&a0, Tn &&...an
 	)
 	{
-		if (iter != names.end()) {
-			std::cout << "name " << *iter << " value " << a0 << '\n';
-			++iter;
-		} else
-			std::cout << "name <none> " << " value " << a0 << '\n';
+		char const *name(nullptr);
+
+		if (iter != names.end())
+			name = *iter;
+
+		cls<
+			T0, detail::is_composite<
+				typename std::remove_reference<T0>::type,
+				np_packager
+			>::value
+		>::apply(*this, name, std::forward<T0>(a0));
 
 		inspect(
 			iter, std::forward<name_pack_type>(names),
 			std::forward<Tn>(an)...
 		);
 	}
+
+	template <typename T>
+	void inspect_s(char const *name, T &&value)
+	{
+		store.sync_value(name, std::forward<T>(value));
+	}
+
+	template <typename T>
+	void inspect_c(char const *name, T &&value)
+	{
+		store.push_level(name);
+		value.mina_pack(*this, unpack);
+		store.pop_level();
+	}
+
+	bool unpack;
+	StoreType store;
 };
 
 }}

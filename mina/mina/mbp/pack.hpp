@@ -5,13 +5,13 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_MINA_PACK_NOV_13_2013_1445)
-#define UCPF_MINA_PACK_NOV_13_2013_1445
+#if !defined(UCPF_MINA_MBP_PACK_20131113T1445)
+#define UCPF_MINA_MBP_PACK_20131113T1445
 
-#include <mina/detail/pack.hpp>
+#include <mina/mbp/detail/pack.hpp>
 #include <boost/range/iterator_range.hpp>
 
-namespace ucpf { namespace mina {
+namespace ucpf { namespace mina { namespace mbp {
 
 template <typename OutputIterator, typename ...Tn>
 void pack(OutputIterator &&sink, Tn &&...vn)
@@ -37,7 +37,7 @@ struct custom<OutputIterator, char const *&> {
 		boost::iterator_range<char const *> r(
 			v, v + std::strlen(v)
 		);
-		mina::pack(std::forward<OutputIterator>(sink), r);
+		mbp::pack(std::forward<OutputIterator>(sink), r);
 	}
 };
 
@@ -48,9 +48,9 @@ struct custom<OutputIterator, char const (&)[N]> {
 		boost::iterator_range<char const *> r(
 			v, v + N - 1
 		);
-		mina::pack(std::forward<OutputIterator>(sink), r);
+		mbp::pack(std::forward<OutputIterator>(sink), r);
 	}
 };
 
-}}
+}}}
 #endif

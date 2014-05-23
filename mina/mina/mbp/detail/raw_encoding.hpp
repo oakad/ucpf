@@ -5,14 +5,14 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_MINA_DETAIL_RAW_ENCODING_NOV_18_2013_1700)
-#define UCPF_MINA_DETAIL_RAW_ENCODING_NOV_18_2013_1700
+#if !defined(UCPF_MINA_MBP_DETAIL_RAW_ENCODING_20131118T1700)
+#define UCPF_MINA_DETAIL_RAW_ENCODING_20131118T1700
 
 #include <array>
 #include <cstdint>
 #include <yesod/bitops.hpp>
 
-namespace ucpf { namespace mina { namespace detail {
+namespace ucpf { namespace mina { namespace mbp { namespace detail {
 
 constexpr uint8_t const small_int_mask         = 0x1f;
 constexpr uint8_t const small_int_code_offset  = 0x10;
@@ -134,6 +134,6 @@ constexpr uint8_t tuple_start_code = 0x50;
 constexpr uint8_t byte_skip_code = 0x60;
 constexpr uint8_t tuple_end_code = 0x70;
 
-}}}
+}}}}
 
 #endif

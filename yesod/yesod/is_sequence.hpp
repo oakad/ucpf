@@ -67,13 +67,13 @@ struct has_cbegin<T, true> {
 
 	template <typename U>
 	static std::true_type test(
-		wrapper<
+		U *, wrapper<
 			const_iterator (U::*)() const, &U::begin
 		> * = nullptr
 	);
 	static std::false_type test(...);
 
-	typedef decltype(test<T>()) type;
+	typedef decltype(test(static_cast<T *>(nullptr))) type;
 
 	static constexpr bool value = type::value;
 };
