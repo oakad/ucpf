@@ -114,8 +114,10 @@ private:
 	{
 		char const *name(nullptr);
 
-		if (iter != names.end())
+		if (iter != names.end()) {
 			name = *iter;
+			++iter;
+		}
 
 		cls<
 			T0, detail::is_composite<
