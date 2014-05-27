@@ -9,6 +9,7 @@
 #if !defined(UCPF_MINA_NP_PACKAGER_20140522T1620)
 #define UCPF_MINA_NP_PACKAGER_20140522T1620
 
+#include <utility>
 #include <initializer_list>
 #include <mina/detail/is_composite.hpp>
 
