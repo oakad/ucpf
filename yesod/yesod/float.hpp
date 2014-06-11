@@ -90,6 +90,9 @@ struct float_t {
 	float_t(float_t const &other)
 	: value(other.value) {}
 
+	float_t(storage_type const &other)
+	: storable(other) {}
+
 	float_t(float_t &&other)
 	: value(std::move(other.value)) {}
 
@@ -99,6 +102,11 @@ struct float_t {
 		machine_type, U, traits_type::is_native,
 		std::is_floating_point<U>::value
 	>::convert(other)) {};
+
+	operator machine_type() const
+	{
+		return value;
+	}
 
 	storage_type get_storable() const
 	{

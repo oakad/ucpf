@@ -6,16 +6,16 @@
  * shed by the Free Software Foundation.
  */
 
-#if !defined(UCPF_YESOD_ITERATOR_RANGE_20140327T1420)
-#define UCPF_YESOD_ITERATOR_RANGE_20140327T1420
+#if !defined(UCPF_YESOD_ITERATOR_SUB_RANGE_20140611T2230)
+#define UCPF_YESOD_ITERATOR_SUB_RANGE_20140611T2230
 
 #include <yesod/iterator/facade.hpp>
 
 namespace ucpf { namespace yesod { namespace iterator {
 
 template <typename Iterator>
-struct range {
-	typedef range type;
+struct sub_range {
+	typedef sub_range type;
 	typedef size_t size_type;
 	typedef typename std::iterator_traits<Iterator>::value_type value_type;
 	typedef typename std::iterator_traits<Iterator>::reference reference;
@@ -93,76 +93,97 @@ struct range {
 		iterator_base<typename std::add_const<value_type>::type>
 	>::type const_iterator;
 
-	range(Iterator first_, Iterator last_)
-	: first(first_), last(last_)
+	sub_range(Iterator first_, Iterator last_)
+	: first(first_), last(last_), lower(first_), upper(first_), 
 	{}
 
 	iterator begin()
 	{
-		return iterator(first);
+		return iterator(lower);
 	}
 
 	iterator end()
 	{
-		return iterator(last);
+		return iterator(upper);
 	}
 
 	const_iterator begin() const
 	{
-		return const_iterator(first);
+		return const_iterator(lower);
 	}
 
 	const_iterator end() const
 	{
-		return const_iterator(last);
+		return const_iterator(upper);
 	}
 
 	size_type size() const
+	{
+		return std::distance(lower, upper);
+	}
+
+	size_type capacity() const
 	{
 		return std::distance(first, last);
 	}
 
 	reference operator[](difference_type pos) const
 	{
-		auto iter(first);
+		auto iter(lower);
 		std::advance(iter, pos);
 		return *iter;
 	}
 
+	void push_back(value_type const &v)
+	{
+		if (upper != last) {
+			auto pos(upper);
+			++upper;
+			*pos = v;
+		}
+	}
+
+	void push_back(value_type &&v)
+	{
+		if (upper != last) {
+			auto pos(upper);
+			++upper;
+			*pos = std::move(v);
+		}
+	}
+
+	void pop_back()
+	{
+		if (upper != lower)
+			--upper;
+	}
+
 private:
-	Iterator first, last;
+	Iterator first, last, lower, upper;
 };
 
 template <typename Iterator>
-auto make_range(Iterator first, Iterator last) -> range<Iterator>
+auto make_sub_range(Iterator first, Iterator last) -> range<Iterator>
 {
-	return range<Iterator>(first, last);
+	return sub_range<Iterator>(first, last);
 }
 
 template <typename Iterator>
-auto make_range(Iterator first, size_t n) -> range<Iterator>
+auto make_sub_range(Iterator first, size_t n) -> range<Iterator>
 {
 	auto last(first);
 	std::advance(last, n);
-	return range<Iterator>(first, last);
+	return sub_range<Iterator>(first, last);
 }
 
 template <typename Range>
-auto make_range(Range const &r) -> range<
+auto make_sub_range(Range const &r) -> range<
 	decltype(std::begin(std::declval<Range>()))
 >
 {
-	return range<
+	return sub_range<
 		decltype(std::begin(std::declval<Range>()))
 	>(std::begin(r), std::end(r));
-}
-
-template <typename CharType>
-auto str(CharType const *s) -> range<CharType const *>
-{
-	return range<CharType const *>(
-		s, s + std::char_traits<CharType>::length(s)
-	);
 }
 
 }}}

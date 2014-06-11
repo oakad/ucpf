@@ -10,7 +10,7 @@
 #include <boost/test/included/unit_test.hpp>
 #include <boost/test/output_test_stream.hpp>
 
-#include <mina/mbp/pack.hpp>
+#include <mina/mbp.hpp>
 #include <string>
 
 namespace ucpf { namespace mina { namespace mbp {
@@ -24,8 +24,9 @@ struct a {
 
 }
 
-template <typename OutputIterator>
-struct custom<OutputIterator, test::a> {
+template <>
+struct custom<test::a> {
+	template <typename OutputIterator>
 	static void pack(OutputIterator &&sink, test::a &&va)
 	{
 		mbp::pack(

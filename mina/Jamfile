@@ -1,3 +1,3 @@
 
-project mina  : requirements <cxxflags>-std=c++11 <threading>multi
+project mina  : requirements <cxxflags>-std=c++1y <threading>multi
               : default-build release ;
