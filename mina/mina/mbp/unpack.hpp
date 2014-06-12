@@ -34,33 +34,22 @@ bool advance_n(ForwardIterator &first, ForwardIterator last, size_t count)
 		return false;
 }
 
-template <bool SignedValue, typename T>
-T unpack_small_integral(uint8_t st)
-{
-	st &= small_int_mask;
-
-	if (SignedValue && (st & small_int_sign_bit))
-		return T(small_int_neg_base) + st;
-	else
-		return T(st);
-}
-
 template <
 	bool SignedValue, typename T, typename ForwardIterator
 > auto unpack_integral(ForwardIterator first, ForwardIterator last)
 -> typename std::enable_if<SignedValue, T>::type
 {
-	uint8_t xv;
+	uint8_t xv(0);
 	T rv(0);
-	for (unsigned int shift(0); shift < sizeof(T); ++shift) {
+	for (unsigned int shift(0); shift < (8 * sizeof(T)); shift += 8) {
 		if (first != last) {
 			xv = *first;
-			rv |= T(xv) << (8 * shift);
+			rv |= T(xv) << shift;
 			++first;
 		} else
 			rv |= (
 				(xv & 0x80) ? uint8_t(0xff) : uint8_t(0)
-			) << (8 * shift);
+			) << shift;
 	}
 	return rv;
 }
@@ -70,10 +59,9 @@ template <
 > auto unpack_integral(ForwardIterator first, ForwardIterator last)
 -> typename std::enable_if<!SignedValue, T>::type
 {
-	uint8_t xv;
 	T rv(0);
 	for (unsigned int shift(0); first != last; ++first, shift += 8)
-		rv |= T(*first) << (8 * shift);
+		rv |= T(*first) << shift;
 
 	return rv;
 }
@@ -86,7 +74,9 @@ struct unpack_helper<T, 0> {
 	template <typename ForwardIterator>
 	static bool apply(ForwardIterator &first, ForwardIterator last, T &&v)
 	{
-		return custom<T>::unpack(first, last, std::forward<T>(v));
+		return custom<
+			typename std::remove_reference<T>::type
+		>::unpack(first, last, std::forward<T>(v));
 	}
 };
 
@@ -141,6 +131,7 @@ struct unpack_helper<T, kind_flags::integral> {
 	{
 		if (first == last)
 			return false;
+
 		if (*first == detail::byte_skip_code) {
 			if (!advance_skip(first, last))
 				return false;
@@ -165,7 +156,8 @@ struct unpack_helper<T, kind_flags::integral> {
 			return false;
 
 		if (f_class.scalar_r == scalar_rank::i5) {
-			v = unpack_small_integral<signed_, Tr>(xv);
+			v = xv & small_int_mask;
+			v -= small_int_code_offset;
 			++first;
 			return true;
 		}
@@ -190,7 +182,7 @@ struct unpack_helper<T, kind_flags::integral> {
 template <typename T>
 struct unpack_helper<T, kind_flags::float_t> {
 	template <typename ForwardIterator>
-	static bool apply(ForwardIterator first, ForwardIterator last, T &&v)
+	static bool apply(ForwardIterator &first, ForwardIterator last, T &&v)
 	{
 		if (first == last)
 			return false;
@@ -209,7 +201,9 @@ struct unpack_helper<T, kind_flags::float_t> {
 		if (f_class.list_size_r != list_size_rank::l3)
 			return false;
 
-		typedef typename yesod::fp_adapter_type<T>::type Tw;
+		typedef typename yesod::fp_adapter_type<
+			typename std::remove_reference<T>::type
+		>::type Tw;
 		typedef typename Tw::storage_type Tr;
 		constexpr auto s_rank(scalar_rank::from_type<Tr>());
 
@@ -248,7 +242,7 @@ struct unpack_helper<T, kind_flags::integral | kind_flags::sequence> {
 
 		uint8_t xv(*first);
 		auto f_class(field_class::from_header(xv));
-		typedef typename T::value_type Tr;
+		typedef typename std::remove_reference<T>::type::value_type Tr;
 		constexpr bool signed_(std::is_signed<Tr>::value);
 
 		if ((
@@ -268,9 +262,9 @@ struct unpack_helper<T, kind_flags::integral | kind_flags::sequence> {
 			return false;
 		case list_size_rank::l3:
 			if (f_class.scalar_r == scalar_rank::i5) {
-				v.push_back(
-					unpack_small_integral<signed_, Tr>(xv)
-				);
+				v.push_back(Tr(
+					xv & small_int_mask
+				) - small_int_code_offset);
 				return true;
 			} else
 				list_size = (xv & small_list_size_mask) + 1;
@@ -282,7 +276,7 @@ struct unpack_helper<T, kind_flags::integral | kind_flags::sequence> {
 
 			list_size = unpack_integral<false, size_t>(
 				x_first, first
-			);
+			) + 1;
 		}
 
 		if (!list_size)
@@ -322,7 +316,7 @@ struct unpack_helper<T, kind_flags::float_t | kind_flags::sequence> {
 		uint8_t xv(*first);
 		auto f_class(field_class::from_header(xv));
 		typedef typename yesod::fp_adapter_type<
-			typename T::value_type
+			typename std::remove_reference<T>::type::value_type
 		>::type Tw;
 		typedef typename Tw::storage_type Tr;
 
@@ -348,7 +342,7 @@ struct unpack_helper<T, kind_flags::float_t | kind_flags::sequence> {
 
 			list_size = unpack_integral<false, size_t>(
 				x_first, first
-			);
+			) + 1;
 		}
 
 		if (!list_size)

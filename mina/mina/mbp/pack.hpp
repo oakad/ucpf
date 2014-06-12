@@ -49,7 +49,7 @@ struct pack_helper<T, 0> {
 	template <typename OutputIterator>
 	static void apply(OutputIterator &&sink, T &&v)
 	{
-		custom<T>::pack(
+		custom<typename std::remove_reference<T>::type>::pack(
 			std::forward<OutputIterator>(sink),
 			std::forward<T>(v)
 		);
@@ -91,8 +91,8 @@ struct pack_helper<T, kind_flags::integral> {
 			? numeric_type_rank::n_signed
 			: numeric_type_rank::n_unsigned
 		);
-		auto s_rank(scalar_rank::from_value(v));
 
+		auto s_rank(scalar_rank::from_value(v));
 		if (s_rank == scalar_rank::ie)
 			return;
 
@@ -119,13 +119,18 @@ struct pack_helper<T, kind_flags::float_t> {
 	template <typename OutputIterator>
 	static void apply(OutputIterator &&sink, T &&v)
 	{
-		typedef typename yesod::fp_adapter_type<T>::type Tw;
+		typedef typename yesod::fp_adapter_type<
+			typename std::remove_reference<T>::type
+		>::type Tw;
+
 		constexpr auto s_rank(
 			scalar_rank::from_type<typename Tw::storage_type>()
 		);
+
 		*sink++ = list_code[numeric_type_rank::n_float]
 				   [list_size_rank::l3]
 				   [s_rank - 1];
+
 		pack_integral<scalar_rank::order[s_rank] / 8>(
 			std::forward<OutputIterator>(sink),
 			Tw(v).get_storable()
@@ -183,9 +188,8 @@ struct pack_helper<
 	template <typename OutputIterator>
 	static void apply(OutputIterator &&sink, T &&v)
 	{
-		typedef typename std::remove_reference<T>::type Tr;
 		typedef typename yesod::fp_adapter_type<
-			typename Tr::value_type
+			typename std::remove_reference<T>::type::value_type
 		>::type Tw;
 		auto sz(v.size());
 

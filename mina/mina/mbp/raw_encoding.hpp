@@ -19,16 +19,15 @@ namespace ucpf { namespace mina { namespace mbp {
 template <typename T>
 struct custom {
 	template <typename OutputIterator>
-	static void pack(OutputIterator &&sink, T &&v);
+	static void pack(OutputIterator &sink, T const &v);
 
 	template <typename ForwardIterator>
-	static bool unpack(ForwardIterator &first, ForwardIterator last, T &&v);
+	static bool unpack(ForwardIterator &first, ForwardIterator last, T &v);
 };
 
 namespace detail {
 
-constexpr int small_int_neg_base         = -32;
-constexpr uint8_t small_int_sign_bit     = 0x10;
+constexpr int small_int_neg_base         = -16;
 constexpr uint8_t small_int_mask         = 0x1f;
 constexpr uint8_t small_int_code_offset  = 0x10;
 constexpr uint8_t small_uint_code_offset = 0x30;
@@ -244,6 +243,8 @@ struct field_class {
 	int list_size_r;
 	int numeric_type_r;
 };
+
+constexpr std::array<uint8_t, 256> field_class::header_value_code;
 
 constexpr uint8_t tuple_start_code = 0x50;
 constexpr uint8_t byte_skip_code = 0x60;

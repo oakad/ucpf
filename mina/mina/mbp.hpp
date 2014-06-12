@@ -61,7 +61,8 @@ bool unpack(ForwardIterator &first, ForwardIterator last, Tn &&...vn)
 				return false;
 			++first;
 			return true;
-		}
+		} else
+			return false;
 	} else
 		return detail::unpack(
 			first, last, std::forward<Tn>(vn)...
@@ -69,9 +70,9 @@ bool unpack(ForwardIterator &first, ForwardIterator last, Tn &&...vn)
 }
 
 template <>
-struct custom<char const *&> {
+struct custom<char const *> {
 	template <typename OutputIterator>
-	static void pack(OutputIterator &&sink, char const *&v)
+	static void pack(OutputIterator &sink, char const *v)
 	{
 		yesod::iterator::range<char const *> r(
 			v, v + std::strlen(v)
@@ -81,9 +82,9 @@ struct custom<char const *&> {
 };
 
 template <size_t N>
-struct custom<char const (&)[N]> {
+struct custom<char const [N]> {
 	template <typename OutputIterator>
-	static void pack(OutputIterator &&sink, char const (&v)[N])
+	static void pack(OutputIterator &sink, char const v[N])
 	{
 		yesod::iterator::range<char const *> r(
 			v, v + N - 1
