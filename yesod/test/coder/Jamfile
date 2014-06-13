@@ -10,3 +10,4 @@ run base32.cpp : : test_case ;
 run base86.cpp : : test_case ;
 run blowfish.cpp : : test_case ;
 run pi_word.cpp : : test_case ;
+run xxhash.cpp : : test_case ;

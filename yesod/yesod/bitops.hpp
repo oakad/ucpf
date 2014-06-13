@@ -48,5 +48,15 @@ constexpr int popcount(uint64_t v)
 	return __builtin_popcountll(v);
 }
 
+constexpr uint32_t rotl(uint32_t v, int c)
+{
+	return (v << c) | (v >> (32 - c));
+}
+
+constexpr uint32_t bswap(uint32_t v)
+{
+	return __builtin_bswap32(v);
+}
+
 }}
 #endif
