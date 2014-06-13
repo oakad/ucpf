@@ -30,7 +30,7 @@ struct sub_range {
 		reference, difference_type
 	> {
 		friend struct core_access;
-		friend struct range;
+		friend struct sub_range;
 
 		iterator_base() = default;
 
@@ -94,7 +94,7 @@ struct sub_range {
 	>::type const_iterator;
 
 	sub_range(Iterator first_, Iterator last_)
-	: first(first_), last(last_), lower(first_), upper(first_), 
+	: first(first_), last(last_), lower(first_), upper(first_)
 	{}
 
 	iterator begin()
@@ -163,13 +163,13 @@ private:
 };
 
 template <typename Iterator>
-auto make_sub_range(Iterator first, Iterator last) -> range<Iterator>
+auto make_sub_range(Iterator first, Iterator last) -> sub_range<Iterator>
 {
 	return sub_range<Iterator>(first, last);
 }
 
 template <typename Iterator>
-auto make_sub_range(Iterator first, size_t n) -> range<Iterator>
+auto make_sub_range(Iterator first, size_t n) -> sub_range<Iterator>
 {
 	auto last(first);
 	std::advance(last, n);
@@ -177,13 +177,9 @@ auto make_sub_range(Iterator first, size_t n) -> range<Iterator>
 }
 
 template <typename Range>
-auto make_sub_range(Range const &r) -> range<
-	decltype(std::begin(std::declval<Range>()))
->
+auto make_sub_range(Range &r) -> sub_range<decltype(std::begin(r))>
 {
-	return sub_range<
-		decltype(std::begin(std::declval<Range>()))
-	>(std::begin(r), std::end(r));
+	return sub_range<decltype(std::begin(r))>(std::begin(r), std::end(r));
 }
 
 }}}

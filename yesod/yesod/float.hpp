@@ -8,12 +8,12 @@
 #if !defined(UCPF_YESOD_FLOAT_NOV_15_2013_1215)
 #define UCPF_YESOD_FLOAT_NOV_15_2013_1215
 
+#include <limits>
+
 #include <yesod/mpl/at.hpp>
 #include <yesod/mpl/map.hpp>
 #include <yesod/mpl/has_key.hpp>
 #include <yesod/bitops.hpp>
-
-#include <boost/operators.hpp>
 
 namespace ucpf { namespace yesod {
 namespace detail {

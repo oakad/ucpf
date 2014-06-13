@@ -69,27 +69,34 @@ bool unpack(ForwardIterator &first, ForwardIterator last, Tn &&...vn)
 		);
 }
 
-template <>
-struct custom<char const *> {
+template <typename Range, typename ...Tn>
+bool unpack(Range const &r, Tn &&...vn)
+{
+	auto first(r.begin());
+	return unpack(first, r.end(), std::forward<Tn>(vn)...);
+}
+
+template <typename CharType>
+struct custom<CharType const *> {
 	template <typename OutputIterator>
-	static void pack(OutputIterator &sink, char const *v)
+	static void pack(OutputIterator &sink, CharType const *v)
 	{
-		yesod::iterator::range<char const *> r(
-			v, v + std::strlen(v)
+		mbp::pack(
+			std::forward<OutputIterator>(sink),
+			yesod::iterator::str(v)
 		);
-		mbp::pack(std::forward<OutputIterator>(sink), r);
 	}
 };
 
-template <size_t N>
-struct custom<char const [N]> {
+template <typename CharType, size_t N>
+struct custom<CharType const [N]> {
 	template <typename OutputIterator>
-	static void pack(OutputIterator &sink, char const v[N])
+	static void pack(OutputIterator &sink, CharType const v[N])
 	{
-		yesod::iterator::range<char const *> r(
-			v, v + N - 1
+		mbp::pack(
+			std::forward<OutputIterator>(sink),
+			yesod::iterator::make_range(v, N - 1)
 		);
-		mbp::pack(std::forward<OutputIterator>(sink), r);
 	}
 };
 
