@@ -19,9 +19,6 @@
 #if !defined(UCPF_YESOD_CODER_XXHASH_20140613T2300)
 #define UCPF_YESOD_CODER_XXHASH_20140613T2300
 
-#include <yesod/mpl/package.hpp>
-#include <yesod/mpl/value_cast.hpp>
-
 namespace ucpf { namespace yesod { namespace coder {
 
 template <bool NativeEndianess = false>
@@ -56,35 +53,6 @@ struct xxhash {
 		}
 	}
 
-	template <int S0>
-	static uint32_t rotl(uint32_t v)
-	{
-		return (v << S0) | (v >> (32 - S0));
-	}
-
-	template <int S0, int... Sn>
-	static state_type rotl(state_type v)
-	{
-		static_assert(
-			(sizeof...(Sn) == 0) || (sizeof...(Sn) == 3),
-			"(sizeof...(Sn) == 0) || (sizeof...(Sn) == 3)"
-		);
-
-		if (!sizeof...(Sn))
-			return (v << S0) | (v >> (32 - S0));
-		else {
-			typedef int32_t shift_type [[gnu::vector_size(16)]];
-			typedef mpl::value_cast<
-				mpl::package_c<int, S0, Sn...>
-			> sx;
-			shift_type sy{
-				sx::value[0], sx::value[1], sx::value[2],
-				sx::value[3]
-			};
-			return (v << sy) | (v >> (32 - sy));
-		}
-	}
-
 	xxhash(uint32_t seed_ = 0)
 	{
 		reset(seed_);
@@ -115,7 +83,7 @@ struct xxhash {
 
 		while (true) {
 			state += to_le32(mem_w) * prime[1];
-			state = rotl<13>(state);
+			state = (state << 13) | (state >> (32 - 13));
 			state *= prime[0];
 
 			for (size_t c(0); c < sizeof(state_type); ++c) {
@@ -129,13 +97,15 @@ struct xxhash {
 		}
 	}
 
-	uint32_t digest()
+	uint32_t digest() const
 	{
 		uint32_t rv(0);
 
 		if (total_cnt / (sizeof(state_type))) {
-			state = rotl<1, 7, 12, 18>(state);
-			rv = state[0] + state[1] + state[2] + state[3];
+			state_type x_state{1, 7, 12, 18};
+			x_state = (state << x_state)
+				  | (state >> (32 - x_state));
+			rv = x_state[0] + x_state[1] + x_state[2] + x_state[3];
 		} else
 			rv = seed + prime[4];
 
@@ -145,12 +115,12 @@ struct xxhash {
 
 		for (uint32_t c(0); c < (mem_cnt >> 2); ++c) {
 			rv += to_le32(mem_w[c]) * prime[2];
-			rv = rotl<17>(rv) * prime[3];
+			rv = ((rv << 17) | (rv >> (32 - 17))) * prime[3];
 		}
 
 		for (uint32_t c(mem_cnt & ~uint32_t(3)); c < mem_cnt; ++c) {
 			rv += prime[4] * mem_b[c];
-			rv = rotl<11>(rv) * prime[0];
+			rv = ((rv << 11) | (rv >> (32 - 11))) * prime[0];
 		}
 
 		rv ^= rv >> 15;
