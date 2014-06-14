@@ -19,7 +19,8 @@
 #if !defined(UCPF_YESOD_CODER_XXHASH_20140613T2300)
 #define UCPF_YESOD_CODER_XXHASH_20140613T2300
 
-#include <yesod/bitops.hpp>
+#include <yesod/mpl/package.hpp>
+#include <yesod/mpl/value_cast.hpp>
 
 namespace ucpf { namespace yesod { namespace coder {
 
@@ -32,10 +33,56 @@ struct xxhash {
 #else
 #error Unsupported endianess
 #endif
+	typedef uint32_t state_type [[gnu::vector_size(16)]];
 
-	static uint32_t mem_word(uint32_t &v)
+	static uint32_t to_le32(uint32_t v)
 	{
-		return swap_bytes ? bswap(v) : v;
+		if (!swap_bytes)
+			return v;
+		else
+			return __builtin_bswap32(v);
+	}
+
+	static state_type to_le32(state_type const &v)
+	{
+		if (!swap_bytes)
+			return v;
+		else {
+			state_type rv(
+				((v << 8) & 0xff00ff00u)
+				| ((v >> 8) & 0x00ff00ffu)
+			); 
+			return (rv << 16) | (rv >> 16);
+		}
+	}
+
+	template <int S0>
+	static uint32_t rotl(uint32_t v)
+	{
+		return (v << S0) | (v >> (32 - S0));
+	}
+
+	template <int S0, int... Sn>
+	static state_type rotl(state_type v)
+	{
+		static_assert(
+			(sizeof...(Sn) == 0) || (sizeof...(Sn) == 3),
+			"(sizeof...(Sn) == 0) || (sizeof...(Sn) == 3)"
+		);
+
+		if (!sizeof...(Sn))
+			return (v << S0) | (v >> (32 - S0));
+		else {
+			typedef int32_t shift_type [[gnu::vector_size(16)]];
+			typedef mpl::value_cast<
+				mpl::package_c<int, S0, Sn...>
+			> sx;
+			shift_type sy{
+				sx::value[0], sx::value[1], sx::value[2],
+				sx::value[3]
+			};
+			return (v << sy) | (v >> (32 - sy));
+		}
 	}
 
 	xxhash(uint32_t seed_ = 0)
@@ -46,10 +93,8 @@ struct xxhash {
 	void reset(uint32_t seed_)
 	{
 		seed = seed_;
-		state[0] = seed + prime[0] + prime[1];
-		state[1] = seed + prime[1];
-		state[2] = seed;
-		state[3] = seed - prime[0];
+		state_type z_seed{prime[0] + prime[1], prime[1], 0, -prime[0]};
+		state = z_seed + seed;
 		total_cnt = 0;
 	}
 
@@ -57,8 +102,8 @@ struct xxhash {
 	void update(Iterator first, Iterator last)
 	{
 		for (
-			size_t c(total_cnt % (state_size << 2));
-			c < (state_size << 2); ++c
+			size_t c(total_cnt % sizeof(state_type));
+			c < sizeof(state_type); ++c
 		) {
 			if (first == last)
 				return;
@@ -69,13 +114,11 @@ struct xxhash {
 		}
 
 		while (true) {
-			for (size_t c(0); c < state_size; ++c) {
-				state[c] += mem_word(mem_w[c]) * prime[1];
-				state[c] = rotl(state[c], 13);
-				state[c] *= prime[0];
-			}
+			state += to_le32(mem_w) * prime[1];
+			state = rotl<13>(state);
+			state *= prime[0];
 
-			for (size_t c(0); c < (state_size << 2); ++c) {
+			for (size_t c(0); c < sizeof(state_type); ++c) {
 				if (first == last)
 					return;
 
@@ -90,24 +133,24 @@ struct xxhash {
 	{
 		uint32_t rv(0);
 
-		if (total_cnt / (state_size << 2)) {
-			rv = rotl(state[0], 1) + rotl(state[1], 7);
-			rv += rotl(state[2], 12) + rotl(state[3], 18);
+		if (total_cnt / (sizeof(state_type))) {
+			state = rotl<1, 7, 12, 18>(state);
+			rv = state[0] + state[1] + state[2] + state[3];
 		} else
 			rv = seed + prime[4];
 
 		rv += uint32_t(total_cnt);
 
-		auto mem_cnt(total_cnt % (state_size << 2));
+		auto mem_cnt(total_cnt % sizeof(state_type));
 
 		for (uint32_t c(0); c < (mem_cnt >> 2); ++c) {
-			rv += mem_word(mem_w[c]) * prime[2];
-			rv = rotl(rv, 17) * prime[3];
+			rv += to_le32(mem_w[c]) * prime[2];
+			rv = rotl<17>(rv) * prime[3];
 		}
 
 		for (uint32_t c(mem_cnt & ~uint32_t(3)); c < mem_cnt; ++c) {
 			rv += prime[4] * mem_b[c];
-			rv = rotl(rv, 11) * prime[0];
+			rv = rotl<11>(rv) * prime[0];
 		}
 
 		rv ^= rv >> 15;
@@ -121,14 +164,13 @@ struct xxhash {
 	constexpr static uint32_t prime[5] = {
 		2654435761u, 2246822519u, 3266489917u, 668265263u, 374761393u
 	};
-	constexpr static size_t state_size = 4;
 
 	size_t total_cnt;
 	uint32_t seed;
-	uint32_t state[state_size];
+	state_type state;
 	union {
-		uint8_t mem_b[state_size << 2];
-		uint32_t mem_w[state_size];
+		uint8_t mem_b[sizeof(state_type)];
+		state_type mem_w;
 	};
 };
 
