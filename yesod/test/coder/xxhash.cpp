@@ -36,4 +36,50 @@ BOOST_AUTO_TEST_CASE(xxhash_0)
 	BOOST_CHECK_EQUAL(h.digest(), 0x053ca93e);
 }
 
+BOOST_AUTO_TEST_CASE(xxhash_1)
+{
+	std::string s0("xgnnmqokr");
+	std::string s1("wvuxuvbworkuyxsxmblnygo");
+	std::string s2("trosycntqxpchtfbjfiltclcsibjahpptewafm");
+	uint32_t seed(0xd385be64);
+
+	xxhash<> h(seed);
+	h.update(s0.begin(), s0.size());
+	BOOST_CHECK_EQUAL(h.digest(), 0xc3548371);
+	h.reset(seed);
+	h.update(s1.begin(), s1.size());
+	BOOST_CHECK_EQUAL(h.digest(), 0x5bb63324);
+	h.reset(seed);
+	h.update(s2.begin(), s2.size());
+	BOOST_CHECK_EQUAL(h.digest(), 0x4b486c85);
+	h.reset(seed);
+	h.update(s0.begin(), s0.size());
+	h.update(s1.begin(), s1.size());
+	h.update(s2.begin(), s2.size());
+	BOOST_CHECK_EQUAL(h.digest(), 0x053ca93e);
+}
+
+BOOST_AUTO_TEST_CASE(xxhash_2)
+{
+	std::string s0("xgnnmqokr");
+	std::string s1("wvuxuvbworkuyxsxmblnygo");
+	std::string s2("trosycntqxpchtfbjfiltclcsibjahpptewafm");
+	uint32_t seed(0xd385be64);
+
+	xxhash<> h(seed);
+	h.update(reinterpret_cast<uint8_t const *>(s0.c_str()), s0.size());
+	BOOST_CHECK_EQUAL(h.digest(), 0xc3548371);
+	h.reset(seed);
+	h.update(reinterpret_cast<uint8_t const *>(s1.c_str()), s1.size());
+	BOOST_CHECK_EQUAL(h.digest(), 0x5bb63324);
+	h.reset(seed);
+	h.update(reinterpret_cast<uint8_t const *>(s2.c_str()), s2.size());
+	BOOST_CHECK_EQUAL(h.digest(), 0x4b486c85);
+	h.reset(seed);
+	h.update(reinterpret_cast<uint8_t const *>(s0.c_str()), s0.size());
+	h.update(reinterpret_cast<uint8_t const *>(s1.c_str()), s1.size());
+	h.update(reinterpret_cast<uint8_t const *>(s2.c_str()), s2.size());
+	BOOST_CHECK_EQUAL(h.digest(), 0x053ca93e);
+}
+
 }}}
