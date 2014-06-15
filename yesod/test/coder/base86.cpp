@@ -11,6 +11,19 @@
 
 #include <yesod/coder/base86.hpp>
 
+namespace std {
+
+std::ostream &operator<<(std::ostream &os, std::array<uint8_t, 4> const &v)
+{
+	os << std::hex;
+	os << '[' << static_cast<int>(v[0]);
+	os << ':' << static_cast<int>(v[1]);
+	os << ':' << static_cast<int>(v[2]);
+	os << ':' << static_cast<int>(v[3]) << ']';
+	return os;
+}
+
+}
 namespace ucpf { namespace yesod { namespace coder {
 
 BOOST_AUTO_TEST_CASE(base86_0)
@@ -18,8 +31,9 @@ BOOST_AUTO_TEST_CASE(base86_0)
 	auto *in(reinterpret_cast<uint8_t const *>(
 		"HelloWorld"
 	)), *in_p(in);
-	uint32_t v1(0), v2(0);
-	uint32_t v3(0x15c1ba2b), v4(0x6b716e3a);
+	base86::value_type v1, v2;
+	base86::value_type v3{0x2b, 0xba, 0xc1, 0x15};
+	base86::value_type v4{0x3a, 0x6e, 0x71, 0x6b};
 	base86::decode(v1, in_p);
 	base86::decode(v2, in_p);
 	BOOST_CHECK_EQUAL(v1, v3);
@@ -46,10 +60,11 @@ BOOST_AUTO_TEST_CASE(base86_1)
 	buf[5] = 0;
 
 	for (int c(0); c < count; ++c) {
-		uint32_t d_r(dis(gen));
+		base86::value_type d_r;
+		*reinterpret_cast<uint32_t *>(d_r.data()) = dis(gen);
 		p = &buf.front();
 		base86::encode(p, d_r);
-		uint32_t d_d(0);
+		base86::value_type d_d;
 		p = &buf.front();
 		base86::decode(d_d, p);
 		BOOST_CHECK_EQUAL(d_r, d_d);

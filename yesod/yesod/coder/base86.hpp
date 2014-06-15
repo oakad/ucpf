@@ -71,82 +71,72 @@ struct base86 {
 		0xa0, 0xa1, 0xa2, 0xa4, 0xa5, 0xa6, 0xa8, 0xa9, 0xaa
 	}};
 
+	typedef std::array<uint8_t, 4> value_type;
+
 	template <typename Iter>
-	static bool decode(uint32_t &out, Iter &in)
+	static bool decode(value_type &out, Iter &in)
 	{
-		constexpr static uint32_t d_offset[3] = {
-			0x00000000, 0x00000056, 0x000000ac
-		};
+		constexpr static uint8_t d_offset[3] = {0x00, 0x56, 0xac};
 
-		std::array<uint8_t, 5> tok;
-
-		for (auto c(0); c < 4; ++c) {
-			tok[c] = *in;
-			if (tok[c] < dec_offset)
+		for (auto &d: out) {
+			d = *in;
+			if (d < dec_offset)
 				return false;
-			tok[c] -= dec_offset;
-			if (tok[c] >= dec_tab.size())
+			d -= dec_offset;
+			if (d >= dec_tab.size())
 				return false;
-			tok[c] = dec_tab[tok[c]];
-			if (tok[c] == 0xff)
+			d = dec_tab[d];
+			if (d == 0xff)
 				return false;
 			++in;
 		}
 
-		tok[4] = *in;
-		if (tok[4] < dec_offset)
+		uint8_t tail(*in);
+		if (tail < dec_offset)
 			return false;
-		tok[4] -= dec_offset;
-		if (tok[4] >= dec_tab.size())
+		tail -= dec_offset;
+		if (tail >= dec_tab.size())
 			return false;
-		tok[4] = dec_tab[tok[4]];
-		if (tok[4] >= ternary_exp_tab.size())
+		tail = dec_tab[tail];
+		if (tail >= ternary_exp_tab.size())
 			return false;
-
-		tok[4] = ternary_exp_tab[tok[4]];
-
-		out = (d_offset[(tok[4] >> 6) & 3] + tok[0])
-		      | ((d_offset[(tok[4] >> 4) & 3] + tok[1]) << 8)
-		      | ((d_offset[(tok[4] >> 2) & 3] + tok[2]) << 16)
-		      | ((d_offset[tok[4] & 3] + tok[3]) << 24);
-
 		++in;
+		tail = ternary_exp_tab[tail];
+
+		out[0] += d_offset[(tail >> 6) & 3];
+		out[1] += d_offset[(tail >> 4) & 3];
+		out[2] += d_offset[(tail >> 2) & 3];
+		out[3] += d_offset[tail & 3];
+
 		return true;
 	}
 
 	template <typename Iter>
-	static bool decode(uint64_t &out, Iter &in)
-	{
-		uint32_t dh, dl;
-		if (decode(dl, in) && decode(dh, in)) {
-			out = dh;
-			out <<= 32;
-			out |= dl;
-			return true;
-		} else
-			return false;
-	}
-
-	template <typename Iter>
-	static void encode(Iter &out, uint32_t in)
+	static void encode(Iter &out, value_type &&in)
 	{
 		uint8_t tail(0);
 
-		for (auto c(0); c < 4; ++c) {
-			uint8_t d((in >> (c * 8)) & 0xff);
-			*out = enc_tab_r[d];
-			tail = tail * 3 + (d >= 0xac ? 2 : (d >= 0x56 ? 1 : 0));
-			++out;
+		for (auto d: in) {
+			*out++ = enc_tab_r[d];
+			tail = tail * 3 + (
+				d >= 0xac ? 2 : (d >= 0x56 ? 1 : 0)
+			);
 		}
-		*out = enc_tab_r[tail];
-		++out;
+		*out++ = enc_tab_r[tail];
 	}
 
 	template <typename Iter>
-	static void encode(Iter &out, uint64_t in)
+	static void encode(Iter &out, value_type const &in)
 	{
-		encode(out, static_cast<uint32_t>(in));
-		encode(out, static_cast<uint32_t>(in >> 32));
+		uint8_t tail(0);
+
+		for (auto d: in) {
+			*out++ = enc_tab_r[d];
+			tail = tail * 3 + (
+				d >= 0xac ? 2 : (d >= 0x56 ? 1 : 0)
+			);
+		}
+		*out++ = enc_tab_r[tail];
 	}
 };
 
