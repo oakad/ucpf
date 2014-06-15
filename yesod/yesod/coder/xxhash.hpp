@@ -85,9 +85,13 @@ struct xxhash {
 		total_cnt += c_cnt * sizeof(state_type);
 
 		for (; c_cnt > 0; --c_cnt) {
-			std::copy_n(first, sizeof(state_type), mem_b);
+			state_type tmp;
+			std::copy_n(
+				first, sizeof(state_type),
+				reinterpret_cast<uint8_t *>(&tmp)
+			);
 			first += sizeof(state_type);
-			state = hash_step(state, mem_w);
+			state = hash_step(state, tmp);
 		}
 
 		if (count) {
@@ -96,7 +100,7 @@ struct xxhash {
 		}
 	}
 
-	/* Fastest option */
+	/* Fastest option - for best result compile with -mavx on Intel */
 	void update(uint8_t const *p, size_t count)
 	{
 		auto s_off(total_cnt % sizeof(state_type));
@@ -119,8 +123,9 @@ struct xxhash {
 		auto q(p + c_cnt);
 
 		for (; p < q; p += sizeof(state_type)) {
-			__builtin_memcpy(mem_b, p, sizeof(state_type));
-			state = hash_step(state, mem_w);
+			state_type tmp;
+			__builtin_memcpy(&tmp, p, sizeof(state_type));
+			state = hash_step(state, tmp);
 		}
 
 		if (count) {
