@@ -17,18 +17,21 @@ namespace ucpf { namespace mina { namespace mbp {
 template <typename OutputIterator, typename ...Tn>
 void pack(OutputIterator &&sink, Tn &&...vn)
 {
-	if (sizeof...(vn) > 1) {
-		*sink++ = detail::tuple_start_code;
-		detail::pack(
-			std::forward<OutputIterator>(sink),
-			std::forward<Tn>(vn)...
-		);
-		*sink++ = detail::tuple_end_code;
-	} else
-		detail::pack(
-			std::forward<OutputIterator>(sink),
-			std::forward<Tn>(vn)...
-		);
+	detail::pack(
+		std::forward<OutputIterator>(sink),
+		std::forward<Tn>(vn)...
+	);
+}
+
+template <typename OutputIterator, typename ...Tn>
+void pack_tuple(OutputIterator &&sink, Tn &&...vn)
+{
+	*sink++ = detail::tuple_start_code;
+	detail::pack(
+		std::forward<OutputIterator>(sink),
+		std::forward<Tn>(vn)...
+	);
+	*sink++ = detail::tuple_end_code;
 }
 
 template <typename ForwardIterator, typename ...Tn>
@@ -45,28 +48,44 @@ bool unpack(ForwardIterator &first, ForwardIterator last, Tn &&...vn)
 			return false;
 	}
 
-	if (sizeof...(vn) > 1) {
-		if (*first != detail::tuple_start_code)
-			return false;
-		++first;
+	return detail::unpack(first, last, std::forward<Tn>(vn)...);
+}
 
-		if (detail::unpack(first, last, std::forward<Tn>(vn)...)) {
-			if (first == last)
-				return false;
-			if (*first == detail::byte_skip_code) {
-				if (!detail::advance_skip(first, last))
-					return false;
-			}
-			if (*first != detail::tuple_end_code)
-				return false;
-			++first;
-			return true;
-		} else
+template <typename ForwardIterator, typename ...Tn>
+bool unpack_tuple(ForwardIterator &first, ForwardIterator last, Tn &&...vn)
+{
+	if (!sizeof...(vn))
+		return true;
+
+	if (first == last)
+		return false;
+
+	if (*first == detail::byte_skip_code) {
+		if (!detail::advance_skip(first, last))
 			return false;
+	}
+
+	if (*first != detail::tuple_start_code)
+		return false;
+
+	++first;
+
+	if (detail::unpack(first, last, std::forward<Tn>(vn)...)) {
+		if (first == last)
+			return false;
+
+		if (*first == detail::byte_skip_code) {
+			if (!detail::advance_skip(first, last))
+				return false;
+		}
+
+		if (*first != detail::tuple_end_code)
+			return false;
+
+		++first;
+		return true;
 	} else
-		return detail::unpack(
-			first, last, std::forward<Tn>(vn)...
-		);
+		return false;
 }
 
 template <typename Range, typename ...Tn>
@@ -74,6 +93,13 @@ bool unpack(Range const &r, Tn &&...vn)
 {
 	auto first(r.begin());
 	return unpack(first, r.end(), std::forward<Tn>(vn)...);
+}
+
+template <typename Range, typename ...Tn>
+bool unpack_tuple(Range const &r, Tn &&...vn)
+{
+	auto first(r.begin());
+	return unpack_tuple(first, r.end(), std::forward<Tn>(vn)...);
 }
 
 template <typename CharType>
