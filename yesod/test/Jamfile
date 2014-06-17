@@ -8,12 +8,12 @@ alias test_case : : : : <include>..
                         <toolset>gcc:<cxxflags>-fmax-errors=4 ;
 
 run array_element_count.cpp : : test_case ;
-run dynamic_bitset.cpp : : test_case ;
+run bitops.cpp : : test_case ;
 run compressed_index_map.cpp : : test_case ;
+run dynamic_bitset.cpp : : test_case ;
 run flat_map.cpp : : test_case ;
 run float.cpp : : test_case ;
 run is_sequence.cpp : : test_case ;
-run bitops.cpp : : test_case ;
 run rope.cpp : : test_case ;
 run shared_mutex.cpp : : test_case ;
 run sparse_vector.cpp : : test_case ;

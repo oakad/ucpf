@@ -6,9 +6,11 @@
  * shed by the Free Software Foundation.
  */
 
-#if !defined(UCPF_YESOD_ITERATOR_BUFFER_INSERTER_20140616T930)
-#define UCPF_YESOD_ITERATOR_BUFFER_INSERTER_20140616T930
+#if !defined(UCPF_YESOD_ITERATOR_OBJECT_COLLECTOR_20140616T1930)
+#define UCPF_YESOD_ITERATOR_OBJECT_COLLECTOR_20140616T1930
 
+#include <yesod/counted_ptr.hpp>
+#include <yesod/allocator/array_helper.hpp>
 #include <yesod/detail/placement_array.hpp>
 
 namespace ucpf { namespace yesod { namespace iterator {
@@ -16,91 +18,70 @@ namespace ucpf { namespace yesod { namespace iterator {
 template <
 	typename ValueType, size_t BlockSize,
 	typename Alloc = std::allocator<void>
-> struct buffer_inserter : std::iterator<
+> struct object_collector : std::iterator<
 	std::output_iterator_tag, ValueType, void, void, void
 > {
 	static_assert(BlockSize > 1, "BlockSize > 1");
 
-	buffer_inserter()
+	object_collector()
 	{}
 
-	buffer_inserter(bool create, Alloc const &a = Alloc())
-	: base_ptr(create ? allocate_counted(a) : counted_ptr<base_type>())
+	object_collector(bool create, Alloc const &a = Alloc())
+	: base_ptr(
+		create ? allocate_counted<base_type>(a, a)
+		       : counted_ptr<base_type>()
+	)
 	{}
 
-	buffer_inserter(buffer_inserter const &other)
+	object_collector(object_collector const &other)
 	: base_ptr(other.base_ptr)
 	{}
 
-	buffer_inserter(buffer_inserter &&other)
+	object_collector(object_collector &&other)
 	: base_ptr(std::move(other.base_ptr))
 	{}
 
-	buffer_inserter &operator=(buffer_inserter const &other)
+	object_collector &operator=(object_collector const &other)
 	{
 		base_ptr = other.base_ptr;
 		return *this;
 	}
 
-	buffer_inserter &operator=(buffer_inserter &&other)
+	object_collector &operator=(object_collector &&other)
 	{
 		base_ptr = std::move(other.base_ptr);
 		return *this;
 	}
 
-	typename std::enable_if<
-		!std::is_pod<ValueType>::value, buffer_inserter &
-	>::type operator=(ValueType const &value)
+	object_collector &operator=(ValueType const &value)
 	{
 		auto n_pos(get_next_pos());
-		n_pos.cmd = COPY_VALUE;
+		n_pos.cmd = alloc_cmd::COPY_VALUE;
 		n_pos.value_ptr = const_cast<ValueType *>(&value);
 		base_ptr.access_allocator(&n_pos);
 		return *this;
 	}
 
-	typename std::enable_if<
-		!std::is_pod<ValueType>::value, buffer_inserter &
-	>::type operator=(ValueType &&value)
+	object_collector &operator=(ValueType &&value)
 	{
 		auto n_pos(get_next_pos());
-		n_pos.cmd = MOVE_VALUE;
+		n_pos.cmd = alloc_cmd::MOVE_VALUE;
 		n_pos.value_ptr = &value;
 		base_ptr.access_allocator(&n_pos);
 		return *this;
 	}
 
-	typename std::enable_if<
-		std::is_pod<ValueType>::value, buffer_inserter &
-	>::type operator=(ValueType const &value)
-	{
-		auto n_pos(get_next_pos());
-		*n_pos.node_ptr->items.ptr_at(n_pos.node_pos) = value;
-		return *this;
-	}
-
-	typename std::enable_if<
-		std::is_pod<ValueType>::value, buffer_inserter &
-	>::type operator=(ValueType &&value)
-	{
-		auto n_pos(get_next_pos());
-		*n_pos.node_ptr->items.ptr_at(
-			n_pos.node_pos
-		) = std::move(value);
-		return *this;
-	}
-	
-	buffer_inserter &operator*() const
+	object_collector &operator*()
 	{
 		return *this;
 	}
 
-	buffer_inserter &operator++()
+	object_collector &operator++()
 	{
 		return *this;
 	}
 
-	buffer_inserter &operator++(int)
+	object_collector &operator++(int)
 	{
 		return *this;
 	}
@@ -116,20 +97,50 @@ template <
 			rv += BlockSize;
 
 		auto l_pos(last->pos.load());
-		if (l_pos)
-			rv += l_pos - 1;
+		rv += std::min(l_pos, BlockSize);
 
 		return rv;
 	}
 
 	template <typename Iterator>
-	void copy(Iterator &first, Iterator last) const
+	size_t copy(Iterator &&out, size_t n, size_t skip) const
 	{
-	}
+		if (!base_ptr)
+			return 0;
 
-	template <typename Iterator>
-	void copy_n(Iterator &first, size_t n) const
-	{
+		auto last(base_ptr->node_ptr.load());
+		auto last_cnt(std::min(last->pos.load(), BlockSize));
+		node_type *p(&base_ptr->first_node);
+
+		for (; skip >= BlockSize; skip -= BlockSize) {
+			if (p == last)
+				return 0;
+			p = p->next;
+		}
+
+		size_t rv(0);
+		while (n && (p != last)) {
+			auto cnt(std::min(BlockSize - skip, n));
+			for (size_t c(0); c < cnt; ++c)
+				*out++ = p->items[c + skip];
+
+			rv += cnt;
+			n -= cnt;
+			skip = 0;
+			p = p->next;
+		}
+
+		if (n && (p == last)) {
+			if (skip >= last_cnt)
+				return 0;
+			auto cnt(std::min(last_cnt - skip, n));
+			for (auto c(0); c < cnt; ++c)
+				*out++ = p->items[c + skip];
+
+			rv += cnt;
+		}
+
+		return rv;
 	}
 
 private:
@@ -141,13 +152,14 @@ private:
 	};
 
 	struct node_type {
-		node_type()
-		: next(nullptr), pos(0)
+		template <typename Alloc1>
+		node_type(Alloc1 const &a)
+		: next(nullptr), pos(0), items(a)
 		{}
 
-		node *next;
+		node_type *next;
 		std::atomic<size_t> pos;
-		placement_array<
+		yesod::detail::placement_array<
 			ValueType, BlockSize, Alloc, all_valid_pred
 		> items;
 	};
@@ -165,17 +177,27 @@ private:
 	};
 
 	struct base_type {
-		base_type()
-		: node_ptr(&first_node), tail(&first_node)
+		template <typename Alloc1>
+		base_type(Alloc1 const &a)
+		: first_node(a), node_ptr(&first_node)
 		{}
 
-		node_type *alloc_node()
-		{
-		}
-
 		template <typename Alloc1>
-		static node_type *alloc_node(Alloc1 &a)
+		static void destroy(Alloc1 &a, base_type *self)
 		{
+			auto p(self->first_node.next);
+
+			while (p) {
+				auto q(p);
+				p = p->next;
+				yesod::allocator::array_helper<
+					node_type, Alloc1
+				>::destroy(a, q, 1, true);
+			}
+
+			allocator::array_helper<
+				base_type, Alloc1
+			>::destroy(a, self, 1, false);
 		}
 
 		template <typename Alloc1>
@@ -186,11 +208,12 @@ private:
 			auto cmd(reinterpret_cast<alloc_cmd *>(data));
 			switch (cmd->cmd) {
 			case alloc_cmd::ALLOC_NODE:
-				cmd->node_ptr = alloc_node(a);
+				cmd->node_ptr = allocator::array_helper<
+					node_type, Alloc1
+				>::alloc_n(a, 1, a);
 				cmd->node_ptr->pos = 1;
 				cmd->node_pos = 0;
-				self->tail->next = cmd->node_ptr;
-				self->tail = cmd->node_ptr;
+				self->node_ptr.load()->next = cmd->node_ptr;
 				self->node_ptr = cmd->node_ptr;
 				break;
 			case alloc_cmd::COPY_VALUE:
@@ -212,9 +235,8 @@ private:
 			}
 		}
 
-		mutable std::atomic<node_type *> node_ptr;
-		mutable node_type *tail;
 		mutable node_type first_node;
+		mutable std::atomic<node_type *> node_ptr;
 	};
 
 	alloc_cmd get_next_pos()
@@ -222,7 +244,8 @@ private:
 		alloc_cmd rv{
 			.cmd = alloc_cmd::NOP,
 			.node_ptr = nullptr,
-			.node_pos = 0
+			.node_pos = 0,
+			.value_ptr = nullptr
 		};
 
 		if (!base_ptr)

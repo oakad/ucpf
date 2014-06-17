@@ -4,7 +4,9 @@ alias test_case : : : : <include>../..
                         <library>../../..//unit_test_framework
                         <library>../../..//test_exec_monitor ;
 
+run collector.cpp : : test_case ;
 run facade.cpp : : test_case ;
 run joined_range.cpp : : test_case ;
+run object_collector.cpp : : test_case ;
 run range.cpp : : test_case ;
 
