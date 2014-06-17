@@ -138,7 +138,7 @@ struct unpack_helper<T, kind_flags::integral> {
 		}
 
 		uint8_t xv(*first);
-		auto f_class(field_class::from_header(xv));
+		auto f_class(field_class<>::from_header(xv));
 
 		typedef typename std::remove_reference<T>::type Tr;
 		constexpr bool signed_(std::is_signed<Tr>::value);
@@ -148,14 +148,14 @@ struct unpack_helper<T, kind_flags::integral> {
 		) != signed_)
 			return false;
 
-		auto s_rank(scalar_rank::from_type<Tr>());
+		auto s_rank(scalar_rank<>::from_type<Tr>());
 		if (s_rank < f_class.scalar_r)
 			return false;
 
 		if (f_class.list_size_r != list_size_rank::l3)
 			return false;
 
-		if (f_class.scalar_r == scalar_rank::i5) {
+		if (f_class.scalar_r == scalar_rank<>::i5) {
 			v = xv & small_int_mask;
 			v -= small_int_code_offset;
 			++first;
@@ -170,7 +170,7 @@ struct unpack_helper<T, kind_flags::integral> {
 
 		auto x_first(first);
 		if (!advance_n(
-			first, last, scalar_rank::order[f_class.scalar_r] / 8
+			first, last, scalar_rank<>::order[f_class.scalar_r] / 8
 		))
 			return false;
 
@@ -193,7 +193,7 @@ struct unpack_helper<T, kind_flags::float_t> {
 		}
 
 		uint8_t xv(*first);
-		auto f_class(field_class::from_header(xv));
+		auto f_class(field_class<>::from_header(xv));
 
 		if (f_class.numeric_type_r != numeric_type_rank::n_float)
 			return false;
@@ -205,7 +205,7 @@ struct unpack_helper<T, kind_flags::float_t> {
 			typename std::remove_reference<T>::type
 		>::type Tw;
 		typedef typename Tw::storage_type Tr;
-		constexpr auto s_rank(scalar_rank::from_type<Tr>());
+		constexpr auto s_rank(scalar_rank<>::from_type<Tr>());
 
 		if (s_rank != f_class.scalar_r)
 			return false;
@@ -218,7 +218,7 @@ struct unpack_helper<T, kind_flags::float_t> {
 
 		auto x_first(first);
 		if (!advance_n(
-			first, last, scalar_rank::order[f_class.scalar_r] / 8
+			first, last, scalar_rank<>::order[f_class.scalar_r] / 8
 		))
 			return false;
 
@@ -241,7 +241,7 @@ struct unpack_helper<T, kind_flags::integral | kind_flags::sequence> {
 		}
 
 		uint8_t xv(*first);
-		auto f_class(field_class::from_header(xv));
+		auto f_class(field_class<>::from_header(xv));
 		typedef typename std::remove_reference<T>::type::value_type Tr;
 		constexpr bool signed_(std::is_signed<Tr>::value);
 
@@ -250,7 +250,7 @@ struct unpack_helper<T, kind_flags::integral | kind_flags::sequence> {
 		) != signed_)
 			return false;
 
-		auto s_rank(scalar_rank::from_type<Tr>());
+		auto s_rank(scalar_rank<>::from_type<Tr>());
 		if (s_rank < f_class.scalar_r)
 			return false;
 
@@ -261,7 +261,7 @@ struct unpack_helper<T, kind_flags::integral | kind_flags::sequence> {
 		case list_size_rank::le:
 			return false;
 		case list_size_rank::l3:
-			if (f_class.scalar_r == scalar_rank::i5) {
+			if (f_class.scalar_r == scalar_rank<>::i5) {
 				v.push_back(Tr(
 					xv & small_int_mask
 				) - small_int_code_offset);
@@ -283,7 +283,7 @@ struct unpack_helper<T, kind_flags::integral | kind_flags::sequence> {
 			return false;
 
 		x_first = first;
-		auto x_step(scalar_rank::order[f_class.scalar_r] / 8);
+		auto x_step(scalar_rank<>::order[f_class.scalar_r] / 8);
 		if (!advance_n(first, last, x_step * list_size))
 			return false;
 
@@ -314,7 +314,7 @@ struct unpack_helper<T, kind_flags::float_t | kind_flags::sequence> {
 		}
 
 		uint8_t xv(*first);
-		auto f_class(field_class::from_header(xv));
+		auto f_class(field_class<>::from_header(xv));
 		typedef typename yesod::fp_adapter_type<
 			typename std::remove_reference<T>::type::value_type
 		>::type Tw;
@@ -323,7 +323,7 @@ struct unpack_helper<T, kind_flags::float_t | kind_flags::sequence> {
 		if (f_class.numeric_type_r != numeric_type_rank::n_float)
 			return false;
 
-		auto s_rank(scalar_rank::from_type<Tr>());
+		auto s_rank(scalar_rank<>::from_type<Tr>());
 		if (s_rank != f_class.scalar_r)
 			return false;
 
@@ -349,7 +349,7 @@ struct unpack_helper<T, kind_flags::float_t | kind_flags::sequence> {
 			return false;
 
 		x_first = first;
-		auto x_step(scalar_rank::order[f_class.scalar_r] / 8);
+		auto x_step(scalar_rank<>::order[f_class.scalar_r] / 8);
 		if (!advance_n(first, last, x_step * list_size))
 			return false;
 

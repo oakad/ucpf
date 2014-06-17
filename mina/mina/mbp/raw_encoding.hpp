@@ -32,6 +32,7 @@ constexpr uint8_t small_int_mask         = 0x1f;
 constexpr uint8_t small_int_code_offset  = 0x10;
 constexpr uint8_t small_uint_code_offset = 0x30;
 
+template <typename Unused_ = void>
 struct scalar_rank {
 	enum {
 		ie   = -1,
@@ -87,7 +88,8 @@ struct scalar_rank {
 	}
 };
 
-constexpr std::array<int, 6> scalar_rank::order;
+template <typename Unused_>
+constexpr std::array<int, 6> scalar_rank<Unused_>::order;
 
 constexpr uint8_t small_list_size_mask = 0x07;
 
@@ -147,6 +149,7 @@ constexpr std::array<
 	}}
 }};
 
+template <typename Unused_ = void>
 struct field_class {
 	/* For each header field xx_yyy_zzz:
 	 * xx: numeric type rank (11 - illegal)
@@ -233,8 +236,8 @@ struct field_class {
 			rv.list_size_r = list_size_rank::le;
 
 		rv.scalar_r = value_cls & 7;
-		if (rv.scalar_r > scalar_rank::i128)
-			rv.scalar_r = scalar_rank::ie;
+		if (rv.scalar_r > scalar_rank<>::i128)
+			rv.scalar_r = scalar_rank<>::ie;
 
 		return rv;
 	}
@@ -244,7 +247,8 @@ struct field_class {
 	int numeric_type_r;
 };
 
-constexpr std::array<uint8_t, 256> field_class::header_value_code;
+template <typename Unused_>
+constexpr std::array<uint8_t, 256> field_class<Unused_>::header_value_code;
 
 constexpr uint8_t tuple_start_code = 0x50;
 constexpr uint8_t byte_skip_code = 0x60;

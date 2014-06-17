@@ -92,20 +92,20 @@ struct pack_helper<T, kind_flags::integral> {
 			: numeric_type_rank::n_unsigned
 		);
 
-		auto s_rank(scalar_rank::from_value(v));
-		if (s_rank == scalar_rank::ie)
+		auto s_rank(scalar_rank<>::from_value(v));
+		if (s_rank == scalar_rank<>::ie)
 			return;
 
-		if (s_rank > scalar_rank::i5) {
+		if (s_rank > scalar_rank<>::i5) {
 			*sink++ = list_code[n_rank]
 					   [list_size_rank::l3]
 					   [s_rank - 1];
 			pack_integral(
 				std::forward<OutputIterator>(sink),
 				std::forward<T>(v),
-				scalar_rank::order[s_rank] / 8
+				scalar_rank<>::order[s_rank] / 8
 			);
-		} else if (s_rank == scalar_rank::i5)
+		} else if (s_rank == scalar_rank<>::i5)
 			*sink++ = (v & small_int_mask) + (
 				n_rank == numeric_type_rank::n_signed
 				? small_int_code_offset
@@ -124,14 +124,14 @@ struct pack_helper<T, kind_flags::float_t> {
 		>::type Tw;
 
 		constexpr auto s_rank(
-			scalar_rank::from_type<typename Tw::storage_type>()
+			scalar_rank<>::from_type<typename Tw::storage_type>()
 		);
 
 		*sink++ = list_code[numeric_type_rank::n_float]
 				   [list_size_rank::l3]
 				   [s_rank - 1];
 
-		pack_integral<scalar_rank::order[s_rank] / 8>(
+		pack_integral<scalar_rank<>::order[s_rank] / 8>(
 			std::forward<OutputIterator>(sink),
 			Tw(v).get_storable()
 		);
@@ -156,10 +156,10 @@ struct pack_helper<T, kind_flags::integral | kind_flags::sequence> {
 		);
 		auto l_rank(list_size_rank::from_size(sz));
 		constexpr auto s_rank(
-			scalar_rank::from_type<typename Tr::value_type>()
+			scalar_rank<>::from_type<typename Tr::value_type>()
 		);
 
-		if (s_rank == scalar_rank::ie)
+		if (s_rank == scalar_rank<>::ie)
 			return;
 
 		if (l_rank > list_size_rank::l3) {
@@ -175,7 +175,7 @@ struct pack_helper<T, kind_flags::integral | kind_flags::sequence> {
 			return;
 
 		for (auto xv: v)
-			pack_integral<scalar_rank::order[s_rank] / 8>(
+			pack_integral<scalar_rank<>::order[s_rank] / 8>(
 				std::forward<OutputIterator>(sink), xv
 			);
 	}
@@ -198,7 +198,7 @@ struct pack_helper<
 
 		auto l_rank(list_size_rank::from_size(sz));
 		constexpr auto s_rank(
-			scalar_rank::from_type<typename Tw::storage_type>()
+			scalar_rank<>::from_type<typename Tw::storage_type>()
 		);
 
 		if (l_rank > list_size_rank::l3) {
@@ -218,7 +218,7 @@ struct pack_helper<
 			return;
 
 		for (auto xv: v)
-			pack_integral<scalar_rank::order[s_rank] / 8>(
+			pack_integral<scalar_rank<>::order[s_rank] / 8>(
 				std::forward<OutputIterator>(sink),
 				Tw(xv).get_storable()
 			);

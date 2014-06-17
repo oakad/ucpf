@@ -64,15 +64,7 @@ template <
 	~collector()
 	{
 		if (owner) {
-			auto p(std::get<0>(base_ptr)->first_node.next);
-
-			while (p) {
-				auto q(p);
-				p = p->next;
-				yesod::allocator::array_helper<
-					node_type, Alloc
-				>::destroy(std::get<1>(base_ptr), q, 1, true);
-			}
+			reset();
 
 			allocator::array_helper<base_type, Alloc>::destroy(
 				std::get<1>(base_ptr), std::get<0>(base_ptr),
@@ -169,6 +161,27 @@ template <
 
 		return rv;
 	}
+
+	void reset()
+	{
+		auto b(std::get<0>(base_ptr));
+		if (!b)
+			return;
+
+		auto p(b->first_node.next);
+
+		while (p) {
+			auto q(p);
+			p = p->next;
+			yesod::allocator::array_helper<
+				node_type, Alloc
+			>::destroy(std::get<1>(base_ptr), q, 1, true);
+		}
+		b->first_node.pos = 0;
+		b->first_node.next = nullptr;
+		b->node_ptr = &b->first_node;
+	}
+
 private:
 	struct node_type {
 		node_type()
