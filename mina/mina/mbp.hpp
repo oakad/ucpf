@@ -34,6 +34,18 @@ void pack_tuple(OutputIterator &&sink, Tn &&...vn)
 	*sink++ = detail::tuple_end_code;
 }
 
+template <typename OutputIterator>
+void pack_tuple_start(OutputIterator &&sink)
+{
+	*sink++ = detail::tuple_start_code;
+}
+
+template <typename OutputIterator>
+void pack_tuple_end(OutputIterator &&sink)
+{
+	*sink++ = detail::tuple_end_code;
+}
+
 template <typename ForwardIterator, typename ...Tn>
 bool unpack(ForwardIterator &first, ForwardIterator last, Tn &&...vn)
 {
