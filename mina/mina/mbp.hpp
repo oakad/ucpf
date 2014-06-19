@@ -10,6 +10,7 @@
 
 #include <mina/mbp/pack.hpp>
 #include <mina/mbp/unpack.hpp>
+#include <mina/mbp/expand.hpp>
 #include <yesod/iterator/range.hpp>
 
 namespace ucpf { namespace mina { namespace mbp {
@@ -112,6 +113,37 @@ bool unpack_tuple(Range const &r, Tn &&...vn)
 {
 	auto first(r.begin());
 	return unpack_tuple(first, r.end(), std::forward<Tn>(vn)...);
+}
+
+template <typename ForwardIterator, typename Visitor>
+bool expand(ForwardIterator &first, ForwardIterator last, Visitor &&v)
+{
+	size_t t_level(0);
+
+	while (first != last) {
+		if (*first == detail::byte_skip_code) {
+			if (!detail::advance_skip(first, last))
+				break;
+		}
+
+		if (*first == detail::tuple_start_code) {
+			++first;
+			++t_level;
+			v.tuple_start(t_level);
+			continue;
+		} else if (*first == detail::tuple_end_code) {
+			if (!t_level)
+				return false;
+			++first;
+			v.tuple_end(t_level);
+			--t_level;
+			continue;
+		}
+
+		if (!detail::expand(first, last, std::forward<Visitor>(v)))
+			return false;
+	}
+	return !t_level;
 }
 
 template <typename CharType>

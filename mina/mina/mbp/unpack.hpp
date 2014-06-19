@@ -13,59 +13,6 @@
 
 namespace ucpf { namespace mina { namespace mbp { namespace detail {
 
-template <typename ForwardIterator>
-bool advance_skip(ForwardIterator &first, ForwardIterator last)
-{
-	do {
-		++first;
-		if (first == last)
-			return false;
-	} while (*first == byte_skip_code);
-	return true;
-}
-
-template <typename ForwardIterator>
-bool advance_n(ForwardIterator &first, ForwardIterator last, size_t count)
-{
-	if (std::distance(first, last) >= count) {
-		std::advance(first, count);
-		return true;
-	} else
-		return false;
-}
-
-template <
-	bool SignedValue, typename T, typename ForwardIterator
-> auto unpack_integral(ForwardIterator first, ForwardIterator last)
--> typename std::enable_if<SignedValue, T>::type
-{
-	uint8_t xv(0);
-	T rv(0);
-	for (unsigned int shift(0); shift < (8 * sizeof(T)); shift += 8) {
-		if (first != last) {
-			xv = *first;
-			rv |= T(xv) << shift;
-			++first;
-		} else
-			rv |= (
-				(xv & 0x80) ? uint8_t(0xff) : uint8_t(0)
-			) << shift;
-	}
-	return rv;
-}
-
-template <
-	bool SignedValue, typename T, typename ForwardIterator
-> auto unpack_integral(ForwardIterator first, ForwardIterator last)
--> typename std::enable_if<!SignedValue, T>::type
-{
-	T rv(0);
-	for (unsigned int shift(0); first != last; ++first, shift += 8)
-		rv |= T(*first) << shift;
-
-	return rv;
-}
-
 template <typename T, int Kind>
 struct unpack_helper;
 
@@ -157,7 +104,9 @@ struct unpack_helper<T, kind_flags::integral> {
 
 		if (f_class.scalar_r == scalar_rank<>::i5) {
 			v = xv & small_int_mask;
-			v -= small_int_code_offset;
+			if (signed_)
+				v -= small_int_code_offset;
+
 			++first;
 			return true;
 		}

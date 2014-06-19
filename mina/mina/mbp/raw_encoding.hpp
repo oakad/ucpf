@@ -27,7 +27,6 @@ struct custom {
 
 namespace detail {
 
-constexpr int small_int_neg_base         = -16;
 constexpr uint8_t small_int_mask         = 0x1f;
 constexpr uint8_t small_int_code_offset  = 0x10;
 constexpr uint8_t small_uint_code_offset = 0x30;
@@ -242,6 +241,11 @@ struct field_class {
 		return rv;
 	}
 
+	static bool header_valid(uint8_t h)
+	{
+		return header_value_code[h] != 0xff;
+	}
+
 	int scalar_r;
 	int list_size_r;
 	int numeric_type_r;
@@ -278,6 +282,59 @@ struct classify<T, Kind, true> {
 	>::value;
 	typedef typename std::integral_constant<int, value> type;
 };
+
+template <typename ForwardIterator>
+bool advance_skip(ForwardIterator &first, ForwardIterator last)
+{
+	do {
+		++first;
+		if (first == last)
+			return false;
+	} while (*first == byte_skip_code);
+	return true;
+}
+
+template <typename ForwardIterator>
+bool advance_n(ForwardIterator &first, ForwardIterator last, size_t count)
+{
+	if (std::distance(first, last) >= count) {
+		std::advance(first, count);
+		return true;
+	} else
+		return false;
+}
+
+template <
+	bool SignedValue, typename T, typename ForwardIterator
+> auto unpack_integral(ForwardIterator first, ForwardIterator last)
+-> typename std::enable_if<SignedValue, T>::type
+{
+	uint8_t xv(0);
+	T rv(0);
+	for (unsigned int shift(0); shift < (8 * sizeof(T)); shift += 8) {
+		if (first != last) {
+			xv = *first;
+			rv |= T(xv) << shift;
+			++first;
+		} else
+			rv |= (
+				(xv & 0x80) ? uint8_t(0xff) : uint8_t(0)
+			) << shift;
+	}
+	return rv;
+}
+
+template <
+	bool SignedValue, typename T, typename ForwardIterator
+> auto unpack_integral(ForwardIterator first, ForwardIterator last)
+-> typename std::enable_if<!SignedValue, T>::type
+{
+	T rv(0);
+	for (unsigned int shift(0); first != last; ++first, shift += 8)
+		rv |= T(*first) << shift;
+
+	return rv;
+}
 
 }
 }}}
