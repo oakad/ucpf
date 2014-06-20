@@ -125,6 +125,19 @@ struct numeric_type_rank {
 	};
 };
 
+template <typename Tsigned, typename Tunsigned, typename Tfloat>
+using numeric_type_map = yesod::mpl::map<
+	yesod::mpl::pair<
+		yesod::mpl::int_<numeric_type_rank::n_signed>, Tsigned
+	>,
+	yesod::mpl::pair<
+		yesod::mpl::int_<numeric_type_rank::n_unsigned>, Tunsigned
+	>,
+	yesod::mpl::pair<
+		yesod::mpl::int_<numeric_type_rank::n_float>, Tfloat
+	>
+>;
+
 constexpr std::array<
 	std::array<std::array<uint8_t, 5>, 4>, 3
 > list_code = {{
@@ -257,6 +270,41 @@ constexpr std::array<uint8_t, 256> field_class<Unused_>::header_value_code;
 constexpr uint8_t tuple_start_code = 0x50;
 constexpr uint8_t byte_skip_code = 0x60;
 constexpr uint8_t tuple_end_code = 0x70;
+
+typedef yesod::mpl::map<
+	yesod::mpl::pair<
+		yesod::mpl::int_<scalar_rank<>::i8>,
+		numeric_type_map<int8_t, uint8_t, yesod::float_t<8>>
+	>,
+	yesod::mpl::pair<
+		yesod::mpl::int_<scalar_rank<>::i16>,
+		numeric_type_map<int16_t, uint16_t, yesod::float_t<16>>
+	>,
+	yesod::mpl::pair<
+		yesod::mpl::int_<scalar_rank<>::i32>,
+		numeric_type_map<int32_t, uint32_t, yesod::float_t<32>>
+	>,
+	yesod::mpl::pair<
+		yesod::mpl::int_<scalar_rank<>::i64>,
+		numeric_type_map<int64_t, uint64_t, yesod::float_t<64>>
+	>,
+	yesod::mpl::pair<
+		yesod::mpl::int_<scalar_rank<>::i128>,
+		numeric_type_map<
+			__int128, unsigned __int128, yesod::float_t<128>
+		>
+	>
+> scalar_rank_types;
+
+template <int ScalarType, int NumericTypeRank>
+struct scalar_type {
+	typedef typename yesod::mpl::at<
+		scalar_rank_types, yesod::mpl::int_<ScalarType>
+	>::type type_map;
+	typedef typename yesod::mpl::at<
+		type_map, yesod::mpl::int_<NumericTypeRank>
+	>::type type;
+};
 
 struct kind_flags {
 	enum {

@@ -204,7 +204,9 @@ struct unpack_helper<T, kind_flags::integral | kind_flags::sequence> {
 			return false;
 
 		size_t list_size(0);
-		++first;
+		if (!advance_n(first, last, 1))
+			return false;
+
 		auto x_first(first);
 		switch (f_class.list_size_r) {
 		case list_size_rank::le:
