@@ -16,29 +16,29 @@ namespace ucpf { namespace mina { namespace mbp { namespace detail {
 template <
 	int ScalarRank, int NumericTypeRank, typename Func, typename... Args
 > bool expand_apply(field_class<> f_class, Args &&...args)
-{
+{	
 	if (ScalarRank != f_class.scalar_r) {
-		switch (f_class.numeric_type_r) {
+		switch (f_class.scalar_r) {
 		case scalar_rank<>::i8:
 			return expand_apply<
 				scalar_rank<>::i8, NumericTypeRank, Func
-			>(std::forward<Args>(args)...);
+			>(f_class, std::forward<Args>(args)...);
 		case scalar_rank<>::i16:
 			return expand_apply<
 				scalar_rank<>::i16, NumericTypeRank, Func
-			>(std::forward<Args>(args)...);
+			>(f_class, std::forward<Args>(args)...);
 		case scalar_rank<>::i32:
 			return expand_apply<
 				scalar_rank<>::i32, NumericTypeRank, Func
-			>(std::forward<Args>(args)...);
+			>(f_class, std::forward<Args>(args)...);
 		case scalar_rank<>::i64:
 			return expand_apply<
 				scalar_rank<>::i64, NumericTypeRank, Func
-			>(std::forward<Args>(args)...);
+			>(f_class, std::forward<Args>(args)...);
 		case scalar_rank<>::i128:
 			return expand_apply<
 				scalar_rank<>::i128, NumericTypeRank, Func
-			>(std::forward<Args>(args)...);
+			>(f_class, std::forward<Args>(args)...);
 		default:
 			return false;
 		}
@@ -49,15 +49,15 @@ template <
 		case numeric_type_rank::n_signed:
 			return expand_apply<
 				ScalarRank, numeric_type_rank::n_signed, Func
-			>(std::forward<Args>(args)...);
+			>(f_class, std::forward<Args>(args)...);
 		case numeric_type_rank::n_unsigned:
 			return expand_apply<
 				ScalarRank, numeric_type_rank::n_unsigned, Func
-			>(std::forward<Args>(args)...);
+			>(f_class, std::forward<Args>(args)...);
 		case numeric_type_rank::n_float:
 			return expand_apply<
 				ScalarRank, numeric_type_rank::n_float, Func
-			>(std::forward<Args>(args)...);
+			>(f_class, std::forward<Args>(args)...);
 		default:
 			return false;
 		}
