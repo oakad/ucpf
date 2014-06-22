@@ -18,6 +18,7 @@ struct dumping_store {
 	bool start_save()
 	{
 		levels.push_back(level{std::string(), 0});
+		return true;
 	}
 
 	void end_save()
