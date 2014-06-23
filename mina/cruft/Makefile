@@ -7,3 +7,5 @@ t3 : t3.cpp
 t1 : t1.cpp
 	$(CC) $(CXXFLAGS) -o $@ $^
 
+magic_div : magic_div.cpp
+	$(CC) $(CXXFLAGS) -m32 -o $@ $^
