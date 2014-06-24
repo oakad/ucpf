@@ -9,6 +9,8 @@
 #if !defined(UCPF_MINA_TO_ASCII_DECIMAL_20140623T2300)
 #define UCPF_MINA_TO_ASCII_DECIMAL_20140623T2300
 
+#include <yesod/bitops.hpp>
+
 namespace ucpf { namespace mina {
 namespace detail {
 
@@ -25,6 +27,28 @@ constexpr std::array<uint8_t, 100> ascii_decimal_digits = {
 	0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99
 };
 
+template <typename OutputIterator, size_t N>
+void bcd_to_ascii(OutputIterator &&sink, std::array<uint32_t, N> const &v)
+{
+	bool skip_zero(true);
+	for (auto d: v) {
+		int c(-1);
+		if (skip_zero) {
+			if (d) {
+				c = (yesod::fls(d) | 3) - 3;
+				skip_zero = false;
+			}
+		} else
+			c = 28;
+
+		for (; c >= 0; c -= 4)
+			*sink++ = 0x30 + ((d >> c) & 0xf);
+	}
+
+	if (skip_zero)
+		*sink++ = 0x30;
+}
+
 template <typename OutputIterator>
 void to_ascii_decimal_u(OutputIterator &&sink, uint8_t v)
 {
@@ -33,24 +57,15 @@ void to_ascii_decimal_u(OutputIterator &&sink, uint8_t v)
 
 	auto acc(base_divider);
 	acc *= v;
-	uint8_t h(acc >> (8 + base_shift));
-	uint8_t l(ascii_decimal_digits[v - h * 100]);
-	if (h) {
-		*sink++ = 0x30 + h;
-		*sink++ = 0x30 + (l >> 4);
-		*sink++ = 0x30 + (l & 0xf);
-	} else {
-		if (l >> 4)
-			*sink++ = 0x30 + (l >> 4);
-
-		*sink++ = 0x30 + (l & 0xf);
-	}
+	std::array<uint32_t, 1> bv{uint32_t(acc) >> (8 + base_shift)};
+	bv[0] = (bv[0] << 8) | ascii_decimal_digits[v - bv[0] * 100];
+	bcd_to_ascii(std::forward<OutputIterator>(sink), bv);
 }
 
 template <typename T, bool IsFloat = false>
 struct ascii_decimal_converter {
 	template <typename OutputIterator>
-	void apply(OutputIterator &&sink, T v)
+	static void apply(OutputIterator &&sink, T v)
 	{
 		if (std::is_signed<T>::value) {
 			typedef typename std::make_unsigned<T>::type U;
@@ -78,7 +93,7 @@ struct ascii_decimal_converter {
 template <typename T>
 struct ascii_decimal_converter<T, true> {
 	template <typename OutputIterator>
-	void apply(OutputIterator &&sink, T v)
+	static void apply(OutputIterator &&sink, T v)
 	{
 	}
 };

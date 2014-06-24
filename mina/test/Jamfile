@@ -9,3 +9,4 @@ alias test_case : : : : <include>..
                         <toolset>gcc:<cxxflags>-fmax-errors=4 ;
 
 run mbp.cpp : : test_case ;
+run to_ascii_decimal.cpp : : test_case ;
