@@ -49,42 +49,102 @@ void bcd_to_ascii(OutputIterator &&sink, std::array<uint32_t, N> const &v)
 		*sink++ = 0x30;
 }
 
-template <typename OutputIterator>
-void to_ascii_decimal_u(OutputIterator &&sink, uint8_t v)
-{
-	constexpr uint16_t base_divider(0x29);
-	constexpr int base_shift(4);
+template <typename T>
+struct to_ascii_decimal_u;
 
-	auto acc(base_divider);
-	acc *= v;
-	std::array<uint32_t, 1> bv{uint32_t(acc) >> (8 + base_shift)};
-	bv[0] = (bv[0] << 8) | ascii_decimal_digits[v - bv[0] * 100];
-	bcd_to_ascii(std::forward<OutputIterator>(sink), bv);
-}
+template <>
+struct to_ascii_decimal_u<uint8_t> {
+	template <typename OutputIterator>
+	to_ascii_decimal_u(OutputIterator &&sink, uint8_t v)
+	{
+		constexpr uint16_t divider_100(0x29);
+		constexpr int shift_100(4);
+
+		std::array<uint32_t, 1> bv{divider_100};
+		bv[0] *= v;
+		bv[0] >>= (8 + shift_100);
+		bv[0] = (bv[0] << 8) | ascii_decimal_digits[v - bv[0] * 100];
+		bcd_to_ascii(std::forward<OutputIterator>(sink), bv);
+	}
+};
+
+template <>
+struct to_ascii_decimal_u<uint16_t> {
+	template <typename OutputIterator>
+	to_ascii_decimal_u(OutputIterator &&sink, uint16_t v)
+	{
+		constexpr uint16_t divider_100(0x47af);
+		constexpr int shift_100(7);
+
+		std::array<uint32_t, 1> bv{0};
+
+		auto xv(v);
+		for (int s(0); s < 16; s += 8) {
+			uint32_t acc(divider_100);
+			acc = (acc * xv) >> 16;
+			acc = (acc & 0xffff) + xv;
+			acc = (acc >> shift_100) & 0xffff;
+
+			bv[0] |= uint32_t(
+				ascii_decimal_digits[xv - acc * 100]
+			) << s;
+			xv = acc;
+		}
+
+		bv[0] |= uint32_t(xv) << 16;
+		bcd_to_ascii(std::forward<OutputIterator>(sink), bv);
+	}
+};
+
+template <>
+struct to_ascii_decimal_u<uint32_t> {
+	template <typename OutputIterator>
+	to_ascii_decimal_u(OutputIterator &&sink, uint32_t v)
+	{
+		constexpr uint32_t divider_100(0x51eb851f);
+		constexpr int shift_100(5);
+
+		std::array<uint32_t, 2> bv{0, 0};
+
+		auto xv(v);
+		for (int s(0); s < 32; s += 8) {
+			uint64_t acc(divider_100);
+			acc = (acc * xv) >> (32 + shift_100);
+
+			bv[1] |= uint32_t(
+				ascii_decimal_digits[xv - acc * 100]
+			) << s;
+			xv = acc;
+		}
+
+		bv[0] = ascii_decimal_digits[xv];
+		bcd_to_ascii(std::forward<OutputIterator>(sink), bv);
+	}
+};
 
 template <typename T, bool IsFloat = false>
 struct ascii_decimal_converter {
 	template <typename OutputIterator>
 	static void apply(OutputIterator &&sink, T v)
 	{
-		if (std::is_signed<T>::value) {
-			typedef typename std::make_unsigned<T>::type U;
+		typedef typename std::make_unsigned<T>::type U;
 
+		if (std::is_signed<T>::value) {
 			if (v < 0) {
 				*sink++ = '-';
-				to_ascii_decimal_u(
+				to_ascii_decimal_u<U>(
 					std::forward<OutputIterator>(sink),
 					U(-v)
 				);
 			} else {
 				*sink++ = '+';
-				to_ascii_decimal_u(
+				to_ascii_decimal_u<U>(
 					std::forward<OutputIterator>(sink),
 					U(v)
 				);
 			}
 		} else
-			to_ascii_decimal_u(
+			to_ascii_decimal_u<U>(
 				std::forward<OutputIterator>(sink), v
 			);
 	}

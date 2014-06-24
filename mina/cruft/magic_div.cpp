@@ -72,8 +72,15 @@ std::tuple<T, int, bool> generate_mul(T d)
 int main(int argc, char **argv)
 {
 	unsigned long dr(0);
+	unsigned long tv(0);
+	bool test(false);
 	if (argc > 1) {
 		sscanf(argv[1], "%lu", &dr);
+	}
+
+	if (argc > 2) {
+		sscanf(argv[2], "%lu", &tv);
+		test = true;
 	}
 
 	if (!dr)
@@ -81,19 +88,27 @@ int main(int argc, char **argv)
 
 	printf("Div %lu, ", dr);
 
-	auto rv(generate_mul<uint8_t>(dr));
+	auto rv(generate_mul<uint32_t>(dr));
 	printf("adj %d, ", std::get<2>(rv));
 	printf("shift %d, ", std::get<1>(rv));
-	printf("M %lx\n", std::get<0>(rv));
-/*
-	auto M(std::get<0>(rv));
-	auto s(std::get<1>(rv));
+	printf("M %x\n", std::get<0>(rv));
 
-	uint8_t v1(232);
-	uint16_t v2(M);
-	v2 *= v1;
-	uint8_t v3((v2 >> 8) >> s);
-	printf("aa %d\n", v3);
-*/
+	if (test) {
+		auto M(std::get<0>(rv));
+		auto s(std::get<1>(rv));
+
+		uint32_t v1(tv);
+		uint64_t v2(M);
+		v2 *= v1;
+		v2 = (v2 >> 32) & 0xffffffff;
+
+		if (std::get<2>(rv))
+			v2 += v1;
+
+		uint16_t v3(v2 >> s);
+		printf("Divide %lu by %lu: %lu\n", tv, dr, (unsigned long)v3);
+	}
+	
+
 	return 0;
 }
