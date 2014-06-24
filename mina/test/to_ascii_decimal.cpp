@@ -141,4 +141,53 @@ BOOST_AUTO_TEST_CASE(to_ascii_decimal_2)
 	BOOST_CHECK_EQUAL(ref, s1);
 }
 
+BOOST_AUTO_TEST_CASE(to_ascii_decimal_3)
+{
+	std::array<uint64_t, 9> n0{
+		0, 709, 7709, 77095, 77095615, 4670770956ull, 467077095615ull,
+		18446744077095615ull, 18446744073709551615ull
+	};
+	std::string s0(
+		"0, 709, 7709, 77095, 77095615, 4670770956, 467077095615, "
+		"18446744077095615, 18446744073709551615"
+	);
+	std::string ref;
+	auto iter0(n0.begin());
+	auto sink(std::back_inserter(ref));
+
+	while (true) {
+		to_ascii_decimal(sink, *iter0);
+		++iter0;
+		if (iter0 == n0.end())
+			break;
+		*sink++ = ',';
+		*sink++ = ' ';
+	};
+
+	BOOST_CHECK_EQUAL(ref, s0);
+	ref.clear();
+
+	std::array<int64_t, 9> n1{
+		-9223372036854775808ll, -92233720854778ll, -92230368808ll,
+		-37203685ll, 0, 23368557ll, 72036854757ll, 72036854775807ll,
+		9223372036854775807ll
+	};
+	std::string s1(
+		"-9223372036854775808, -92233720854778, -92230368808, "
+		"-37203685, +0, +23368557, +72036854757, +72036854775807, "
+		"+9223372036854775807"
+	);
+	auto iter1(n1.begin());
+
+	while (true) {
+		to_ascii_decimal(sink, *iter1);
+		++iter1;
+		if (iter1 == n1.end())
+			break;
+		*sink++ = ',';
+		*sink++ = ' ';
+	};
+	BOOST_CHECK_EQUAL(ref, s1);
+}
+
 }}

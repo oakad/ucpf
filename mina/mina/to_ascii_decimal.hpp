@@ -70,13 +70,12 @@ struct to_ascii_decimal_u<uint8_t> {
 
 template <>
 struct to_ascii_decimal_u<uint16_t> {
-	template <typename OutputIterator>
-	to_ascii_decimal_u(OutputIterator &&sink, uint16_t v)
+	static uint32_t to_bcd(uint16_t v)
 	{
 		constexpr uint16_t divider_100(0x47af);
 		constexpr int shift_100(7);
 
-		std::array<uint32_t, 1> bv{0};
+		uint32_t rv(0);
 
 		auto xv(v);
 		for (int s(0); s < 16; s += 8) {
@@ -85,13 +84,20 @@ struct to_ascii_decimal_u<uint16_t> {
 			acc = (acc & 0xffff) + xv;
 			acc = (acc >> shift_100) & 0xffff;
 
-			bv[0] |= uint32_t(
+			rv |= uint32_t(
 				ascii_decimal_digits[xv - acc * 100]
 			) << s;
 			xv = acc;
 		}
 
-		bv[0] |= uint32_t(xv) << 16;
+		rv |= uint32_t(xv) << 16;
+		return rv;
+	}
+
+	template <typename OutputIterator>
+	to_ascii_decimal_u(OutputIterator &&sink, uint16_t v)
+	{
+		std::array<uint32_t, 1> bv{to_bcd(v)};
 		bcd_to_ascii(std::forward<OutputIterator>(sink), bv);
 	}
 };
@@ -118,6 +124,49 @@ struct to_ascii_decimal_u<uint32_t> {
 		}
 
 		bv[0] = ascii_decimal_digits[xv];
+		bcd_to_ascii(std::forward<OutputIterator>(sink), bv);
+	}
+};
+
+template <>
+struct to_ascii_decimal_u<uint64_t> {
+	template <typename OutputIterator>
+	to_ascii_decimal_u(OutputIterator &&sink, uint64_t v)
+	{
+		constexpr uint32_t divider_10000(0xd1b71759);
+		constexpr int shift_10000(13);
+
+		std::array<uint16_t, 4> xx{
+			uint16_t(v), uint16_t(v >> 16), uint16_t(v >> 32),
+			uint16_t(v >> 48)
+		};
+
+		std::array<uint32_t, 4> xy{
+			656u * xx[3] + 7296u * xx[2] + 5536u * xx[1] + xx[0],
+			7671u * xx[3] + 9496u * xx[2] + 6u * xx[1],
+			4749u * xx[3] + 42u * xx[2],
+			281u * xx[3]
+		};
+
+		std::array<uint32_t, 3> bv{0, 0, 0};
+		int shift(0);
+		uint32_t c(0);
+		for (uint32_t d: xy) {
+			uint64_t acc(d);
+			acc += c;
+			c = (acc * divider_10000) >> (32 + shift_10000);
+			bv[2 - (shift >> 5)] |= to_ascii_decimal_u<
+				uint16_t
+			>::to_bcd(
+				acc - c * 10000
+			) << (shift & 0x1f);
+			shift += 16;
+		}
+
+		bv[2 - (shift >> 5)] |= to_ascii_decimal_u<uint16_t>::to_bcd(
+			c
+		) << (shift & 0x1f);
+
 		bcd_to_ascii(std::forward<OutputIterator>(sink), bv);
 	}
 };
