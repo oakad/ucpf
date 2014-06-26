@@ -47,6 +47,17 @@ struct ascii_decimal_converter<T, true> {
 	template <typename OutputIterator>
 	static void apply(OutputIterator &&sink, T v)
 	{
+		if (std::signbit(v)) {
+			*sink++ = '-';
+			to_ascii_decimal_f<T>(
+				std::forward<OutputIterator>(sink), std::abs(v)
+			);
+		} else {
+			*sink++ = '+';
+			to_ascii_decimal_f<T>(
+				std::forward<OutputIterator>(sink), v
+			);
+		}
 	}
 };
 

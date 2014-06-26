@@ -54,19 +54,47 @@ struct to_ascii_decimal_f<double> {
 				uint64_t(acc >> 64), exp + other.exp + 64
 			);
 		}
-	};
 
-	static int k_comp(int exp, int a)
-	{
-		constexpr double inv_log2_10 = 0.30102999566398114;
-		return std::ceil((a - exp + 63) * inv_log2_10);
-	}
+		std::pair<fp_type, fp_type> boundaries() const
+		{
+			constexpr int subnormal_exp = -1074;
+			fp_type high((m << 1) + 1, exp - 1);
+			high.normalize();
+			fp_type low((m << 1) - 1, exp - 1);
+			if (!m && (exp != subnormal_exp)) {
+				low.m = (m << 2) - 1;
+				low.exp = exp - 2;
+			}
+			low.m <<= low.exp - high.exp;
+			low.exp = high.exp;
+			return std::make_pair(low, high);
+		}
+
+		void normalize()
+		{
+			auto l(__builtin_clzll(m));
+			m <<= l;
+			exp -= l;
+		}
+	};
 
 	template <typename OutputIterator>
 	to_ascii_decimal_f(OutputIterator &&sink, double v)
 	{
-		bool sign(std::signbit(v));
-		fp_type xv(std::abs(v));
+		fp_type xv(v);
+		auto bd(xv.boundaries());
+
+		auto exp_bd(binary_pow_10::lookup_exp_10<double>(
+			min_target_exp - (xv.exp + sig_size)
+		));
+		auto s_xv(xv * exp_bd.ten_mk());
+		auto s_bd(std::make_pair(
+			bd.first * exp_bd.ten_mk(),
+			bd.second * exp_bd.ten_mk()
+		));
+
+		int exp_adj;
+		auto x_bcd(to_bcd(s_xv, s_bd, exp_adj));
 	}
 };
 
