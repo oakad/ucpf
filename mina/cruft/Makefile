@@ -1,5 +1,8 @@
 CC=g++
-CXXFLAGS=-std=c++11  -I.. -I../../yesod
+CXXFLAGS=-std=gnu++1y  -I.. -I../../yesod
+
+t4 : t4.cpp
+	$(CC) $(CXXFLAGS) -o $@ $^
 
 t3 : t3.cpp
 	$(CC) $(CXXFLAGS) -o $@ $^
