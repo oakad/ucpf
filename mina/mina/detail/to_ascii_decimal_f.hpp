@@ -38,15 +38,14 @@ struct to_ascii_decimal_f<double> {
 
 		fp_type(double v)
 		{
-			constexpr static int m_shift = 11;
 			constexpr static int e_shift = 52;
-			constexpr static int e_offset = 1086;
+			constexpr static int e_offset = 1075;
 			union {
 				double f;
 				uint64_t i;
 			} xv;
 			xv.f = v;
-			m = xv.i << m_shift;
+			m = xv.i & ((1ull << (e_shift + 1)) - 1);
 			exp = xv.i >> e_shift;
 			exp -= e_offset;
 			printf("xx %zx, %d\n", m, exp);
@@ -98,9 +97,9 @@ struct to_ascii_decimal_f<double> {
 		constexpr static int mantissa_size = 64;
 
 		fp_type xv(v);
+		auto bd(xv.boundaries());
 		xv.normalize();
 		printf("in %f, m: %zx, e: %d\n", v, xv.m, xv.exp);
-		auto bd(xv.boundaries());
 
 		auto exp_bd(binary_pow_10::lookup_exp_10<double>(
 			minimal_target_exp - (xv.exp + mantissa_size)
@@ -113,8 +112,15 @@ struct to_ascii_decimal_f<double> {
 		printf("s_bd min %zx, %d\n", s_bd.first.m, s_bd.first.exp);
 		printf("s_bd max %zx, %d\n", s_bd.second.m, s_bd.second.exp);
 		printf("scale %zx, %d, %d\n", exp_bd.m, exp_bd.exp_10, exp_bd.exp_2);
-		//int exp_adj;
-		//auto x_bcd(to_bcd(s_xv, s_bd, exp_adj));
+
+		auto s_bd_outer(s_bd);
+		--s_bd_outer.first.m;
+		++s_bd_outer.second.m;
+		auto unsafe(s_bd_outer.second - s_bd_outer.first);
+		fp_type x_one(uint64_t(1) << -s_xv.exp, s_xv.exp);
+		auto x_int(s_bd_outer.second.m >> -s_xv.exp);
+		auto x_frac(s_bd_outer.second.m & (x_one.m - 1));
+		
 	}
 };
 
