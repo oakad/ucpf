@@ -9,7 +9,7 @@
 #if !defined(UCPF_MINA_TO_ASCII_DECIMAL_20140623T2300)
 #define UCPF_MINA_TO_ASCII_DECIMAL_20140623T2300
 
-#include <mina/detail/to_ascii_decimal_u.hpp>
+#include <mina/detail/to_ascii_decimal_f.hpp>
 
 namespace ucpf { namespace mina {
 namespace detail {

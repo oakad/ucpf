@@ -15,10 +15,89 @@
 #if !defined(UCPF_MINA_DETAIL_TO_ASCII_DECIMAL_F_20140624T2300)
 #define UCPF_MINA_DETAIL_TO_ASCII_DECIMAL_F_20140624T2300
 
-#include <mina/detail/bcd_to_ascii.hpp>
 #include <mina/detail/binary_pow_10.hpp>
+#include <mina/detail/to_ascii_decimal_u.hpp>
 
 namespace ucpf { namespace mina { namespace detail {
+
+template <typename OutputIterator, size_t N>
+void bcd_to_ascii_f(
+	OutputIterator &&sink, std::array<uint32_t, N> const &v,
+	int length, int exp
+)
+{
+	constexpr static int negative_cutoff = -6;
+	constexpr static int positive_cutoff = 21;
+	int c(0);
+
+	printf("xxx %d\n", exp);
+	if ((exp >= negative_cutoff) && (exp < positive_cutoff)) {
+		int dot_pos(length + exp);
+
+		if (dot_pos < 0) {
+			*sink++ = '0';
+			*sink++ = '.';
+			for(; dot_pos < 0; ++dot_pos)
+				*sink++ = '0';
+
+			for (; c < length; ++c) {
+				*sink++ = '0' + ((
+					v[c >> 3] >> ((7 - (c & 7)) << 2)
+				) & 0xf);
+			}
+		} else if (dot_pos < length) {
+			for (; c < dot_pos; ++c) {
+				*sink++ = '0' + ((
+					v[c >> 3] >> ((7 - (c & 7)) << 2)
+				) & 0xf);
+			}
+
+			*sink++ = '.';
+
+			for (; c < length; ++c) {
+				*sink++ = '0' + ((
+					v[c >> 3] >> ((7 - (c & 7)) << 2)
+				) & 0xf);
+			}
+		} else {
+			for (; c < length; ++c) {
+				*sink++ = '0' + ((
+					v[c >> 3] >> ((7 - (c & 7)) << 2)
+				) & 0xf);
+			}
+
+			for (; c < dot_pos; ++c)
+				*sink++ = '0';
+
+			*sink++ = '.';
+			*sink++ = '0';
+		}
+	} else {
+		*sink++ = '0' + (
+			(v[c >> 3] >> ((7 - (c & 7)) << 2)) & 0xf
+		);
+		++c;
+		if (c < length)
+			*sink++ = '.';
+
+		for (; c < length; ++c) {
+			*sink++ = 0x30 + (
+				(v[c >> 3] >> ((7 - (c & 7)) << 2)) & 0xf
+			);
+		}
+		*sink++ = 'e';
+		if (exp >= 0)
+			*sink++ = '+';
+		else {
+			exp = -exp;
+			*sink++ = '-';
+		}
+		exp += length - 1;
+		to_ascii_decimal_u<uint32_t>(
+			std::forward<OutputIterator>(sink), uint32_t(exp)
+		);
+	}
+}
 
 template <typename T>
 struct to_ascii_decimal_f;
@@ -107,8 +186,7 @@ struct to_ascii_decimal_f<double> {
 	}
 
 	static bool round_weed(
-		std::array<uint32_t, 3> const &v,
-		int digit_pos,
+		uint32_t &last_digit,
 		uint64_t upper_range, uint64_t unsafe_range,
 		uint64_t x_rem, uint64_t mult, uint64_t scale
 	)
@@ -126,7 +204,7 @@ struct to_ascii_decimal_f<double> {
 			))
 		)
 		{
-			buffer[length - 1]--;
+			last_digit--;
 			x_rem += mult;
 		}
 
@@ -136,7 +214,7 @@ struct to_ascii_decimal_f<double> {
 			&& (((x_rem + mult) < range.second) || (
 				(range.second - x_rem)
 				> (x_rem + mult - range.second)
-			)
+			))
 		)
 			return false;
 
@@ -181,9 +259,7 @@ struct to_ascii_decimal_f<double> {
 		int dp(0);
 		uint64_t scale(1);
 		while (x_exp.second > 0) {
-			auto x_dig(x_int / x_exp.first);
-			bv[dp >> 3] |= x_dig << ((7 - (dp & 7)) << 2);
-			++dp;
+			uint32_t x_dig(x_int / x_exp.first);
 			x_int %= x_exp.first;
 			--x_exp.second;
 
@@ -192,23 +268,22 @@ struct to_ascii_decimal_f<double> {
 			if (x_rem < unsafe.m) {
 				printf("e_int\n");
 				if (!round_weed(
-					bv, dp - 1,
-					(s_bd_outer.second - s_xv).m,
+					x_dig, (s_bd_outer.second - s_xv).m,
 					unsafe.m, x_rem,
 					x_exp.first << (-x_one.exp), scale
 				)) {
 					printf("no match\n");
 				}
-				bcd_to_ascii(
-					std::forward<OutputIterator>(sink), bv
+				bv[dp >> 3] |= x_dig << ((7 - (dp & 7)) << 2);
+				++dp;
+				bcd_to_ascii_f(
+					std::forward<OutputIterator>(sink), bv,
+					dp, x_exp.second - exp_bd.exp_10
 				);
 				return;
-				/*
-				return RoundWeed(buffer, *length, DiyFp::Minus(too_high, w).f(),
-				unsafe_interval.f(), rest,
-				static_cast<uint64_t>(divisor) << -one.e(), scale);
-			*/
-				
+			} else {
+				bv[dp >> 3] |= x_dig << ((7 - (dp & 7)) << 2);
+				++dp;
 			}
 			x_exp.first /= 10;
 		}
@@ -217,26 +292,28 @@ struct to_ascii_decimal_f<double> {
 			x_frac *= 10;
 			scale *= 10;
 			unsafe.m *= 10;
-			auto x_dig(x_frac >> (-x_one.exp));
-			bv[dp >> 3] |= x_dig << ((7 - (dp & 7)) << 2);
-			++dp;
+			uint32_t x_dig(x_frac >> (-x_one.exp));
 			x_frac &= x_one.m - 1;
 			--x_exp.second;
 			if (x_frac < unsafe.m) {
 				printf("e_frac\n");
 				if (!round_weed(
-					bv, dp - 1,
+					x_dig,
 					(s_bd_outer.second - s_xv).m * scale,
 					unsafe.m, x_frac, x_one.m, scale
 				)) {
 					printf("no match\n");
 				}
-				bcd_to_ascii(
-					std::forward<OutputIterator>(sink), bv
+				bv[dp >> 3] |= x_dig << ((7 - (dp & 7)) << 2);
+				++dp;
+				bcd_to_ascii_f(
+					std::forward<OutputIterator>(sink), bv,
+					dp, x_exp.second - exp_bd.exp_10
 				);
 				return;
-				/*return RoundWeed(buffer, *length, DiyFp::Minus(too_high, w).f() * unit,
-                               unsafe_interval.f(), fractionals, one.f(), scale);*/
+			} else {
+				bv[dp >> 3] |= x_dig << ((7 - (dp & 7)) << 2);
+				++dp;
 			}
 		}
 	}
