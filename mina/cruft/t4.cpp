@@ -17,5 +17,6 @@ int main(int argc, char **argv)
 	print_dbl(1230);
 	print_dbl(1230e100);
 	print_dbl(0.000123);
+	print_dbl(1.23e500Q);
 	return 0;
 }

@@ -8,6 +8,7 @@
 #if !defined(UCPF_YESOD_BITOPS_NOV_17_2013_1945)
 #define UCPF_YESOD_BITOPS_NOV_17_2013_1945
 
+#include <cstdint>
 #include <type_traits>
 
 namespace ucpf { namespace yesod {

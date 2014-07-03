@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Alex Dubov <oakad@yahoo.com>
+ * Copyright (c) 2013-2014 Alex Dubov <oakad@yahoo.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
@@ -9,11 +9,11 @@
 #define UCPF_YESOD_FLOAT_NOV_15_2013_1215
 
 #include <limits>
-
+#include <utility>
+#include <yesod/bitops.hpp>
 #include <yesod/mpl/at.hpp>
 #include <yesod/mpl/map.hpp>
 #include <yesod/mpl/has_key.hpp>
-#include <yesod/bitops.hpp>
 
 namespace ucpf { namespace yesod {
 namespace detail {
@@ -22,8 +22,8 @@ struct float_tag {};
 
 template <
 	typename StorageType, typename MachineType = StorageType,
-	unsigned int MantissaBits = std::numeric_limits<MachineType>::digits,
-	unsigned int ExponentBits = order_base_2(uint32_t(
+	uint32_t MantissaBits = std::numeric_limits<MachineType>::digits,
+	uint32_t ExponentBits = order_base_2(uint32_t(
 		std::numeric_limits<MachineType>::max_exponent
 		- std::numeric_limits<MachineType>::min_exponent
 	))
@@ -33,18 +33,19 @@ template <
 	constexpr static bool is_native = std::is_floating_point<
 		machine_type
 	>::value;
-	constexpr static unsigned int mantissa_bits = MantissaBits;
-	constexpr static unsigned int exponent_bits = ExponentBits;
+	constexpr static uint32_t mantissa_bits = MantissaBits;
+	constexpr static uint32_t exponent_bits = ExponentBits;
+	constexpr static int32_t exponent_bias = ((1 << ExponentBits) - 2) / 2;
 };
 
 typedef typename mpl::map<
 	mpl::pair<
 		mpl::uint_<8>,
-		storable_float_traits<uint8_t, uint8_t, 3, 4>
+		storable_float_traits<uint8_t, uint8_t, 4, 4>
 	>,
 	mpl::pair<
 		mpl::uint_<16>,
-		storable_float_traits<uint16_t, uint16_t, 10, 5>
+		storable_float_traits<uint16_t, uint16_t, 11, 5>
 	>,
 	mpl::pair<
 		mpl::uint_<32>,
@@ -113,7 +114,46 @@ struct float_t {
 		return storable;
 	}
 
+	storage_type get_mantissa() const
+	{
+		constexpr static storage_type mantissa_mask(
+			(storage_type(1) << (traits_type::mantissa_bits - 1))
+			- 1
+		);
+		return mantissa_mask & storable;
+	}
+
+	storage_type get_exponent() const
+	{
+		return exponent_mask & (
+			storable >> (traits_type::mantissa_bits - 1)
+		);
+	}
+
+	int32_t get_exponent_value() const
+	{
+		return static_cast<int32_t>(get_exponent())
+		       - traits_type::exponent_bias;
+	}
+
+	bool get_sign() const
+	{
+		return (storable >> (
+			traits_type::mantissa_bits + traits_type::exponent_bits
+			- 1
+		)) ? true : false;
+	}
+
+	bool is_special() const
+	{
+		return get_exponent() == exponent_mask;
+	}
+
 private:
+	constexpr static storage_type exponent_mask = (
+		storage_type(1) << (traits_type::exponent_bits + 1)
+	) - 1;
+
 	union {
 		machine_type value;
 		storage_type storable;

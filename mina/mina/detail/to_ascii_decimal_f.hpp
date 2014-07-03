@@ -15,6 +15,7 @@
 #if !defined(UCPF_MINA_DETAIL_TO_ASCII_DECIMAL_F_20140624T2300)
 #define UCPF_MINA_DETAIL_TO_ASCII_DECIMAL_F_20140624T2300
 
+#include <yesod/float.hpp>
 #include <mina/detail/binary_pow_10.hpp>
 #include <mina/detail/to_ascii_decimal_u.hpp>
 
@@ -30,7 +31,6 @@ void bcd_to_ascii_f(
 	constexpr static int positive_cutoff = 21;
 	int c(0);
 
-	printf("xxx %d\n", exp);
 	if ((exp >= negative_cutoff) && (exp < positive_cutoff)) {
 		int dot_pos(length + exp);
 
@@ -99,77 +99,90 @@ void bcd_to_ascii_f(
 	}
 }
 
+template <unsigned int N>
+struct float_t {
+	typedef yesod::float_t<N> wrapper_type;
+	typedef typename wrapper_type::storage_type mantissa_type;
+
+	float_t(mantissa_type m_, int32_t exp_)
+	: m(m_), exp(exp_)
+	{}
+
+	float_t(float_t const &other)
+	: m(other.m), exp(other.exp)
+	{}
+
+	float_t(typename wrapper_type::machine_type v)
+	{
+		constexpr static auto exponent_bias(
+			wrapper_type::traits_type::mantissa_bits - 1
+		);
+
+		wrapper_type xv(v);
+		m = xv.get_mantissa();
+		exp = xv.get_exponent_value() - exponent_bias;
+		if (xv.get_exponent())
+			m += mantissa_type(1) << exponent_bias;
+	}
+
+	float_t operator-(float_t other) const
+	{
+		return float_t(m - other.m, exp);
+	}
+
+	auto operator*(float_t other) const -> float_t;
+
+	std::pair<float_t, float_t> boundaries() const
+	{
+		constexpr static auto exponent_bias
+		= wrapper_type::traits_type::mantissa_bits
+		  + wrapper_type::traits_type::exponent_bias;
+
+		float_t high((m << 1) + 1, exp - 1);
+		high.normalize();
+		float_t low((m << 1) - 1, exp - 1);
+		if (!m && (exp != exponent_bias)) {
+			low.m = (m << 2) - 1;
+			low.exp = exp - 2;
+		}
+		low.m <<= low.exp - high.exp;
+		low.exp = high.exp;
+		return std::make_pair(low, high);
+	}
+
+	void normalize();
+
+	mantissa_type m;
+	int32_t exp;
+};
+
+template <>
+auto float_t<64>::operator*(float_t other) const -> float_t
+{
+	unsigned __int128 acc(m);
+	acc *= other.m;
+	acc += 1ull << 63; /* rounding */
+	return float_t(
+		uint64_t(acc >> 64), exp + other.exp + 64
+	);
+}
+
+template <>
+void float_t<64>::normalize()
+{
+	auto l(__builtin_clzll(m));
+	m <<= l;
+	exp -= l;
+}
+
 template <typename T>
 struct to_ascii_decimal_f;
 
+template <typename T>
+struct to_ascii_decimal_f_s;
+
 template <>
 struct to_ascii_decimal_f<double> {
-	struct fp_type {
-		uint64_t m;
-		int exp;
-
-		fp_type(uint64_t m_, int exp_)
-		: m(m_), exp(exp_)
-		{}
-
-		fp_type(fp_type const &other)
-		: m(other.m), exp(other.exp)
-		{}
-
-		fp_type(double v)
-		{
-			constexpr static int e_shift = 52;
-			constexpr static int e_offset = 1075;
-			union {
-				double f;
-				uint64_t i;
-			} xv;
-			xv.f = v;
-			m = xv.i & ((1ull << (e_shift + 1)) - 1);
-			exp = xv.i >> e_shift;
-			exp -= e_offset;
-			printf("xx %zx, %d\n", m, exp);
-		}
-
-		fp_type operator-(fp_type other) const
-		{
-			return fp_type(m - other.m, exp);
-		}
-
-		fp_type operator*(fp_type other) const
-		{
-			unsigned __int128 acc(m);
-			acc *= other.m;
-			acc += 0x8000000000000000ull; /* rounding */
-			return fp_type(
-				uint64_t(acc >> 64), exp + other.exp + 64
-			);
-		}
-
-		std::pair<fp_type, fp_type> boundaries() const
-		{
-			constexpr static int exponent_bias = 1074;
-			fp_type high((m << 1) + 1, exp - 1);
-			high.normalize();
-			fp_type low((m << 1) - 1, exp - 1);
-			if (!m && (exp != exponent_bias)) {
-				low.m = (m << 2) - 1;
-				low.exp = exp - 2;
-			}
-			low.m <<= low.exp - high.exp;
-			low.exp = high.exp;
-			printf("bd (%zx, %d) - (%zx, %d)\n", low.m, low.exp, high.m, high.exp);
-			return std::make_pair(low, high);
-		}
-
-		void normalize()
-		{
-			auto l(__builtin_clzll(m));
-			m <<= l;
-			exp -= l;
-		}
-	};
-
 	static std::pair<uint32_t, int> pow_10_estimate(uint32_t v, int n_bits)
 	{
 		constexpr std::array<uint32_t, 11> pow_10 = {{
@@ -188,7 +201,7 @@ struct to_ascii_decimal_f<double> {
 	static bool round_weed(
 		uint32_t &last_digit,
 		uint64_t upper_range, uint64_t unsafe_range,
-		uint64_t x_rem, uint64_t mult, uint64_t scale
+		uint64_t remainder, uint64_t mult, uint64_t scale
 	)
 	{
 		auto range(std::make_pair(
@@ -196,30 +209,30 @@ struct to_ascii_decimal_f<double> {
 		));
 
 		while (
-			(x_rem < range.first)
-			&& ((unsafe_range - x_rem) >= mult)
-			&& (((x_rem + mult) < range.first) || (
-				(range.first - x_rem)
-				>= (x_rem + mult - range.first)
+			(remainder < range.first)
+			&& ((unsafe_range - remainder) >= mult)
+			&& (((remainder + mult) < range.first) || (
+				(range.first - remainder)
+				>= (remainder + mult - range.first)
 			))
 		)
 		{
 			last_digit--;
-			x_rem += mult;
+			remainder += mult;
 		}
 
 		if (
-			(x_rem < range.second)
-			&& ((unsafe_range - x_rem) >= mult)
-			&& (((x_rem + mult) < range.second) || (
-				(range.second - x_rem)
-				> (x_rem + mult - range.second)
+			(remainder < range.second)
+			&& ((unsafe_range - remainder) >= mult)
+			&& (((remainder + mult) < range.second) || (
+				(range.second - remainder)
+				> (remainder + mult - range.second)
 			))
 		)
 			return false;
 
-		return ((scale << 1) <= x_rem) && (
-			x_rem <= (unsafe_range - (mult << 2))
+		return ((scale << 1) <= remainder) && (
+			remainder <= (unsafe_range - (mult << 2))
 		);
 	}
 
@@ -229,93 +242,105 @@ struct to_ascii_decimal_f<double> {
 		constexpr static int minimal_target_exp = -60;
 		constexpr static int mantissa_size = 64;
 
-		fp_type xv(v);
+		float_t<64> xv(v);
 		auto bd(xv.boundaries());
 		xv.normalize();
-		printf("in %f, m: %zx, e: %d\n", v, xv.m, xv.exp);
 
 		auto exp_bd(binary_pow_10::lookup_exp_10<double>(
 			minimal_target_exp - (xv.exp + mantissa_size)
 		));
-		fp_type x_scale(exp_bd.m, exp_bd.exp_2);
+		float_t<64> x_scale(exp_bd.m, exp_bd.exp_2);
 		auto s_xv(xv * x_scale);
-		auto s_bd(std::make_pair(bd.first * x_scale, bd.second * x_scale));
+		auto s_bd(std::make_pair(
+			bd.first * x_scale, bd.second * x_scale
+		));
 
-		printf("s_xv %zx, %d\n", s_xv.m, s_xv.exp);
-		printf("s_bd min %zx, %d\n", s_bd.first.m, s_bd.first.exp);
-		printf("s_bd max %zx, %d\n", s_bd.second.m, s_bd.second.exp);
-		printf("scale %zx, %d, %d\n", exp_bd.m, exp_bd.exp_10, exp_bd.exp_2);
+		--s_bd.first.m;
+		++s_bd.second.m;
 
-		auto s_bd_outer(s_bd);
-		--s_bd_outer.first.m;
-		++s_bd_outer.second.m;
-		auto unsafe(s_bd_outer.second - s_bd_outer.first);
-		fp_type x_one(uint64_t(1) << -s_xv.exp, s_xv.exp);
-		auto x_int(s_bd_outer.second.m >> -s_xv.exp);
-		auto x_frac(s_bd_outer.second.m & (x_one.m - 1));
-		auto x_exp(pow_10_estimate(x_int, mantissa_size + x_one.exp));
+		auto unsafe(s_bd.second - s_bd.first);
+		float_t<64> unity(uint64_t(1) << -s_xv.exp, s_xv.exp);
+		auto integral(s_bd.second.m >> -s_xv.exp);
+		auto fractional(s_bd.second.m & (unity.m - 1));
+		auto exponent(
+			pow_10_estimate(integral, mantissa_size + unity.exp)
+		);
 
 		std::array<uint32_t, 3> bv{0, 0, 0};
 		int dp(0);
 		uint64_t scale(1);
-		while (x_exp.second > 0) {
-			uint32_t x_dig(x_int / x_exp.first);
-			x_int %= x_exp.first;
-			--x_exp.second;
+		while (exponent.second > 0) {
+			uint32_t digit(integral / exponent.first);
+			integral %= exponent.first;
+			--exponent.second;
 
-			auto x_rem((x_int << (-x_one.exp)) + x_frac);
+			auto remainder((integral << (-unity.exp)) + fractional);
 
-			if (x_rem < unsafe.m) {
-				printf("e_int\n");
+			if (remainder < unsafe.m) {
 				if (!round_weed(
-					x_dig, (s_bd_outer.second - s_xv).m,
-					unsafe.m, x_rem,
-					x_exp.first << (-x_one.exp), scale
-				)) {
-					printf("no match\n");
-				}
-				bv[dp >> 3] |= x_dig << ((7 - (dp & 7)) << 2);
+					digit, (s_bd.second - s_xv).m,
+					unsafe.m, remainder,
+					exponent.first << (-unity.exp), scale
+				))
+					to_ascii_decimal_f_s<double>(
+						std::forward<
+							OutputIterator
+						>(sink), v
+					);
+
+				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
 				++dp;
 				bcd_to_ascii_f(
 					std::forward<OutputIterator>(sink), bv,
-					dp, x_exp.second - exp_bd.exp_10
+					dp, exponent.second - exp_bd.exp_10
 				);
 				return;
 			} else {
-				bv[dp >> 3] |= x_dig << ((7 - (dp & 7)) << 2);
+				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
 				++dp;
 			}
-			x_exp.first /= 10;
+			exponent.first /= 10;
 		}
 
 		while (true) {
-			x_frac *= 10;
+			fractional *= 10;
 			scale *= 10;
 			unsafe.m *= 10;
-			uint32_t x_dig(x_frac >> (-x_one.exp));
-			x_frac &= x_one.m - 1;
-			--x_exp.second;
-			if (x_frac < unsafe.m) {
-				printf("e_frac\n");
+			uint32_t digit(fractional >> (-unity.exp));
+			fractional &= unity.m - 1;
+			--exponent.second;
+			if (fractional < unsafe.m) {
 				if (!round_weed(
-					x_dig,
-					(s_bd_outer.second - s_xv).m * scale,
-					unsafe.m, x_frac, x_one.m, scale
-				)) {
-					printf("no match\n");
-				}
-				bv[dp >> 3] |= x_dig << ((7 - (dp & 7)) << 2);
+					digit, (s_bd.second - s_xv).m * scale,
+					unsafe.m, fractional, unity.m, scale
+				))
+					to_ascii_decimal_f_s<double>(
+						std::forward<
+							OutputIterator
+						>(sink), v
+					);
+
+				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
 				++dp;
 				bcd_to_ascii_f(
 					std::forward<OutputIterator>(sink), bv,
-					dp, x_exp.second - exp_bd.exp_10
+					dp, exponent.second - exp_bd.exp_10
 				);
 				return;
 			} else {
-				bv[dp >> 3] |= x_dig << ((7 - (dp & 7)) << 2);
+				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
 				++dp;
 			}
 		}
+	}
+};
+
+template <>
+struct to_ascii_decimal_f_s<double> {
+	template <typename OutputIterator>
+	to_ascii_decimal_f_s(OutputIterator &&sink, double v)
+	{
+		
 	}
 };
 
