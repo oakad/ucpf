@@ -8,12 +8,14 @@
 #if !defined(UCPF_YESOD_FLOAT_NOV_15_2013_1215)
 #define UCPF_YESOD_FLOAT_NOV_15_2013_1215
 
-#include <limits>
 #include <utility>
 #include <yesod/bitops.hpp>
 #include <yesod/mpl/at.hpp>
 #include <yesod/mpl/map.hpp>
 #include <yesod/mpl/has_key.hpp>
+
+#include <yesod/detail/float8.hpp>
+#include <yesod/detail/float16.hpp>
 
 namespace ucpf { namespace yesod {
 namespace detail {
@@ -41,11 +43,11 @@ template <
 typedef typename mpl::map<
 	mpl::pair<
 		mpl::uint_<8>,
-		storable_float_traits<uint8_t, uint8_t, 4, 4>
+		storable_float_traits<uint8_t, float8>
 	>,
 	mpl::pair<
 		mpl::uint_<16>,
-		storable_float_traits<uint16_t, uint16_t, 11, 5>
+		storable_float_traits<uint16_t, float16>
 	>,
 	mpl::pair<
 		mpl::uint_<32>,
@@ -151,7 +153,7 @@ struct float_t {
 
 private:
 	constexpr static storage_type exponent_mask = (
-		storage_type(1) << (traits_type::exponent_bits + 1)
+		storage_type(1) << traits_type::exponent_bits
 	) - 1;
 
 	union {

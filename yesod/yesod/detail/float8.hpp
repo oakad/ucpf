@@ -5,8 +5,8 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_YESOD_DETAIL_MINIFLOAT_20140703T2300)
-#define UCPF_YESOD_DETAIL_MINIFLOAT_20140703T2300
+#if !defined(UCPF_YESOD_DETAIL_FLOAT8_20140703T2300)
+#define UCPF_YESOD_DETAIL_FLOAT8_20140703T2300
 
 #include <limits>
 #include <cstdint>
@@ -21,14 +21,6 @@ struct float8 {
 	uint8_t v;
 };
 
-struct float16 {
-	constexpr static uint16_t sign_mask = 0x8000;
-	constexpr static uint16_t exp_mask = 0x7c00;
-	constexpr static uint16_t mantissa_mask = 0x3ff;
-
-	uint16_t v;
-};
-
 }}
 
 namespace std {
@@ -39,37 +31,42 @@ struct numeric_limits<ucpf::yesod::float8> {
 
 	constexpr static ucpf::yesod::float8 min() noexcept
 	{
+		return ucpf::yesod::float8{0x08};
 	}
 
 	constexpr static ucpf::yesod::float8 max() noexcept
 	{
+		return ucpf::yesod::float8{0x77};
 	}
 
 	constexpr static ucpf::yesod::float8 lowest() noexcept
 	{
+		return ucpf::yesod::float8{0xf7};
 	}
 
-	constexpr static int digits = 0;
-	constexpr static int digits10 = 0;
-	constexpr static int max_digits10 = 0;
+	constexpr static int digits = 4;
+	constexpr static int digits10 = 1;
+	constexpr static int max_digits10 = 3;
 
 	constexpr static bool is_signed = true;
 	constexpr static bool is_integer = false;
 	constexpr static bool is_exact = false;
-	constexpr static int radix = 0;
+	constexpr static int radix = 2;
 
 	constexpr static ucpf::yesod::float8 epsilon() noexcept
 	{
+		return ucpf::yesod::float8{0x20};
 	}
 
 	constexpr static ucpf::yesod::float8 round_error() noexcept
 	{
+		return ucpf::yesod::float8{0x30};
 	}
 
-	constexpr static int min_exponent = 0;
+	constexpr static int min_exponent = -5;
 	constexpr static int min_exponent10 = 0;
-	constexpr static int max_exponent = 0;
-	constexpr static int max_exponent10 = 0;
+	constexpr static int max_exponent = 8;
+	constexpr static int max_exponent10 = 2;
 
 	constexpr static bool has_infinity = true;
 	constexpr static bool has_quiet_NaN = true;
@@ -79,18 +76,22 @@ struct numeric_limits<ucpf::yesod::float8> {
 
 	constexpr static ucpf::yesod::float8 infinity() noexcept
 	{
+		return ucpf::yesod::float8{0x78};
 	}
 
 	constexpr static ucpf::yesod::float8 quiet_NaN() noexcept
 	{
+		return ucpf::yesod::float8{0x7c};
 	}
 
 	constexpr static ucpf::yesod::float8 signaling_NaN() noexcept
 	{
+		return ucpf::yesod::float8{0x7a};
 	}
 
 	constexpr static ucpf::yesod::float8 denorm_min() noexcept
 	{
+		return ucpf::yesod::float8{0x01};
 	}
 
 	constexpr static bool is_iec559 = true;
@@ -102,12 +103,5 @@ struct numeric_limits<ucpf::yesod::float8> {
 	constexpr static float_round_style round_style = round_to_nearest;
 };
 
-template <>
-struct numeric_limits<ucpf::yesod::float16> {
-	constexpr static bool is_specialized = true;
-	
-};
-
 }
-
 #endif
