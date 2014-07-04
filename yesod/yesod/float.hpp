@@ -106,7 +106,7 @@ struct float_t {
 		std::is_floating_point<U>::value
 	>::convert(other)) {};
 
-	operator machine_type() const
+	machine_type get() const
 	{
 		return value;
 	}

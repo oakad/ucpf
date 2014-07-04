@@ -128,7 +128,6 @@ auto binary_pow_10::lookup_exp_10<double>(int exp_10) -> entry
 	auto idx(std::lround(k));
 	idx -= pow_list.front().exp_10 + 1;
 	idx /= pow_10_step;
-	printf("lookup %d, idx %ld, e10 %d\n", exp_10, idx, pow_list[idx + 1].exp_10);
 	return pow_list[idx + 1];
 }
 

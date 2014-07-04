@@ -14,7 +14,7 @@
 
 namespace ucpf { namespace mina {
 
-BOOST_AUTO_TEST_CASE(to_ascii_decimal_0)
+BOOST_AUTO_TEST_CASE(to_ascii_decimal1_0)
 {
 	std::array<uint8_t, 9> n0{
 		0, 7, 24, 91, 113, 139, 200, 243, 255
@@ -53,7 +53,7 @@ BOOST_AUTO_TEST_CASE(to_ascii_decimal_0)
 	BOOST_CHECK_EQUAL(ref, s1);
 }
 
-BOOST_AUTO_TEST_CASE(to_ascii_decimal_1)
+BOOST_AUTO_TEST_CASE(to_ascii_decimal1_1)
 {
 	std::array<uint16_t, 9> n0{
 		0, 7, 24, 910, 1130, 14739, 27485, 43204, 65535
@@ -94,7 +94,7 @@ BOOST_AUTO_TEST_CASE(to_ascii_decimal_1)
 	BOOST_CHECK_EQUAL(ref, s1);
 }
 
-BOOST_AUTO_TEST_CASE(to_ascii_decimal_2)
+BOOST_AUTO_TEST_CASE(to_ascii_decimal1_2)
 {
 	std::array<uint32_t, 9> n0{
 		0, 76, 243, 9100, 63192, 6399192, 576495799, 2104957993,
@@ -141,7 +141,7 @@ BOOST_AUTO_TEST_CASE(to_ascii_decimal_2)
 	BOOST_CHECK_EQUAL(ref, s1);
 }
 
-BOOST_AUTO_TEST_CASE(to_ascii_decimal_3)
+BOOST_AUTO_TEST_CASE(to_ascii_decimal1_3)
 {
 	std::array<uint64_t, 9> n0{
 		0, 709, 7709, 77095, 77095615, 4670770956ull, 467077095615ull,
@@ -190,7 +190,7 @@ BOOST_AUTO_TEST_CASE(to_ascii_decimal_3)
 	BOOST_CHECK_EQUAL(ref, s1);
 }
 
-BOOST_AUTO_TEST_CASE(to_ascii_decimal_4)
+BOOST_AUTO_TEST_CASE(to_ascii_decimal1_4)
 {
 	std::array<unsigned __int128, 9> n0{
 		0, 709, 7709, 77095, 77095615, 4670770956ull, 467077095615ull,

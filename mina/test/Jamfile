@@ -1,7 +1,6 @@
 import testing ;
 
 alias test_case : : : : <include>..
-                        <include>../../../boost
                         <include>../../yesod
                         <library>../..//unit_test_framework
                         <library>../..//test_exec_monitor
@@ -9,4 +8,5 @@ alias test_case : : : : <include>..
                         <toolset>gcc:<cxxflags>-fmax-errors=4 ;
 
 run mbp.cpp : : test_case ;
-run to_ascii_decimal.cpp : : test_case ;
+run to_ascii_decimal1.cpp : : test_case ;
+run to_ascii_decimal2.cpp : : test_case ;

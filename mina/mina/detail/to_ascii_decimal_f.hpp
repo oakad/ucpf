@@ -86,13 +86,15 @@ void bcd_to_ascii_f(
 			);
 		}
 		*sink++ = 'e';
-		if (exp >= 0)
+		if (exp >= 0) {
 			*sink++ = '+';
-		else {
-			exp = -exp;
+			exp += length - 1;
+		} else {
 			*sink++ = '-';
+			exp = -exp;
+			exp -= length - 1;
 		}
-		exp += length - 1;
+
 		to_ascii_decimal_u<uint32_t>(
 			std::forward<OutputIterator>(sink), uint32_t(exp)
 		);
@@ -249,6 +251,7 @@ struct to_ascii_decimal_f<double> {
 		auto exp_bd(binary_pow_10::lookup_exp_10<double>(
 			minimal_target_exp - (xv.exp + mantissa_size)
 		));
+
 		float_t<64> x_scale(exp_bd.m, exp_bd.exp_2);
 		auto s_xv(xv * x_scale);
 		auto s_bd(std::make_pair(
@@ -287,13 +290,18 @@ struct to_ascii_decimal_f<double> {
 							OutputIterator
 						>(sink), v
 					);
-
-				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
-				++dp;
-				bcd_to_ascii_f(
-					std::forward<OutputIterator>(sink), bv,
-					dp, exponent.second - exp_bd.exp_10
-				);
+				else {
+					bv[dp >> 3] |= digit << (
+						(7 - (dp & 7)) << 2
+					);
+					++dp;
+					bcd_to_ascii_f(
+						std::forward<
+							OutputIterator
+						>(sink), bv, dp,
+						exponent.second - exp_bd.exp_10
+					);
+				}
 				return;
 			} else {
 				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
@@ -309,6 +317,7 @@ struct to_ascii_decimal_f<double> {
 			uint32_t digit(fractional >> (-unity.exp));
 			fractional &= unity.m - 1;
 			--exponent.second;
+
 			if (fractional < unsafe.m) {
 				if (!round_weed(
 					digit, (s_bd.second - s_xv).m * scale,
@@ -319,13 +328,18 @@ struct to_ascii_decimal_f<double> {
 							OutputIterator
 						>(sink), v
 					);
-
-				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
-				++dp;
-				bcd_to_ascii_f(
-					std::forward<OutputIterator>(sink), bv,
-					dp, exponent.second - exp_bd.exp_10
-				);
+				else {
+					bv[dp >> 3] |= digit << (
+						(7 - (dp & 7)) << 2
+					);
+					++dp;
+					bcd_to_ascii_f(
+						std::forward<
+							OutputIterator
+						>(sink), bv, dp,
+						exponent.second - exp_bd.exp_10
+					);
+				}
 				return;
 			} else {
 				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
@@ -340,7 +354,11 @@ struct to_ascii_decimal_f_s<double> {
 	template <typename OutputIterator>
 	to_ascii_decimal_f_s(OutputIterator &&sink, double v)
 	{
-		
+		*sink++ = 'e';
+		*sink++ = 'r';
+		*sink++ = 'r';
+		*sink++ = 'o';
+		*sink++ = 'r';
 	}
 };
 
