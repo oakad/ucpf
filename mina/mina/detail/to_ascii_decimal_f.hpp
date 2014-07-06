@@ -15,7 +15,9 @@
 #if !defined(UCPF_MINA_DETAIL_TO_ASCII_DECIMAL_F_20140624T2300)
 #define UCPF_MINA_DETAIL_TO_ASCII_DECIMAL_F_20140624T2300
 
+#include <vector>
 #include <yesod/float.hpp>
+#include <mina/detail/bigint.hpp>
 #include <mina/detail/binary_pow_10.hpp>
 #include <mina/detail/to_ascii_decimal_u.hpp>
 
@@ -187,17 +189,11 @@ template <>
 struct to_ascii_decimal_f<double> {
 	static std::pair<uint32_t, int> pow_10_estimate(uint32_t v, int n_bits)
 	{
-		constexpr std::array<uint32_t, 11> pow_10 = {{
-			0, 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000,
-			100000000, 1000000000
-		}};
-
-		auto exp(((n_bits + 1) * 1233 >> 12) + 1);
-
-		if (v < pow_10[exp])
+		auto exp(small_power_10_estimate(n_bits + 1));
+		if (v < small_power_10[exp])
 			--exp;
 
-		return std::make_pair(pow_10[exp], exp);
+		return std::make_pair(small_power_10[exp], exp + 1);
 	}
 
 	static bool round_weed(
@@ -238,8 +234,8 @@ struct to_ascii_decimal_f<double> {
 		);
 	}
 
-	template <typename OutputIterator>
-	to_ascii_decimal_f(OutputIterator &&sink, double v)
+	template <typename OutputIterator, typename Alloc>
+	to_ascii_decimal_f(OutputIterator &&sink, double v, Alloc const &a)
 	{
 		constexpr static int minimal_target_exp = -60;
 		constexpr static int mantissa_size = 64;
@@ -288,7 +284,7 @@ struct to_ascii_decimal_f<double> {
 					to_ascii_decimal_f_s<double>(
 						std::forward<
 							OutputIterator
-						>(sink), v
+						>(sink), v, a
 					);
 				else {
 					bv[dp >> 3] |= digit << (
@@ -326,7 +322,7 @@ struct to_ascii_decimal_f<double> {
 					to_ascii_decimal_f_s<double>(
 						std::forward<
 							OutputIterator
-						>(sink), v
+						>(sink), v, a
 					);
 				else {
 					bv[dp >> 3] |= digit << (
@@ -351,15 +347,60 @@ struct to_ascii_decimal_f<double> {
 
 template <>
 struct to_ascii_decimal_f_s<double> {
-	template <typename OutputIterator>
-	to_ascii_decimal_f_s(OutputIterator &&sink, double v)
+	template <typename OutputIterator, typename Alloc>
+	to_ascii_decimal_f_s(OutputIterator &&sink, double v, Alloc const &a)
 	{
-		*sink++ = 'e';
-		*sink++ = 'r';
-		*sink++ = 'r';
-		*sink++ = 'o';
-		*sink++ = 'r';
-	}
+		typedef std::vector<
+			bigint_limb_type,
+			typename std::allocator_traits<
+				Alloc
+			>::template rebind_alloc<bigint_limb_type>
+		> bigint_type;
+
+		constexpr static double inv_log2_10 = 0.30102999566398114;
+		constexpr static int bits = 53;
+
+		bool round_down(false);
+		{
+			yesod::float_t<64> xv(v);
+			round_down = !xv.get_mantissa() && xv.get_exponent();
+		}
+		float_t<64> xv(v);
+		auto exponent(std::lround(
+			std::ceil((xv.exp + bits - 1) * inv_log2_10 - 1e-10)
+		));
+		printf("init m: %zx, e: %d, lower: %d, est_exp: %ld\n", xv.m, xv.exp, round_down, exponent);
+
+		bigint_type num(a);
+		bigint_type denom(a);
+		bigint_type bd_low(a);
+		bigint_type bd_high(a);
+
+		if (xv.exp >= 0) {
+			bigint_assign_scalar(num, xv.m, xv.exp + 1);
+			bigint_assign_pow10(denom, exponent);
+			bigint_shift_left(denom, 1);
+			bigint_assign_scalar(bd_low, 1, xv.exp);
+		} else if (exponent >= 0) {
+			bigint_assign_scalar(num, xv.m, 1);
+			bigint_assign_pow10(denom, exponent);
+			bigint_shift_left(denom, -xv.exp + 1);
+			bigint_assign_scalar(bd_low, 1);
+		} else {
+			bigint_assign_scalar(num, xv.m);
+			printf("num: %s\n", &bigint_to_ascii_decimal(num).front());
+			bigint_assign_scalar(denom, 1, -xv.exp + 1);
+			bigint_assign_pow10(bd_low, -exponent);
+			bigint_mul(num, bd_low);
+			bigint_shift_left(num, 1);
+			printf("num: %s\n", &bigint_to_ascii_decimal(num).front());
+			printf("denom: %s\n", &bigint_to_ascii_decimal(denom).front());
+			printf("bd_low: %s\n", &bigint_to_ascii_decimal(bd_low).front());
+		}
+
+		bd_high = bd_low;
+
+	}	
 };
 
 }}}

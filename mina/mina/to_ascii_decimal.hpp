@@ -16,8 +16,8 @@ namespace detail {
 
 template <typename T, bool IsFloat = false>
 struct ascii_decimal_converter {
-	template <typename OutputIterator>
-	static void apply(OutputIterator &&sink, T v)
+	template <typename OutputIterator, typename Alloc>
+	static void apply(OutputIterator &&sink, T v, Alloc const &a)
 	{
 		typedef typename std::make_unsigned<T>::type U;
 
@@ -44,18 +44,19 @@ struct ascii_decimal_converter {
 
 template <typename T>
 struct ascii_decimal_converter<T, true> {
-	template <typename OutputIterator>
-	static void apply(OutputIterator &&sink, T v)
+	template <typename OutputIterator, typename Alloc>
+	static void apply(OutputIterator &&sink, T v, Alloc const &a)
 	{
 		if (std::signbit(v)) {
 			*sink++ = '-';
 			to_ascii_decimal_f<T>(
-				std::forward<OutputIterator>(sink), std::abs(v)
+				std::forward<OutputIterator>(sink),
+				std::abs(v), a
 			);
 		} else {
 			*sink++ = '+';
 			to_ascii_decimal_f<T>(
-				std::forward<OutputIterator>(sink), v
+				std::forward<OutputIterator>(sink), v, a
 			);
 		}
 	}
@@ -63,12 +64,14 @@ struct ascii_decimal_converter<T, true> {
 
 }
 
-template <typename OutputIterator, typename T>
-void to_ascii_decimal(OutputIterator &&sink, T v)
+template <
+	typename OutputIterator, typename T,
+	typename Alloc = std::allocator<void>
+> void to_ascii_decimal(OutputIterator &&sink, T v, Alloc const &a = Alloc())
 {
 	detail::ascii_decimal_converter<
 		T, std::is_floating_point<T>::value
-	>::apply(std::forward<OutputIterator>(sink), v);
+	>::apply(std::forward<OutputIterator>(sink), v, a);
 }
 
 }}

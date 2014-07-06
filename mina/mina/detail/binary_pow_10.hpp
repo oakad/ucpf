@@ -121,8 +121,8 @@ constexpr std::array<binary_pow_10::entry, 87> binary_pow_10::pow_list;
 template <>
 auto binary_pow_10::lookup_exp_10<double>(int exp_10) -> entry
 {
-	constexpr double inv_log2_10 = 0.30102999566398114;
-	constexpr int bits = 64;
+	constexpr static double inv_log2_10 = 0.30102999566398114;
+	constexpr static int bits = 64;
 
 	double k(std::ceil(inv_log2_10 * (exp_10 + bits - 1)));
 	auto idx(std::lround(k));

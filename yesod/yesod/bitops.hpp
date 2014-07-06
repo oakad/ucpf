@@ -13,6 +13,16 @@
 
 namespace ucpf { namespace yesod {
 
+constexpr int clz(uint32_t v)
+{
+	return __builtin_clz(v);
+}
+
+constexpr int clz(uint64_t v)
+{
+	return __builtin_clzll(v);
+}
+
 constexpr int fls(uint32_t v)
 {
 	return 31 - __builtin_clz(v);
