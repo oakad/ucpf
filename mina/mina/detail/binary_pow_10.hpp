@@ -22,7 +22,7 @@ struct binary_pow_10 {
 	};
 
 	constexpr static size_t pow_10_step = 8;
-	constexpr static std::array<entry, 87> pow_list = {{
+	constexpr static std::array<entry, 87> pow_5_list = {{
 		{0xfa8fd5a0081c0288ull, -1220, -348},
 		{0xbaaee17fa23ebf76ull, -1193, -340},
 		{0x8b16fb203055ac76ull, -1166, -332},
@@ -128,7 +128,7 @@ auto binary_pow_10::lookup_exp_10<double>(int exp_10) -> entry
 	auto idx(std::lround(k));
 	idx -= pow_list.front().exp_10 + 1;
 	idx /= pow_10_step;
-	return pow_list[idx + 1];
+	return pow_5_list[idx + 1];
 }
 
 }}}

@@ -360,16 +360,17 @@ struct to_ascii_decimal_f_s<double> {
 		constexpr static double inv_log2_10 = 0.30102999566398114;
 		constexpr static int bits = 53;
 
-		bool round_down(false);
+		int extra_shift(0);
 		{
 			yesod::float_t<64> xv(v);
-			round_down = !xv.get_mantissa() && xv.get_exponent();
+			if (!xv.get_mantissa() && xv.get_exponent())
+				extra_shift = 1;
 		}
 		float_t<64> xv(v);
 		auto exponent(std::lround(
 			std::ceil((xv.exp + bits - 1) * inv_log2_10 - 1e-10)
 		));
-		printf("init m: %zx, e: %d, lower: %d, est_exp: %ld\n", xv.m, xv.exp, round_down, exponent);
+		printf("init m: %zx, e: %d, lower: %d, est_exp: %ld\n", xv.m, xv.exp, extra_shift, exponent);
 
 		bigint_type num(a);
 		bigint_type denom(a);
@@ -377,30 +378,125 @@ struct to_ascii_decimal_f_s<double> {
 		bigint_type bd_high(a);
 
 		if (xv.exp >= 0) {
-			bigint_assign_scalar(num, xv.m, xv.exp + 1);
+			bigint_assign_scalar(
+				num, xv.m, xv.exp + 1 + extra_shift
+			);
 			bigint_assign_pow10(denom, exponent);
-			bigint_shift_left(denom, 1);
+			bigint_shift_left(denom, 1 +  extra_shift);
 			bigint_assign_scalar(bd_low, 1, xv.exp);
 		} else if (exponent >= 0) {
-			bigint_assign_scalar(num, xv.m, 1);
+			bigint_assign_scalar(num, xv.m, 1 + extra_shift);
 			bigint_assign_pow10(denom, exponent);
-			bigint_shift_left(denom, -xv.exp + 1);
+			bigint_shift_left(denom, -xv.exp + 1 + extra_shift);
 			bigint_assign_scalar(bd_low, 1);
 		} else {
 			bigint_assign_scalar(num, xv.m);
 			printf("num: %s\n", &bigint_to_ascii_decimal(num).front());
-			bigint_assign_scalar(denom, 1, -xv.exp + 1);
+			bigint_assign_scalar(
+				denom, 1, -xv.exp + 1 + extra_shift
+			);
 			bigint_assign_pow10(bd_low, -exponent);
 			bigint_mul(num, bd_low);
-			bigint_shift_left(num, 1);
+			bigint_shift_left(num, 1 + extra_shift);
 			printf("num: %s\n", &bigint_to_ascii_decimal(num).front());
 			printf("denom: %s\n", &bigint_to_ascii_decimal(denom).front());
 			printf("bd_low: %s\n", &bigint_to_ascii_decimal(bd_low).front());
 		}
 
 		bd_high = bd_low;
+		if (extra_shift)
+			bigint_shift_left(bd_high, extra_shift);
 
-	}	
+		bool in_range(false);
+		if (xv.m & 1)
+			in_range = bigint_compare_sum(num, bd_high, denom) > 0;
+		else
+			in_range = bigint_compare_sum(num, bd_high, denom) >= 0;
+
+		auto decimal_point(exponent);
+		if (in_range)
+			++decimal_point;
+		else {
+			bigint_mul_scalar(num, 10);
+			if (bd_high == bd_low) {
+				bigint_mul_scalar(bd_low, 10);
+				bd_high = bd_low;
+			} else {
+				bigint_mul_scalar(bd_low, 10);
+				bigint_mul_scalar(bd_high, 10);
+			}
+		}
+
+		bigint_type q(a);
+		bigint_type r(a);
+		std::array<uint32_t, 3> bv{0, 0, 0};
+		int dp(0);
+
+		while (true) {
+			bigint_div(q, r, num, denom);
+			int32_t digit(q[0]);
+			num.swap(r);
+
+			int bd_test(0);
+			if (xv.m & 1) {
+				bd_test |= bigint_compare(
+					num, bd_low
+				) < 0 ? 1 : 0;
+				bd_test |= bigint_compare_sum(
+					num, bd_high, denom
+				) > 0 ? 2 : 0;
+			} else {
+				bd_test |= bigint_compare(
+					num, bd_low
+				) <= 0 ? 1 : 0;
+				bd_test |= bigint_compare_sum(
+					num, bd_high, denom
+				) >= 0 ? 2 : 0;
+			}
+
+			switch (bd_test) {
+			case 0:
+				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
+				++dp;
+				bigint_mul_scalar(num, 10);
+				bigint_mul_scalar(bd_low, 10);
+				bigint_mul_scalar(bd_high, 10);
+				break;
+			case 1:
+				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
+				++dp;
+				bcd_to_ascii_f(
+					std::forward<
+						OutputIterator
+					>(sink), bv, dp, decimal_point
+				);
+				return;
+			case 2:
+				++digit;
+				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
+				++dp;
+				bcd_to_ascii_f(
+					std::forward<
+						OutputIterator
+					>(sink), bv, dp, decimal_point
+				);
+				return;
+			case 3:
+				bd_test = bigint_compare_sum(num, num, denom);
+				if ((bd_test > 0) || (!bd_test && (digit & 1)))
+					++digit;
+
+				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
+				++dp;
+				bcd_to_ascii_f(
+					std::forward<
+						OutputIterator
+					>(sink), bv, dp, decimal_point
+				);
+				return;
+			};
+		}
+	}
 };
 
 }}}

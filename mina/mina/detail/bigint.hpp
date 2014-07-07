@@ -57,9 +57,8 @@ auto bigint_to_ascii_decimal(Vector const &v)
 template <typename Vector, typename T>
 void bigint_assign_scalar(Vector &v, T value, size_t order = 0)
 {
-	typedef typename Vector::value_type limb_type;
-	constexpr static int limb_bits = GMP_NUMB_BITS;
-	constexpr static int value_bits = std::numeric_limits<T>::digits;
+	constexpr static int limb_bits(GMP_NUMB_BITS);
+	constexpr static int value_bits(std::numeric_limits<T>::digits);
 
 	auto bit_cnt(value_bits + order);
 	auto limb_cnt(bit_cnt / limb_bits);
@@ -76,7 +75,7 @@ void bigint_assign_scalar(Vector &v, T value, size_t order = 0)
 	}
 
 	auto bit_off(order - bit_pos);
-	limb_type x(value);
+	bigint_limb_type x(value);
 	x <<= bit_off;
 	x &= GMP_NUMB_MASK;
 	*iter++ = x;
@@ -98,7 +97,7 @@ void bigint_assign_scalar(Vector &v, T value, size_t order = 0)
 template <typename Vector>
 void bigint_shift_left(Vector &v, size_t order)
 {
-	constexpr static int max_order = GMP_NUMB_BITS - 1;
+	constexpr static int max_order(GMP_NUMB_BITS - 1);
 
 	v.reserve(v.size() + (order / max_order + 1));
 	auto c(mpn_lshift(&v.front(), &v.front(), v.size(), order % max_order));
@@ -118,9 +117,7 @@ void bigint_shift_left(Vector &v, size_t order)
 template <typename Vector>
 void bigint_assign_pow10(Vector &v, size_t order)
 {
-	constexpr static auto max_order = small_power_10_estimate(
-		GMP_NUMB_BITS
-	);
+	constexpr static auto max_order(small_power_10_estimate(GMP_NUMB_BITS));
 
 	v.clear();
 	v.reserve(order / max_order + 1);
@@ -142,6 +139,100 @@ void bigint_mul(Vector &l, Vector const &r)
 	Vector acc(l.size() + r.size(), 0, l.get_allocator());
 	mpn_mul(&acc.front(), &l.front(), l.size(), &r.front(), r.size());
 	l.swap(acc);
+}
+
+template <typename Vector>
+int bigint_compare(Vector const &l, Vector const &r)
+{
+	if (l.size() > r.size())
+		return 1;
+	else if (r.size() > l.size())
+		return -1;
+	else
+		return mpn_cmp(&l.front(), &r.front(), l.size());
+}
+
+template <typename Vector>
+int bigint_compare_sum(Vector const &l0, Vector const &l1, Vector const &r)
+{
+	auto l_sz(std::max(l0.size(), l1.size()) + 1);
+
+	if (r.size() > l_sz)
+		return -1;
+	else if ((l_sz - r.size()) > 1)
+		return 1;
+
+	bigint_limb_type sum[l_sz];
+
+	if (l0.size() >= l1.size())
+		sum[l_sz - 1] = mpn_add(
+			sum, &l0.front(), l0.size(), &l1.front(), l1.size()
+		);
+	else
+		sum[l_sz - 1] = mpn_add(
+			sum, &l1.front(), l1.size(), &l0.front(), l0.size()
+		);
+
+	if (sum[l_sz - 1]) {
+		if (r.size() == l_sz)
+			return mpn_cmp(sum, &r.front(), l_sz);
+		else
+			return 1;
+	} else {
+		if (r.size() == (l_sz - 1))
+			return mpn_cmp(sum, &r.front(), l_sz - 1);
+		else
+			return -1;
+	}
+}
+
+template <typename Vector, typename T>
+void bigint_mul_scalar(Vector &l, T r)
+{
+	constexpr static int limb_bits(GMP_NUMB_BITS);
+	constexpr static int value_bits(std::numeric_limits<T>::digits);
+	constexpr static int max_shift(
+		limb_bits > value_bits ? value_bits : limb_bits
+	);
+
+	if (value_bits > limb_bits) {
+		Vector xr(value_bits / limb_bits + 1, 0, l.get_allocator());
+		xr.clear();
+		while (r) {
+			xr.push_back(r & GMP_NUMB_MASK);
+			r >>= max_shift;
+		}
+		Vector acc(xr.size() + l.size(), 0, l.get_allocator());
+		mpn_mul(
+			&acc.front(), &l.front(), l.size(), &xr.front(),
+			xr.size()
+		);
+		l.swap(acc);
+	} else {
+		auto c(mpn_mul_1(&l.front(), &l.front(), l.size(), r));
+		if (c)
+			l.push_back(c);
+	}
+}
+
+template <typename Vector>
+void bigint_div(
+	Vector &quot, Vector &rem, Vector const &num, Vector const &denom
+){
+	quot.clear();
+	rem.clear();
+
+	if (denom.size() > num.size()) {
+		quot.push_back(0);
+		rem = denom;
+		return;
+	}
+	quot.resize(num.size() - denom.size() + 1, 0);
+	rem.resize(denom.size(), 0);
+	mpn_tdiv_qr(
+		&quot.front(), &rem.front(), 0, &num.front(),num.size(),
+		&denom.front(), denom.size()
+	);
 }
 
 }}}

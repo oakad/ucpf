@@ -35,5 +35,9 @@ int main(int argc, char **argv)
 		return true;
 	});
 */
+	double a(10);
+	double b(std::pow(a, 4));
+	ucpf::yesod::float_t<64> c(b);
+	printf("m: %zx, e: %d\n", c.get_mantissa(), c.get_exponent_value());
 	return 0;
 }
