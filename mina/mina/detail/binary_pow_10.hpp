@@ -116,7 +116,7 @@ struct binary_pow_10 {
 	static entry lookup_exp_10(int exp_10);
 };
 
-constexpr std::array<binary_pow_10::entry, 87> binary_pow_10::pow_list;
+constexpr std::array<binary_pow_10::entry, 87> binary_pow_10::pow_5_list;
 
 template <>
 auto binary_pow_10::lookup_exp_10<double>(int exp_10) -> entry
@@ -126,7 +126,7 @@ auto binary_pow_10::lookup_exp_10<double>(int exp_10) -> entry
 
 	double k(std::ceil(inv_log2_10 * (exp_10 + bits - 1)));
 	auto idx(std::lround(k));
-	idx -= pow_list.front().exp_10 + 1;
+	idx -= pow_5_list.front().exp_10 + 1;
 	idx /= pow_10_step;
 	return pow_5_list[idx + 1];
 }

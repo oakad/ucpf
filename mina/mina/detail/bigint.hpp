@@ -66,11 +66,10 @@ void bigint_assign_scalar(Vector &v, T value, size_t order = 0)
 		++limb_cnt;
 
 	v.clear();
-	v.resize(limb_cnt, 0);
-	auto iter(v.begin());
+	v.reserve(limb_cnt);
 	decltype(bit_cnt) bit_pos(0);
 	while ((bit_pos + limb_bits) <= order) {
-		*iter++ = 0;
+		v.push_back(0);
 		bit_pos += limb_bits;
 	}
 
@@ -78,7 +77,7 @@ void bigint_assign_scalar(Vector &v, T value, size_t order = 0)
 	bigint_limb_type x(value);
 	x <<= bit_off;
 	x &= GMP_NUMB_MASK;
-	*iter++ = x;
+	v.push_back(x);
 	bit_pos += limb_bits;
 	bit_off = limb_bits - bit_off;
 	if (bit_off < value_bits)
@@ -89,7 +88,7 @@ void bigint_assign_scalar(Vector &v, T value, size_t order = 0)
 	while (value) {
 		x = value;
 		x &= GMP_NUMB_MASK;
-		*iter++ = x;
+		v.push_back(x);
 		value >>= std::min(value_bits, limb_bits);
 	}
 }
@@ -137,7 +136,15 @@ template <typename Vector>
 void bigint_mul(Vector &l, Vector const &r)
 {
 	Vector acc(l.size() + r.size(), 0, l.get_allocator());
-	mpn_mul(&acc.front(), &l.front(), l.size(), &r.front(), r.size());
+	if (l.size() >= r.size())
+		mpn_mul(
+			&acc.front(), &l.front(), l.size(), &r.front(), r.size()
+		);
+	else
+		mpn_mul(
+			&acc.front(), &r.front(), r.size(), &l.front(), l.size()
+		);
+
 	l.swap(acc);
 }
 

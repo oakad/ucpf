@@ -32,10 +32,9 @@ void bcd_to_ascii_f(
 	constexpr static int negative_cutoff = -6;
 	constexpr static int positive_cutoff = 21;
 	int c(0);
+	auto dot_pos(length + exp);
 
-	if ((exp >= negative_cutoff) && (exp < positive_cutoff)) {
-		int dot_pos(length + exp);
-
+	if ((dot_pos >= negative_cutoff) && (dot_pos < positive_cutoff)) {
 		if (dot_pos < 0) {
 			*sink++ = '0';
 			*sink++ = '.';
@@ -88,6 +87,7 @@ void bcd_to_ascii_f(
 			);
 		}
 		*sink++ = 'e';
+
 		if (exp >= 0) {
 			*sink++ = '+';
 			exp += length - 1;
@@ -180,26 +180,21 @@ void float_t<64>::normalize()
 }
 
 template <typename T>
-struct to_ascii_decimal_f;
-
-template <typename T>
 struct to_ascii_decimal_f_s;
 
-template <>
-struct to_ascii_decimal_f<double> {
-	static std::pair<uint32_t, int> pow_10_estimate(uint32_t v, int n_bits)
-	{
-		auto exp(small_power_10_estimate(n_bits + 1));
-		if (v < small_power_10[exp])
-			--exp;
+template <typename T>
+struct to_ascii_decimal_f {
+	typedef typename yesod::fp_adapter_type<T>::type wrapper_type;
+	typedef float_t<wrapper_type::bit_size> adapter_type;
+	typedef typename wrapper_type::storage_type storage_type;
 
-		return std::make_pair(small_power_10[exp], exp + 1);
-	}
+	constexpr static int minimal_target_exp;
+	constexpr static int decimal_limb_count;
 
 	static bool round_weed(
-		uint32_t &last_digit,
-		uint64_t upper_range, uint64_t unsafe_range,
-		uint64_t remainder, uint64_t mult, uint64_t scale
+		uint32_t &last_digit, storage_type upper_range,
+		storage_type unsafe_range, storage_type remainder,
+		storage_type mult, storage_type scale
 	)
 	{
 		auto range(std::make_pair(
@@ -234,21 +229,67 @@ struct to_ascii_decimal_f<double> {
 		);
 	}
 
-	template <typename OutputIterator, typename Alloc>
-	to_ascii_decimal_f(OutputIterator &&sink, double v, Alloc const &a)
+	template <typename OutputIterator>
+	static bool emit_special(OutputIterator &&sink, T v)
 	{
-		constexpr static int minimal_target_exp = -60;
-		constexpr static int mantissa_size = 64;
+		wrapper_type xv(v);
+		if (!xv.is_special()) {
+			if (!xv.get_storable()) {
+				*sink++ = '0';
+				*sink++ = '.';
+				*sink++ = '0';
+				return true;
+			}
+			return false;
+		}
 
-		float_t<64> xv(v);
+		*sink++ = '1';
+		*sink++ = '.';
+		*sink++ = '#';
+		if (!xv.get_mantissa()) {
+			*sink++ = 'i';
+			*sink++ = 'n';
+			*sink++ = 'f';
+		} else {
+			auto nv(xv.get_nan());
+			if (nv.second)
+				*sink++ = 'q';
+			else
+				*sink++ = 's';
+
+			*sink++ = '(';
+			to_ascii_decimal_u<storage_type>(
+				std::forward<OutputIterator>(sink), nv.first
+			);
+			*sink = ')';
+		}
+		return true;
+	}
+
+	static std::pair<uint32_t, int> pow_10_estimate(uint32_t v, int n_bits)
+	{
+		auto exp(small_power_10_estimate(n_bits + 1));
+		if (v < small_power_10[exp])
+			--exp;
+
+		return std::make_pair(small_power_10[exp], exp + 1);
+	}
+
+	template <typename OutputIterator, typename Alloc>
+	to_ascii_decimal_f(OutputIterator &&sink, T v, Alloc const &a)
+	{
+		if (emit_special(std::forward<OutputIterator>(sink), v))
+			return;
+
+		adapter_type xv(v);
 		auto bd(xv.boundaries());
 		xv.normalize();
 
-		auto exp_bd(binary_pow_10::lookup_exp_10<double>(
-			minimal_target_exp - (xv.exp + mantissa_size)
+		auto exp_bd(binary_pow_10::lookup_exp_10<T>(
+			minimal_target_exp - (xv.exp + wrapper_type::bit_size)
 		));
 
-		float_t<64> x_scale(exp_bd.m, exp_bd.exp_2);
+		adapter_type x_scale(exp_bd.m, exp_bd.exp_2);
 		auto s_xv(xv * x_scale);
 		auto s_bd(std::make_pair(
 			bd.first * x_scale, bd.second * x_scale
@@ -258,16 +299,17 @@ struct to_ascii_decimal_f<double> {
 		++s_bd.second.m;
 
 		auto unsafe(s_bd.second - s_bd.first);
-		float_t<64> unity(uint64_t(1) << -s_xv.exp, s_xv.exp);
+		adapter_type unity(storage_type(1) << -s_xv.exp, s_xv.exp);
 		auto integral(s_bd.second.m >> -s_xv.exp);
 		auto fractional(s_bd.second.m & (unity.m - 1));
-		auto exponent(
-			pow_10_estimate(integral, mantissa_size + unity.exp)
-		);
+		auto exponent(pow_10_estimate(
+			integral, wrapper_type::bit_size + unity.exp
+		));
 
-		std::array<uint32_t, 3> bv{0, 0, 0};
+		std::array<uint32_t, decimal_limb_count> bv;
+		std::fill(bv.begin(), bv.end(), 0);
 		int dp(0);
-		uint64_t scale(1);
+		storage_type scale(1);
 		while (exponent.second > 0) {
 			uint32_t digit(integral / exponent.first);
 			integral %= exponent.first;
@@ -276,12 +318,12 @@ struct to_ascii_decimal_f<double> {
 			auto remainder((integral << (-unity.exp)) + fractional);
 
 			if (remainder < unsafe.m) {
-				if (!round_weed(
+				if (!to_ascii_decimal_f::round_weed(
 					digit, (s_bd.second - s_xv).m,
 					unsafe.m, remainder,
 					exponent.first << (-unity.exp), scale
 				))
-					to_ascii_decimal_f_s<double>(
+					to_ascii_decimal_f_s<T>(
 						std::forward<
 							OutputIterator
 						>(sink), v, a
@@ -319,7 +361,7 @@ struct to_ascii_decimal_f<double> {
 					digit, (s_bd.second - s_xv).m * scale,
 					unsafe.m, fractional, unity.m, scale
 				))
-					to_ascii_decimal_f_s<double>(
+					to_ascii_decimal_f_s<T>(
 						std::forward<
 							OutputIterator
 						>(sink), v, a
@@ -332,7 +374,8 @@ struct to_ascii_decimal_f<double> {
 					bcd_to_ascii_f(
 						std::forward<
 							OutputIterator
-						>(sink), bv, dp,
+						>(sink),
+						bv, dp,
 						exponent.second - exp_bd.exp_10
 					);
 				}
@@ -346,10 +389,18 @@ struct to_ascii_decimal_f<double> {
 };
 
 template <>
+constexpr int to_ascii_decimal_f<double>::minimal_target_exp = -60;
+
+template <>
+constexpr int to_ascii_decimal_f<double>::decimal_limb_count = 3;
+
+template <>
 struct to_ascii_decimal_f_s<double> {
-	template <typename OutputIterator, typename Alloc>
-	to_ascii_decimal_f_s(OutputIterator &&sink, double v, Alloc const &a)
-	{
+	template <
+		typename OutputIterator, typename Alloc = std::allocator<void>
+	> to_ascii_decimal_f_s(
+		OutputIterator &&sink, double v, Alloc const &a = Alloc()
+	) {
 		typedef std::vector<
 			bigint_limb_type,
 			typename std::allocator_traits<
@@ -370,7 +421,6 @@ struct to_ascii_decimal_f_s<double> {
 		auto exponent(std::lround(
 			std::ceil((xv.exp + bits - 1) * inv_log2_10 - 1e-10)
 		));
-		printf("init m: %zx, e: %d, lower: %d, est_exp: %ld\n", xv.m, xv.exp, extra_shift, exponent);
 
 		bigint_type num(a);
 		bigint_type denom(a);
@@ -391,16 +441,12 @@ struct to_ascii_decimal_f_s<double> {
 			bigint_assign_scalar(bd_low, 1);
 		} else {
 			bigint_assign_scalar(num, xv.m);
-			printf("num: %s\n", &bigint_to_ascii_decimal(num).front());
 			bigint_assign_scalar(
 				denom, 1, -xv.exp + 1 + extra_shift
 			);
 			bigint_assign_pow10(bd_low, -exponent);
 			bigint_mul(num, bd_low);
 			bigint_shift_left(num, 1 + extra_shift);
-			printf("num: %s\n", &bigint_to_ascii_decimal(num).front());
-			printf("denom: %s\n", &bigint_to_ascii_decimal(denom).front());
-			printf("bd_low: %s\n", &bigint_to_ascii_decimal(bd_low).front());
 		}
 
 		bd_high = bd_low;
@@ -413,9 +459,8 @@ struct to_ascii_decimal_f_s<double> {
 		else
 			in_range = bigint_compare_sum(num, bd_high, denom) >= 0;
 
-		auto decimal_point(exponent);
 		if (in_range)
-			++decimal_point;
+			++exponent;
 		else {
 			bigint_mul_scalar(num, 10);
 			if (bd_high == bd_low) {
@@ -431,7 +476,6 @@ struct to_ascii_decimal_f_s<double> {
 		bigint_type r(a);
 		std::array<uint32_t, 3> bv{0, 0, 0};
 		int dp(0);
-
 		while (true) {
 			bigint_div(q, r, num, denom);
 			int32_t digit(q[0]);
@@ -468,7 +512,7 @@ struct to_ascii_decimal_f_s<double> {
 				bcd_to_ascii_f(
 					std::forward<
 						OutputIterator
-					>(sink), bv, dp, decimal_point
+					>(sink), bv, dp, exponent - dp
 				);
 				return;
 			case 2:
@@ -478,7 +522,7 @@ struct to_ascii_decimal_f_s<double> {
 				bcd_to_ascii_f(
 					std::forward<
 						OutputIterator
-					>(sink), bv, dp, decimal_point
+					>(sink), bv, dp, exponent - dp
 				);
 				return;
 			case 3:
@@ -491,7 +535,7 @@ struct to_ascii_decimal_f_s<double> {
 				bcd_to_ascii_f(
 					std::forward<
 						OutputIterator
-					>(sink), bv, dp, decimal_point
+					>(sink), bv, dp, exponent - dp
 				);
 				return;
 			};

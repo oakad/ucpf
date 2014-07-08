@@ -13,7 +13,7 @@
 #include <mina/to_ascii_decimal.hpp>
 #include "float_generator.hpp"
 
-#define CASE_COUNT 10
+#define CASE_COUNT 1000
 
 namespace ucpf { namespace mina {
 namespace test {
@@ -53,6 +53,32 @@ struct null_sink {
 BOOST_AUTO_TEST_CASE(to_ascii_decimal2_0)
 {
 	test::float_generator<64> fg;
+	{
+		char buf[40] = {0};
+		char *ptr(buf);
+		to_ascii_decimal(ptr, 0.0);
+		BOOST_CHECK_EQUAL(buf, "+0.0");
+	}
+	{
+		char buf[40] = {0};
+		char *ptr(buf);
+		to_ascii_decimal(ptr, std::numeric_limits<double>::infinity());
+		BOOST_CHECK_EQUAL(buf, "+1.#inf");
+	}
+	{
+		char buf[40] = {0};
+		char *ptr(buf);
+		to_ascii_decimal(ptr, std::numeric_limits<double>::quiet_NaN());
+		BOOST_CHECK_EQUAL(buf, "+1.#q(0)");
+	}
+	{
+		char buf[40] = {0};
+		char *ptr(buf);
+		to_ascii_decimal(
+			ptr, std::numeric_limits<double>::signaling_NaN()
+		);
+		BOOST_CHECK_EQUAL(buf, "+1.#s(1125899906842624)");
+	}
 
 	std::generate_n(test::null_sink(), CASE_COUNT, [&fg]() -> bool {
 		return fg([](double v) -> bool {

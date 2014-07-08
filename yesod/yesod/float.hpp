@@ -79,6 +79,7 @@ struct fp_util {
 template <unsigned int N>
 struct float_t {
 	typedef detail::float_tag tag;
+	constexpr static unsigned int bit_size = N;
 
 	typedef typename mpl::at<
 		detail::fp_storage_types,
@@ -118,10 +119,9 @@ struct float_t {
 
 	storage_type get_mantissa() const
 	{
-		constexpr static storage_type mantissa_mask(
-			(storage_type(1) << (traits_type::mantissa_bits - 1))
-			- 1
-		);
+		constexpr static storage_type mantissa_mask((
+			storage_type(1) << (traits_type::mantissa_bits - 1)
+		) - 1);
 		return mantissa_mask & storable;
 	}
 
@@ -149,6 +149,21 @@ struct float_t {
 	bool is_special() const
 	{
 		return get_exponent() == exponent_mask;
+	}
+
+	std::pair<storage_type, bool> get_nan() const
+	{
+		constexpr static storage_type nan_value_mask((
+			storage_type(1) << (traits_type::mantissa_bits - 2)
+		) - 1);
+		constexpr static storage_type nan_type_mask(
+			storage_type(1) << (traits_type::mantissa_bits - 2)
+		);
+
+		return std::make_pair(
+			nan_value_mask & storable,
+			nan_type_mask & storable ? true : false
+		);
 	}
 
 private:
@@ -180,6 +195,8 @@ struct is_floating_point : std::integral_constant<
 > {};
 
 typedef typename mpl::map<
+	mpl::pair<float8, float_t<8>>,
+	mpl::pair<float16, float_t<16>>,
 	mpl::pair<float, float_t<32>>,
 	mpl::pair<double, float_t<64>>,
 	mpl::pair<long double, typename std::conditional<
