@@ -59,7 +59,7 @@ typedef typename mpl::map<
 	>,
 	mpl::pair<
 		mpl::uint_<128>,
-		storable_float_traits<unsigned __int128, __float128>
+		storable_float_traits<uint128_t, __float128>
 	>
 >::type fp_storage_types;
 
@@ -134,8 +134,9 @@ struct float_t {
 
 	int32_t get_exponent_value() const
 	{
-		return static_cast<int32_t>(get_exponent())
-		       - traits_type::exponent_bias;
+		return static_cast<int32_t>(
+			get_exponent() ? get_exponent() : 1
+		) - traits_type::exponent_bias;
 	}
 
 	bool get_sign() const

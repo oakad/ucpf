@@ -291,7 +291,7 @@ typedef yesod::mpl::map<
 	yesod::mpl::pair<
 		yesod::mpl::int_<scalar_rank<>::i128>,
 		numeric_type_map<
-			__int128, unsigned __int128, yesod::float_t<128>
+			int128_t, uint128_t, yesod::float_t<128>
 		>
 	>
 > scalar_rank_types;

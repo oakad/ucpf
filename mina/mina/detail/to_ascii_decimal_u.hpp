@@ -154,7 +154,7 @@ struct to_ascii_decimal_u<uint64_t> {
 		int dp(0);
 		uint64_t c(0);
 		for (uint64_t d: xy) {
-			unsigned __int128 acc(d);
+			uint128_t acc(d);
 			acc += c;
 			c = (acc * divider_10e8) >> (64 + shift_10e8);
 			bv[2 - dp] = to_ascii_decimal_u<uint32_t>::to_bcd(
@@ -170,9 +170,9 @@ struct to_ascii_decimal_u<uint64_t> {
 };
 
 template <>
-struct to_ascii_decimal_u<unsigned __int128> {
+struct to_ascii_decimal_u<uint128_t> {
 	template <typename OutputIterator>
-	to_ascii_decimal_u(OutputIterator &&sink, unsigned __int128 v)
+	to_ascii_decimal_u(OutputIterator &&sink, uint128_t v)
 	{
 		constexpr uint64_t divider_10e8(0xabcc77118461cefd);
 		constexpr int shift_10e8(26);
@@ -199,7 +199,7 @@ struct to_ascii_decimal_u<unsigned __int128> {
 		int dp(0);
 		uint64_t c(0);
 		for (uint64_t d: xy) {
-			unsigned __int128 acc(d);
+			uint128_t acc(d);
 			acc += c;
 			c = (acc * divider_10e8) >> (64 + shift_10e8);
 			bv[4 - dp] = to_ascii_decimal_u<uint32_t>::to_bcd(

@@ -192,11 +192,11 @@ BOOST_AUTO_TEST_CASE(to_ascii_decimal1_3)
 
 BOOST_AUTO_TEST_CASE(to_ascii_decimal1_4)
 {
-	std::array<unsigned __int128, 9> n0{
+	std::array<uint128_t, 9> n0{
 		0, 709, 7709, 77095, 77095615, 4670770956ull, 467077095615ull,
 		18446744077095615ull, 18446744073709551615ull
 	};
-	std::for_each(n0.begin(), n0.end(), [](unsigned __int128 &v) {
+	std::for_each(n0.begin(), n0.end(), [](uint128_t &v) {
 		v = (v << 64) + v;
 	});
 	std::string s0(
@@ -225,12 +225,12 @@ BOOST_AUTO_TEST_CASE(to_ascii_decimal1_4)
 	BOOST_CHECK_EQUAL(ref, s0);
 	ref.clear();
 
-	std::array<__int128, 9> n1{
+	std::array<int128_t, 9> n1{
 		-9223372036854775808ll, -92233720854778ll, -92230368808ll,
 		-37203685ll, 0, 23368557ll, 72036854757ll, 72036854775807ll,
 		9223372036854775807ll
 	};
-	std::for_each(n1.begin(), n1.end(), [](__int128 &v) {
+	std::for_each(n1.begin(), n1.end(), [](int128_t &v) {
 		v = v << 64;
 	});
 	std::string s1(

@@ -36,4 +36,11 @@ BOOST_AUTO_TEST_CASE(float_0)
 	>::value));
 }
 
+BOOST_AUTO_TEST_CASE(float_1)
+{
+	float8 v0{0x91}, v1{0x76};
+	BOOST_CHECK_EQUAL(-18.0f, float8::to_float32(v0));
+	BOOST_CHECK_EQUAL(114688.0f, float8::to_float32(v1));
+}
+
 }}

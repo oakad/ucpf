@@ -19,6 +19,29 @@ struct float8 {
 	constexpr static uint8_t mantissa_mask = 0x7;
 
 	uint8_t v;
+
+	static float to_float32(float8 v)
+	{
+		uint32_t m(v.v & mantissa_mask);
+		int32_t exp((v.v & exp_mask) >> 3);
+		uint32_t sign(v.v & 0x80 ? 0x80000000u : 0u);
+
+		union {
+			float rv;
+			uint32_t s;
+		};
+
+		s = m << 20;
+		if (exp) {
+			if ((v.v & exp_mask) == exp_mask)
+				s |= 0x7f800000;
+			else
+				s |= (exp + 129) << 23;
+		}
+
+		s |= sign;
+		return rv;
+	}
 };
 
 }}

@@ -22,7 +22,9 @@ void print_dbl_s(double v)
 {
 	char buf[80] = {0};
 	char *ptr(buf);
-	to_ascii_decimal_f_s<double>(ptr, v, std::allocator<void>());
+	to_ascii_decimal_f<double>::bigint_convert(
+		ptr, v, std::allocator<void>()
+	);
 	auto xv(strtod(buf, nullptr));
 	printf("--- std: %f (%f), %d\n", v, xv, v == xv);
 	printf("^^^ imp: %s\n", buf);
@@ -51,5 +53,7 @@ int main(int argc, char **argv)
 		return true;
 	});
 */
+	double xx(0.30102999566398118);
+	printf("xx %0.40f\n", xx);
 	return 0;
 }

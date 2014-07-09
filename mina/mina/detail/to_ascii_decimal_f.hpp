@@ -163,7 +163,7 @@ struct float_t {
 template <>
 auto float_t<64>::operator*(float_t other) const -> float_t
 {
-	unsigned __int128 acc(m);
+	uint128_t acc(m);
 	acc *= other.m;
 	acc += 1ull << 63; /* rounding */
 	return float_t(
@@ -183,13 +183,175 @@ template <typename T>
 struct to_ascii_decimal_f_s;
 
 template <typename T>
+struct to_ascii_decimal_f_traits;;
+
+template <>
+struct to_ascii_decimal_f_traits<double> {
+	constexpr static int minimal_target_exp = -60;
+	constexpr static int decimal_limb_count = 3;
+	constexpr static int mantissa_bits = 53;
+	constexpr static double inv_log2_10 = 0.30102999566398114;
+
+	static long pow_10_estimate(int32_t exp_2)
+	{
+		return std::lround(std::ceil(
+			(exp_2 + mantissa_bits - 1) * inv_log2_10 - 1e-10
+		));
+	}
+};
+
+template <typename T>
 struct to_ascii_decimal_f {
 	typedef typename yesod::fp_adapter_type<T>::type wrapper_type;
 	typedef float_t<wrapper_type::bit_size> adapter_type;
 	typedef typename wrapper_type::storage_type storage_type;
+	typedef to_ascii_decimal_f_traits<T> traits_type;
 
-	constexpr static int minimal_target_exp;
-	constexpr static int decimal_limb_count;
+	template <typename OutputIterator, typename Alloc>
+	static void bigint_convert(OutputIterator &&sink, T v, Alloc const &a)
+	{
+		typedef std::vector<
+			bigint::limb_type,
+			typename std::allocator_traits<
+				Alloc
+			>::template rebind_alloc<bigint::limb_type>
+		> bigint_type;
+
+		int extra_shift(0);
+		{
+			wrapper_type xv(v);
+			if (!xv.get_mantissa() && xv.get_exponent())
+				extra_shift = 1;
+		}
+		adapter_type xv(v);
+		auto exponent(traits_type::pow_10_estimate(xv.exp));
+
+		bigint_type num(a);
+		bigint_type denom(a);
+		bigint_type bd_low(a);
+		bigint_type bd_high(a);
+
+		if (xv.exp >= 0) {
+			bigint::assign_scalar(
+				num, xv.m, xv.exp + 1 + extra_shift
+			);
+			bigint::assign_pow10(denom, exponent);
+			bigint::shift_left(denom, 1 +  extra_shift);
+			bigint::assign_scalar(bd_low, 1, xv.exp);
+		} else if (exponent >= 0) {
+			bigint::assign_scalar(num, xv.m, 1 + extra_shift);
+			bigint::assign_pow10(denom, exponent);
+			bigint::shift_left(denom, -xv.exp + 1 + extra_shift);
+			bigint::assign_scalar(bd_low, 1);
+		} else {
+			bigint::assign_scalar(num, xv.m);
+			bigint::assign_scalar(
+				denom, 1, -xv.exp + 1 + extra_shift
+			);
+			bigint::assign_pow10(bd_low, -exponent);
+			bigint::multiply(num, bd_low);
+			bigint::shift_left(num, 1 + extra_shift);
+		}
+
+		bd_high = bd_low;
+		if (extra_shift)
+			bigint::shift_left(bd_high, extra_shift);
+
+		bool in_range(false);
+		if (xv.m & 1)
+			in_range = bigint::compare_sum(
+				num, bd_high, denom
+			) > 0;
+		else
+			in_range = bigint::compare_sum(
+				num, bd_high, denom
+			) >= 0;
+
+		if (in_range)
+			++exponent;
+		else {
+			bigint::multiply_scalar(num, 10u);
+			if (bd_high == bd_low) {
+				bigint::multiply_scalar(bd_low, 10u);
+				bd_high = bd_low;
+			} else {
+				bigint::multiply_scalar(bd_low, 10u);
+				bigint::multiply_scalar(bd_high, 10u);
+			}
+		}
+
+		bigint_type q(a);
+		bigint_type r(a);
+		std::array<
+			uint32_t, traits_type::decimal_limb_count
+		> bv;
+		std::fill(bv.begin(), bv.end(), 0);
+		int dp(0);
+		while (true) {
+			bigint::divide(q, r, num, denom);
+			int32_t digit(q[0]);
+			num.swap(r);
+
+			int bd_test(0);
+			if (xv.m & 1) {
+				bd_test |= bigint::compare(
+					num, bd_low
+				) < 0 ? 1 : 0;
+				bd_test |= bigint::compare_sum(
+					num, bd_high, denom
+				) > 0 ? 2 : 0;
+			} else {
+				bd_test |= bigint::compare(
+					num, bd_low
+				) <= 0 ? 1 : 0;
+				bd_test |= bigint::compare_sum(
+					num, bd_high, denom
+				) >= 0 ? 2 : 0;
+			}
+
+			switch (bd_test) {
+			case 0:
+				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
+				++dp;
+				bigint::multiply_scalar(num, 10u);
+				bigint::multiply_scalar(bd_low, 10u);
+				bigint::multiply_scalar(bd_high, 10u);
+				break;
+			case 1:
+				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
+				++dp;
+				bcd_to_ascii_f(
+					std::forward<
+						OutputIterator
+					>(sink), bv, dp, exponent - dp
+				);
+				return;
+			case 2:
+				++digit;
+				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
+				++dp;
+				bcd_to_ascii_f(
+					std::forward<
+						OutputIterator
+					>(sink), bv, dp, exponent - dp
+				);
+				return;
+			case 3:
+				bd_test = bigint::compare_sum(num, num, denom);
+				if ((bd_test > 0) || (!bd_test && (digit & 1)))
+					++digit;
+
+				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
+				++dp;
+				bcd_to_ascii_f(
+					std::forward<
+						OutputIterator
+					>(sink), bv, dp, exponent - dp
+				);
+				return;
+			};
+		}
+	}
 
 	static bool round_weed(
 		uint32_t &last_digit, storage_type upper_range,
@@ -266,15 +428,6 @@ struct to_ascii_decimal_f {
 		return true;
 	}
 
-	static std::pair<uint32_t, int> pow_10_estimate(uint32_t v, int n_bits)
-	{
-		auto exp(small_power_10_estimate(n_bits + 1));
-		if (v < small_power_10[exp])
-			--exp;
-
-		return std::make_pair(small_power_10[exp], exp + 1);
-	}
-
 	template <typename OutputIterator, typename Alloc>
 	to_ascii_decimal_f(OutputIterator &&sink, T v, Alloc const &a)
 	{
@@ -285,8 +438,9 @@ struct to_ascii_decimal_f {
 		auto bd(xv.boundaries());
 		xv.normalize();
 
-		auto exp_bd(binary_pow_10::lookup_exp_10<T>(
-			minimal_target_exp - (xv.exp + wrapper_type::bit_size)
+		auto exp_bd(binary_pow_10<T>::lookup_exp_10(
+			traits_type::minimal_target_exp
+			- (xv.exp + wrapper_type::bit_size)
 		));
 
 		adapter_type x_scale(exp_bd.m, exp_bd.exp_2);
@@ -302,11 +456,17 @@ struct to_ascii_decimal_f {
 		adapter_type unity(storage_type(1) << -s_xv.exp, s_xv.exp);
 		auto integral(s_bd.second.m >> -s_xv.exp);
 		auto fractional(s_bd.second.m & (unity.m - 1));
-		auto exponent(pow_10_estimate(
-			integral, wrapper_type::bit_size + unity.exp
-		));
 
-		std::array<uint32_t, decimal_limb_count> bv;
+		auto x_exp(small_power_10_estimate(
+			wrapper_type::bit_size + unity.exp + 1
+		));
+		if (integral < small_power_10[x_exp])
+			--x_exp;
+
+		auto exponent(std::make_pair(small_power_10[x_exp], x_exp + 1));
+
+
+		std::array<uint32_t, traits_type::decimal_limb_count> bv;
 		std::fill(bv.begin(), bv.end(), 0);
 		int dp(0);
 		storage_type scale(1);
@@ -323,7 +483,7 @@ struct to_ascii_decimal_f {
 					unsafe.m, remainder,
 					exponent.first << (-unity.exp), scale
 				))
-					to_ascii_decimal_f_s<T>(
+					bigint_convert(
 						std::forward<
 							OutputIterator
 						>(sink), v, a
@@ -361,7 +521,7 @@ struct to_ascii_decimal_f {
 					digit, (s_bd.second - s_xv).m * scale,
 					unsafe.m, fractional, unity.m, scale
 				))
-					to_ascii_decimal_f_s<T>(
+					bigint_convert(
 						std::forward<
 							OutputIterator
 						>(sink), v, a
@@ -384,161 +544,6 @@ struct to_ascii_decimal_f {
 				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
 				++dp;
 			}
-		}
-	}
-};
-
-template <>
-constexpr int to_ascii_decimal_f<double>::minimal_target_exp = -60;
-
-template <>
-constexpr int to_ascii_decimal_f<double>::decimal_limb_count = 3;
-
-template <>
-struct to_ascii_decimal_f_s<double> {
-	template <
-		typename OutputIterator, typename Alloc = std::allocator<void>
-	> to_ascii_decimal_f_s(
-		OutputIterator &&sink, double v, Alloc const &a = Alloc()
-	) {
-		typedef std::vector<
-			bigint_limb_type,
-			typename std::allocator_traits<
-				Alloc
-			>::template rebind_alloc<bigint_limb_type>
-		> bigint_type;
-
-		constexpr static double inv_log2_10 = 0.30102999566398114;
-		constexpr static int bits = 53;
-
-		int extra_shift(0);
-		{
-			yesod::float_t<64> xv(v);
-			if (!xv.get_mantissa() && xv.get_exponent())
-				extra_shift = 1;
-		}
-		float_t<64> xv(v);
-		auto exponent(std::lround(
-			std::ceil((xv.exp + bits - 1) * inv_log2_10 - 1e-10)
-		));
-
-		bigint_type num(a);
-		bigint_type denom(a);
-		bigint_type bd_low(a);
-		bigint_type bd_high(a);
-
-		if (xv.exp >= 0) {
-			bigint_assign_scalar(
-				num, xv.m, xv.exp + 1 + extra_shift
-			);
-			bigint_assign_pow10(denom, exponent);
-			bigint_shift_left(denom, 1 +  extra_shift);
-			bigint_assign_scalar(bd_low, 1, xv.exp);
-		} else if (exponent >= 0) {
-			bigint_assign_scalar(num, xv.m, 1 + extra_shift);
-			bigint_assign_pow10(denom, exponent);
-			bigint_shift_left(denom, -xv.exp + 1 + extra_shift);
-			bigint_assign_scalar(bd_low, 1);
-		} else {
-			bigint_assign_scalar(num, xv.m);
-			bigint_assign_scalar(
-				denom, 1, -xv.exp + 1 + extra_shift
-			);
-			bigint_assign_pow10(bd_low, -exponent);
-			bigint_mul(num, bd_low);
-			bigint_shift_left(num, 1 + extra_shift);
-		}
-
-		bd_high = bd_low;
-		if (extra_shift)
-			bigint_shift_left(bd_high, extra_shift);
-
-		bool in_range(false);
-		if (xv.m & 1)
-			in_range = bigint_compare_sum(num, bd_high, denom) > 0;
-		else
-			in_range = bigint_compare_sum(num, bd_high, denom) >= 0;
-
-		if (in_range)
-			++exponent;
-		else {
-			bigint_mul_scalar(num, 10);
-			if (bd_high == bd_low) {
-				bigint_mul_scalar(bd_low, 10);
-				bd_high = bd_low;
-			} else {
-				bigint_mul_scalar(bd_low, 10);
-				bigint_mul_scalar(bd_high, 10);
-			}
-		}
-
-		bigint_type q(a);
-		bigint_type r(a);
-		std::array<uint32_t, 3> bv{0, 0, 0};
-		int dp(0);
-		while (true) {
-			bigint_div(q, r, num, denom);
-			int32_t digit(q[0]);
-			num.swap(r);
-
-			int bd_test(0);
-			if (xv.m & 1) {
-				bd_test |= bigint_compare(
-					num, bd_low
-				) < 0 ? 1 : 0;
-				bd_test |= bigint_compare_sum(
-					num, bd_high, denom
-				) > 0 ? 2 : 0;
-			} else {
-				bd_test |= bigint_compare(
-					num, bd_low
-				) <= 0 ? 1 : 0;
-				bd_test |= bigint_compare_sum(
-					num, bd_high, denom
-				) >= 0 ? 2 : 0;
-			}
-
-			switch (bd_test) {
-			case 0:
-				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
-				++dp;
-				bigint_mul_scalar(num, 10);
-				bigint_mul_scalar(bd_low, 10);
-				bigint_mul_scalar(bd_high, 10);
-				break;
-			case 1:
-				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
-				++dp;
-				bcd_to_ascii_f(
-					std::forward<
-						OutputIterator
-					>(sink), bv, dp, exponent - dp
-				);
-				return;
-			case 2:
-				++digit;
-				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
-				++dp;
-				bcd_to_ascii_f(
-					std::forward<
-						OutputIterator
-					>(sink), bv, dp, exponent - dp
-				);
-				return;
-			case 3:
-				bd_test = bigint_compare_sum(num, num, denom);
-				if ((bd_test > 0) || (!bd_test && (digit & 1)))
-					++digit;
-
-				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
-				++dp;
-				bcd_to_ascii_f(
-					std::forward<
-						OutputIterator
-					>(sink), bv, dp, exponent - dp
-				);
-				return;
-			};
 		}
 	}
 };
