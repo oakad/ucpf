@@ -24,26 +24,37 @@ struct float8 {
 	{
 		uint32_t m(v.v & mantissa_mask);
 		int32_t exp((v.v & exp_mask) >> 3);
-		uint32_t sign(v.v & 0x80 ? 0x80000000u : 0u);
+		uint32_t sign(v.v & sign_mask ? 0x80000000u : 0u);
 
 		union {
 			float rv;
 			uint32_t s;
 		};
 
-		s = m << 20;
 		if (exp) {
-			if ((v.v & exp_mask) == exp_mask)
-				s |= 0x7f800000;
-			else
-				s |= (exp + 129) << 23;
+			if ((v.v & exp_mask) == exp_mask) {
+				s = 0x7f800000;
+				if (m & 4)
+					s |= 0x00400000;
+
+				s |= m & 3;
+			} else {
+				s = m << 20;
+				s |= (exp + 120) << 23;
+			}
+		} else {
+			if (m) {
+				exp = clz(m);
+				s = (m & (3 >> (exp - 29))) << (exp - 8);
+				s |= (149 - exp) << 23;
+			} else
+				s = 0;
 		}
 
 		s |= sign;
 		return rv;
 	}
 };
-
 }}
 
 namespace std {

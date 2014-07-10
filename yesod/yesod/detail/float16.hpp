@@ -19,6 +19,41 @@ struct float16 {
 	constexpr static uint16_t mantissa_mask = 0x3ff;
 
 	uint16_t v;
+
+	static float to_float32(float16 v)
+	{
+		uint32_t m(v.v & mantissa_mask);
+		int32_t exp((v.v & exp_mask) >> 10);
+		uint32_t sign(v.v & sign_mask ? 0x80000000u : 0u);
+
+		union {
+			float rv;
+			uint32_t s;
+		};
+
+		if (exp) {
+			if ((v.v & exp_mask) == exp_mask) {
+				s = 0x7f800000;
+				if (m & 0x200)
+					s |= 0x00400000;
+
+				s |= m & 0x3ff;
+			} else {
+				s = m << 13;
+				s |= (exp + 112) << 23;
+			}
+		} else {
+			if (m) {
+				exp = clz(m);
+				s = (m & (0x1ff >> (exp - 22))) << (exp - 15);
+				s |= (142 - exp) << 23;
+			} else
+				s = 0;
+		}
+
+		s |= sign;
+		return rv;
+	}
 };
 
 }}
