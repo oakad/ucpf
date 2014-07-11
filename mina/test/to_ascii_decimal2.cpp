@@ -49,8 +49,50 @@ struct null_sink {
 };
 
 }
+/*
+BOOST_AUTO_TEST_CASE(to_ascii_decimal2_2)
+{
+	test::float_generator<32> fg;
+	{
+		char buf[40] = {0};
+		char *ptr(buf);
+		to_ascii_decimal(ptr, 0.0);
+		BOOST_CHECK_EQUAL(buf, "+0.0");
+	}
+	{
+		char buf[40] = {0};
+		char *ptr(buf);
+		to_ascii_decimal(ptr, std::numeric_limits<float>::infinity());
+		BOOST_CHECK_EQUAL(buf, "+1.#inf");
+	}
+	{
+		char buf[40] = {0};
+		char *ptr(buf);
+		to_ascii_decimal(ptr, std::numeric_limits<float>::quiet_NaN());
+		BOOST_CHECK_EQUAL(buf, "+1.#q(0)");
+	}
+	{
+		char buf[40] = {0};
+		char *ptr(buf);
+		to_ascii_decimal(
+			ptr, std::numeric_limits<float>::signaling_NaN()
+		);
+		BOOST_CHECK_EQUAL(buf, "+1.#s(1125899906842624)");
+	}
 
-BOOST_AUTO_TEST_CASE(to_ascii_decimal2_0)
+	std::generate_n(test::null_sink(), CASE_COUNT, [&fg]() -> bool {
+		return fg([](float v) -> bool {
+			char buf[40] = {0};
+			char *ptr(buf);
+			to_ascii_decimal(ptr, v);
+			auto xv(strtof(buf, nullptr));
+			BOOST_CHECK_EQUAL(v, xv);
+			return v == xv;
+		});
+	});
+}
+*/
+BOOST_AUTO_TEST_CASE(to_ascii_decimal2_3)
 {
 	test::float_generator<64> fg;
 	{

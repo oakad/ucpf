@@ -154,11 +154,27 @@ struct float_t {
 		return std::make_pair(low, high);
 	}
 
-	void normalize();
+	void normalize()
+	{
+		auto l(yesod::clz(m));
+		m <<= l;
+		exp -= l;
+	}
 
 	mantissa_type m;
 	int32_t exp;
 };
+
+template <>
+auto float_t<32>::operator*(float_t other) const -> float_t
+{
+	uint64_t acc(m);
+	acc *= other.m;
+	acc += 1ull << 31; /* rounding */
+	return float_t(
+		uint32_t(acc >> 32), exp + other.exp + 32
+	);
+}
 
 template <>
 auto float_t<64>::operator*(float_t other) const -> float_t
@@ -169,14 +185,6 @@ auto float_t<64>::operator*(float_t other) const -> float_t
 	return float_t(
 		uint64_t(acc >> 64), exp + other.exp + 64
 	);
-}
-
-template <>
-void float_t<64>::normalize()
-{
-	auto l(__builtin_clzll(m));
-	m <<= l;
-	exp -= l;
 }
 
 template <typename T>
