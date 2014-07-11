@@ -6,7 +6,6 @@
 using ucpf::mina::to_ascii_decimal;
 using ucpf::mina::test::float_generator;
 using ucpf::mina::detail::to_ascii_decimal_f;
-using ucpf::mina::detail::to_ascii_decimal_f_s;
 
 void print_dbl(double v)
 {
@@ -53,7 +52,9 @@ int main(int argc, char **argv)
 		return true;
 	});
 */
-	double xx(0.30102999566398118);
+
+	//float xx(0x4D104cp-24 );
+	float xx(0.30102992);
 	printf("xx %0.40f\n", xx);
 	return 0;
 }

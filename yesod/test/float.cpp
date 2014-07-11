@@ -66,12 +66,15 @@ BOOST_AUTO_TEST_CASE(float_2)
 	}};
 	std::array<float, 15> a1 = {{
 		0.0f, -0.0f, 0.59604644775390625e-7f, 0.1430511474609375e-4f,
+		0.60975551605224609375e-4f, 0.6103515625e-4f,
+		0.001953125f, 0.0625f, 2.0f, 58.65625f, 1706.0f,
+		49152.0f, 65504.0f,
 		std::numeric_limits<float>::infinity(),
 		-std::numeric_limits<float>::infinity()
 	}};
 	std::array<float, 15> a2;
 
-	std::transform(a0.begin(), a0.end(), a2.begin(), float8::to_float32);
+	std::transform(a0.begin(), a0.end(), a2.begin(), float16::to_float32);
 	BOOST_CHECK(a1 == a2);
 }
 

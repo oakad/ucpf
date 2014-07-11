@@ -45,8 +45,8 @@ struct float16 {
 		} else {
 			if (m) {
 				exp = clz(m);
-				s = (m & (0x1ff >> (exp - 22))) << (exp - 15);
-				s |= (142 - exp) << 23;
+				s = (m & (0x1ff >> (exp - 22))) << (exp - 8);
+				s |= (134 - exp) << 23;
 			} else
 				s = 0;
 		}

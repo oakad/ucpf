@@ -180,10 +180,22 @@ void float_t<64>::normalize()
 }
 
 template <typename T>
-struct to_ascii_decimal_f_s;
-
-template <typename T>
 struct to_ascii_decimal_f_traits;;
+
+template <>
+struct to_ascii_decimal_f_traits<float> {
+	constexpr static int minimal_target_exp = -30;
+	constexpr static int decimal_limb_count = 2;
+	constexpr static int mantissa_bits = 24;
+	constexpr static float inv_log2_10 = 0.30102992f;
+
+	static long pow_10_estimate(int32_t exp_2)
+	{
+		return std::lround(std::ceil(
+			(exp_2 + mantissa_bits - 1) * inv_log2_10 - 1e-10f
+		));
+	}
+};
 
 template <>
 struct to_ascii_decimal_f_traits<double> {
@@ -438,7 +450,7 @@ struct to_ascii_decimal_f {
 		auto bd(xv.boundaries());
 		xv.normalize();
 
-		auto exp_bd(binary_pow_10<T>::lookup_exp_10(
+		auto exp_bd(binary_pow_10<storage_type>::lookup_exp_10(
 			traits_type::minimal_target_exp
 			- (xv.exp + wrapper_type::bit_size)
 		));
@@ -497,7 +509,7 @@ struct to_ascii_decimal_f {
 						std::forward<
 							OutputIterator
 						>(sink), bv, dp,
-						exponent.second - exp_bd.exp_10
+						exponent.second - exp_bd.exp_5
 					);
 				}
 				return;
@@ -536,7 +548,7 @@ struct to_ascii_decimal_f {
 							OutputIterator
 						>(sink),
 						bv, dp,
-						exponent.second - exp_bd.exp_10
+						exponent.second - exp_bd.exp_5
 					);
 				}
 				return;
@@ -545,6 +557,34 @@ struct to_ascii_decimal_f {
 				++dp;
 			}
 		}
+	}
+};
+
+template <>
+struct to_ascii_decimal_f<yesod::float8> {
+	template <typename OutputIterator, typename Alloc>
+	to_ascii_decimal_f(
+		OutputIterator &&sink, yesod::float8 v, Alloc const &a
+	)
+	{
+		to_ascii_decimal_f<float>::to_ascii_decimal_f(
+			std::forward<OutputIterator>(sink),
+			yesod::float8::to_float32(v), a
+		);
+	}
+};
+
+template <>
+struct to_ascii_decimal_f<yesod::float16> {
+	template <typename OutputIterator, typename Alloc>
+	to_ascii_decimal_f(
+		OutputIterator &&sink, yesod::float16 v, Alloc const &a
+	)
+	{
+		to_ascii_decimal_f<float>::to_ascii_decimal_f(
+			std::forward<OutputIterator>(sink),
+			yesod::float16::to_float32(v), a
+		);
 	}
 };
 
