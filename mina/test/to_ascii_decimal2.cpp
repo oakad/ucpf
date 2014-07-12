@@ -49,7 +49,7 @@ struct null_sink {
 };
 
 }
-/*
+#if 1
 BOOST_AUTO_TEST_CASE(to_ascii_decimal2_2)
 {
 	test::float_generator<32> fg;
@@ -77,7 +77,7 @@ BOOST_AUTO_TEST_CASE(to_ascii_decimal2_2)
 		to_ascii_decimal(
 			ptr, std::numeric_limits<float>::signaling_NaN()
 		);
-		BOOST_CHECK_EQUAL(buf, "+1.#s(1125899906842624)");
+		BOOST_CHECK_EQUAL(buf, "+1.#s(2097152)");
 	}
 
 	std::generate_n(test::null_sink(), CASE_COUNT, [&fg]() -> bool {
@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE(to_ascii_decimal2_2)
 		});
 	});
 }
-*/
+#endif
 BOOST_AUTO_TEST_CASE(to_ascii_decimal2_3)
 {
 	test::float_generator<64> fg;

@@ -28,12 +28,12 @@ bool round_up_hex(char *s, int last)
 
 int main(int argc, char **argv)
 {
-	int min(-60), max(60), step(8);
+	int min(-348 - 672), max(340 + 672), step(8);
 	mpfr_t x;
 	mpfr_t y;
 	mpz_t z;
-	mpfr_init2(x, 512);
-	mpfr_init2(y, 512);
+	mpfr_init2(x, 8192);
+	mpfr_init2(y, 8192);
 	mpz_init(z);
 	char c_high[17], c_low[17];
 
@@ -46,11 +46,21 @@ int main(int argc, char **argv)
 		c_high[16] = 0;
 		memcpy(c_low, s + 16, 16);
 		c_low[16] = 0;
-		if (s[33] > 7) {
+		if (s[33] > '7') {
 			if (round_up_hex(c_low, 15))
 				round_up_hex(c_high, 15);
 		}
-		printf("0x%sull, 0x%sull, %ld, %d\n", c_high, c_low, e, c);
+
+		mpfr_mul_2si(x, y, c, MPFR_RNDN);
+		mpfr_log2(y, x, MPFR_RNDN);
+		auto exp_2(mpfr_get_si(y, MPFR_RNDN));
+
+		mpfr_set_ui_2exp(y, 1, exp_2, MPFR_RNDN);
+		if (mpfr_cmp(x, y) > 0)
+			++exp_2;
+
+		//exp_2 -= 64;
+		printf("{0x%sull, 0x%sull, %ld, %d},\n", c_high, c_low, exp_2, c);
 		free(s);
 	}
 

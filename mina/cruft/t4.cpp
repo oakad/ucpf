@@ -39,9 +39,11 @@ int main(int argc, char **argv)
 	print_dbl(3.5386175273211743e-15);
 	print_dbl(2.7521330385015478e-205);
 	print_dbl(25.779390132673132);
-*/
 	print_dbl(1.9534695983725164e-308);
 	print_dbl_s(1.9534695983725164e-308);
+*/
+//	print_dbl(8.2897362787489375e+96);
+	print_dbl_s(8.2897362787489375e+96);
 //	print_dbl_s(25.779390132673132);
 /*
 	print_dbl(-3.8501120564961564e+71);
@@ -52,9 +54,5 @@ int main(int argc, char **argv)
 		return true;
 	});
 */
-
-	//float xx(0x4D104cp-24 );
-	float xx(0.30102992);
-	printf("xx %0.40f\n", xx);
 	return 0;
 }

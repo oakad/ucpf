@@ -195,14 +195,6 @@ struct to_ascii_decimal_f_traits<float> {
 	constexpr static int minimal_target_exp = -30;
 	constexpr static int decimal_limb_count = 2;
 	constexpr static int mantissa_bits = 24;
-	constexpr static float inv_log2_10 = 0.30102992f;
-
-	static long pow_10_estimate(int32_t exp_2)
-	{
-		return std::lround(std::ceil(
-			(exp_2 + mantissa_bits - 1) * inv_log2_10 - 1e-10f
-		));
-	}
 };
 
 template <>
@@ -210,14 +202,13 @@ struct to_ascii_decimal_f_traits<double> {
 	constexpr static int minimal_target_exp = -60;
 	constexpr static int decimal_limb_count = 3;
 	constexpr static int mantissa_bits = 53;
-	constexpr static double inv_log2_10 = 0.30102999566398114;
+};
 
-	static long pow_10_estimate(int32_t exp_2)
-	{
-		return std::lround(std::ceil(
-			(exp_2 + mantissa_bits - 1) * inv_log2_10 - 1e-10
-		));
-	}
+template <>
+struct to_ascii_decimal_f_traits<__float128> {
+	constexpr static int minimal_target_exp = -120;
+	constexpr static int decimal_limb_count = 5;
+	constexpr static int mantissa_bits = 113;
 };
 
 template <typename T>
@@ -226,6 +217,14 @@ struct to_ascii_decimal_f {
 	typedef float_t<wrapper_type::bit_size> adapter_type;
 	typedef typename wrapper_type::storage_type storage_type;
 	typedef to_ascii_decimal_f_traits<T> traits_type;
+
+	static long power_10_estimate(int32_t exp_2)
+	{
+		constexpr static double inv_log2_10 = 0.30102999566398114;
+		return std::lround(std::ceil((
+			exp_2 + traits_type::mantissa_bits - 1
+		) * inv_log2_10 - 1e-10));
+	}
 
 	template <typename OutputIterator, typename Alloc>
 	static void bigint_convert(OutputIterator &&sink, T v, Alloc const &a)
@@ -244,7 +243,7 @@ struct to_ascii_decimal_f {
 				extra_shift = 1;
 		}
 		adapter_type xv(v);
-		auto exponent(traits_type::pow_10_estimate(xv.exp));
+		auto exponent(power_10_estimate(xv.exp));
 
 		bigint_type num(a);
 		bigint_type denom(a);
