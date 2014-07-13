@@ -28,6 +28,10 @@ struct binary_pow_10 {
 		int exp_2;
 		int exp_5;
 
+		entry()
+		: m(0), exp_2(0), exp_5(0)
+		{}
+
 		entry(u_entry const &e);
 	};
 
@@ -294,13 +298,16 @@ struct binary_pow_10 {
 	{
 		constexpr static double inv_log2_10 = 0.30102999566398114;
 		constexpr static int bits = sizeof(T) * 8;
-	
 
 		double k(std::ceil(inv_log2_10 * (exp_10 + bits - 1)));
 		auto idx(std::lround(k));
 		idx -= pow_5_list.front().exp_5 + 1;
 		idx /= pow_5_step;
-		return entry(pow_5_list[idx + 1]);
+
+		if ((idx < 0) || (idx > (pow_5_list.size() - 2)))
+			return entry();
+		else
+			return entry(pow_5_list[idx + 1]);
 	}
 };
 
@@ -310,6 +317,7 @@ binary_pow_10<uint32_t>::entry::entry(
 ) : m(e.m_high >> 32), exp_2(e.exp_2 - 32), exp_5(e.exp_5)
 {
 	constexpr static uint64_t round_mask = 1ull << 31;
+
 	if (e.m_high & round_mask)
 		m += 1;
 }
@@ -320,6 +328,7 @@ binary_pow_10<uint64_t>::entry::entry(
 ) : m(e.m_high), exp_2(e.exp_2 - 64), exp_5(e.exp_5)
 {
 	constexpr static uint64_t round_mask = 1ull << 63;
+
 	if (e.m_low & round_mask)
 		m += 1;
 }

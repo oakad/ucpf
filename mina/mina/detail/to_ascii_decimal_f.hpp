@@ -219,7 +219,7 @@ struct to_ascii_decimal_f_traits;;
 
 template <>
 struct to_ascii_decimal_f_traits<float> {
-	constexpr static int minimal_target_exp = -30;
+	constexpr static int minimal_target_exp = -28;
 	constexpr static int decimal_limb_count = 2;
 	constexpr static int mantissa_bits = 24;
 };
@@ -232,7 +232,7 @@ struct to_ascii_decimal_f_traits<double> {
 };
 
 template <>
-struct to_ascii_decimal_f_traits<__float128> {
+struct to_ascii_decimal_f_traits<yesod::float128> {
 	constexpr static int minimal_target_exp = -120;
 	constexpr static int decimal_limb_count = 5;
 	constexpr static int mantissa_bits = 113;
@@ -488,6 +488,13 @@ struct to_ascii_decimal_f {
 			- (xv.exp + wrapper_type::bit_size)
 		));
 
+		if (!exp_bd.m) {
+			bigint_convert(
+				std::forward<OutputIterator>(sink), v, a
+			);
+			return;
+		}
+
 		adapter_type x_scale(exp_bd.m, exp_bd.exp_2);
 		auto s_xv(xv * x_scale);
 		auto s_bd(std::make_pair(
@@ -508,8 +515,9 @@ struct to_ascii_decimal_f {
 		if (integral < small_power_10[x_exp])
 			--x_exp;
 
-		auto exponent(std::make_pair(small_power_10[x_exp], x_exp + 1));
-
+		auto exponent(std::make_pair(
+			small_power_10[x_exp], x_exp + 1)
+		);
 
 		std::array<uint32_t, traits_type::decimal_limb_count> bv;
 		std::fill(bv.begin(), bv.end(), 0);
@@ -519,7 +527,6 @@ struct to_ascii_decimal_f {
 			uint32_t digit(integral / exponent.first);
 			integral %= exponent.first;
 			--exponent.second;
-
 			auto remainder((integral << (-unity.exp)) + fractional);
 
 			if (remainder < unsafe.m) {
@@ -560,7 +567,6 @@ struct to_ascii_decimal_f {
 			uint32_t digit(fractional >> (-unity.exp));
 			fractional &= unity.m - 1;
 			--exponent.second;
-
 			if (fractional < unsafe.m) {
 				if (!round_weed(
 					digit, (s_bd.second - s_xv).m * scale,

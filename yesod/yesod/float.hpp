@@ -16,6 +16,7 @@
 
 #include <yesod/detail/float8.hpp>
 #include <yesod/detail/float16.hpp>
+#include <yesod/detail/float128.hpp>
 
 namespace ucpf { namespace yesod {
 namespace detail {
@@ -59,7 +60,7 @@ typedef typename mpl::map<
 	>,
 	mpl::pair<
 		mpl::uint_<128>,
-		storable_float_traits<uint128_t, __float128>
+		storable_float_traits<uint128_t, yesod::float128>
 	>
 >::type fp_storage_types;
 
@@ -205,7 +206,7 @@ typedef typename mpl::map<
 		 > std::numeric_limits<double>::digits),
 		float_t<128>, float_t<64>
 	>>,
-	mpl::pair<__float128, float_t<128>>
+	mpl::pair<yesod::float128, float_t<128>>
 >::type fp_adapter_types;
 
 }
