@@ -19,11 +19,19 @@ typedef unsigned __int128 uint128_t;
 struct [[gnu::packed]] int128_t {
 	uint64_t low;
 	uint64_t high;
+
+	int128_t(uint64_t other)
+	: low(other), high(other >> 63 ? ~uint64_t(0) : uint64_t(0))
+	{}
 };
 
 struct [[gnu::packed]] uint128_t {
 	uint64_t low;
 	uint64_t high;
+
+	uint128_t(uint64_t other)
+	: low(other), high(uint64_t(0))
+	{}
 };
 
 #endif

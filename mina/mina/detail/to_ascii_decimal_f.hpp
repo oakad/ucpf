@@ -187,6 +187,33 @@ auto float_t<64>::operator*(float_t other) const -> float_t
 	);
 }
 
+template <>
+auto float_t<128>::operator*(float_t other) const -> float_t
+{
+	uint64_t mh(m >> 64), ml(m);
+	uint64_t oh(other.m >> 64), ol(other.m);
+
+	uint128_t acc_h(mh);
+	acc_h *= oh;
+	uint128_t acc_l(ml);
+	acc_l *= ol;
+	uint128_t acc_m(mh >= ml ? mh - ml : ml - mh);
+	acc_m *= oh >= ol ? oh - ol : ol - oh;
+
+	if ((mh >= ml) != (oh >= ol))
+		acc_m += acc_h + acc_l;
+	else
+		acc_m = acc_h + acc_l - acc_m;
+
+	acc_m += acc_l >> 64;
+	acc_h += acc_m >> 64;
+	acc_h += acc_m >> 127; /* rounding */
+
+	return float_t(
+		acc_h, exp + other.exp + 128
+	);
+}
+
 template <typename T>
 struct to_ascii_decimal_f_traits;;
 
@@ -249,7 +276,6 @@ struct to_ascii_decimal_f {
 		bigint_type denom(a);
 		bigint_type bd_low(a);
 		bigint_type bd_high(a);
-
 		if (xv.exp >= 0) {
 			bigint::assign_scalar(
 				num, xv.m, xv.exp + 1 + extra_shift
@@ -310,7 +336,6 @@ struct to_ascii_decimal_f {
 			bigint::divide(q, r, num, denom);
 			int32_t digit(q[0]);
 			num.swap(r);
-
 			int bd_test(0);
 			if (xv.m & 1) {
 				bd_test |= bigint::compare(
@@ -406,8 +431,9 @@ struct to_ascii_decimal_f {
 			return false;
 
 		return ((scale << 1) <= remainder) && (
-			remainder <= (unsafe_range - (mult << 2))
+			remainder <= (unsafe_range - (scale << 2))
 		);
+		
 	}
 
 	template <typename OutputIterator>

@@ -58,16 +58,7 @@ struct bigint {
 	template <typename Vector, typename T>
 	static void assign_scalar(Vector &v, T value, size_t order = 0)
 	{
-		constexpr static int value_bits(std::numeric_limits<T>::digits);
-
-		auto bit_cnt(value_bits + order);
-		auto limb_cnt(bit_cnt / limb_bits);
-		if ((limb_cnt * limb_bits) < bit_cnt)
-			++limb_cnt;
-
-		v.clear();
-		v.reserve(limb_cnt);
-		decltype(bit_cnt) bit_pos(0);
+		size_t bit_pos(0);
 		while ((bit_pos + limb_bits) <= order) {
 			v.push_back(0);
 			bit_pos += limb_bits;
@@ -78,18 +69,15 @@ struct bigint {
 		x <<= bit_off;
 		x &= GMP_NUMB_MASK;
 		v.push_back(x);
-		bit_pos += limb_bits;
-		bit_off = limb_bits - bit_off;
-		if (bit_off < value_bits)
-			value >>= bit_off;
-		else
-			return;
 
+		value -= x >> bit_off;
 		while (value) {
-			x = value;
+			value >>= limb_bits - bit_off;
+			limb_type x(value);
 			x &= GMP_NUMB_MASK;
 			v.push_back(x);
-			value >>= std::min(value_bits, limb_bits);
+			value -= x;
+			bit_off = limb_bits;
 		}
 	}
 
