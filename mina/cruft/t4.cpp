@@ -54,10 +54,10 @@ void print_dbl_s(double v)
 
 void test_mul()
 {
-	uint64_t xm(3287498753947549ull);
-	uint64_t ym(2305743987457ull);
-	uint64_t xo(12432543544564ull);
-	uint64_t yo(9534946465766ull);
+	uint64_t xm(3298753947549ull);
+	uint64_t ym(2376705743987457ull);
+	uint64_t xo(12432658543544564ull);
+	uint64_t yo(953494648365766ull);
 	uint128_t m(xm);
 	m *= ym;
 	struct {
@@ -69,30 +69,14 @@ void test_mul()
 
 	printf("m (%zd * %zd) * ", xm, ym);
 	printf("(%zd * %zd)\n", xo, yo);
-	uint64_t mh(m >> 64), ml(m);
-	uint64_t oh(other.m >> 64), ol(other.m);
-	uint128_t acc_h(mh);
-	acc_h *= oh;
-	uint128_t acc_l(ml);
-	acc_l *= ol;
-	uint128_t acc_m(mh >= ml ? mh - ml : ml - mh);
-	acc_m *= oh >= ol ? oh - ol : ol - oh;
 
-	if ((mh >= ml) != (oh >= ol))
-		acc_m += acc_h + acc_l;
-	else
-		acc_m = acc_h + acc_l - acc_m;
-
+	auto rv(ucpf::yesod::multiply(m, other.m));
 	uint64_t mv[4];
 
-	mv[0] = acc_l;
-	acc_m += acc_l >> 64;
-
-	mv[1] = acc_m;
-	acc_h += acc_m >> 64;
-
-	mv[2] = acc_h;
-	mv[3] = acc_h >> 64;
+	mv[0] = rv.first;
+	mv[1] = rv.first >> 64;
+	mv[2] = rv.second;
+	mv[3] = rv.second >> 64;;
 
 	printf("aa %016zx%016zx%016zx%016zx\n",
 		mv[3], mv[2], mv[1], mv[0]
@@ -101,11 +85,13 @@ void test_mul()
 
 int main(int argc, char **argv)
 {
+/*
 	print_flt_s(3.15102898e+20f);
 	print_flt(3.15102898e+20f);
 	print_flt_s(2.20260073e+12);
 	print_flt(2.20260073e+12);
 	print_dbl(2.20260073e+12);
+*/
 /*
 	float_generator<64> fg;
 	fg([](double v) -> bool {
@@ -113,5 +99,6 @@ int main(int argc, char **argv)
 		return true;
 	});
 */
+	test_mul();
 	return 0;
 }

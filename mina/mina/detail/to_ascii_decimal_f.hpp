@@ -179,38 +179,20 @@ auto float_t<32>::operator*(float_t other) const -> float_t
 template <>
 auto float_t<64>::operator*(float_t other) const -> float_t
 {
-	uint128_t acc(m);
-	acc *= other.m;
-	acc += 1ull << 63; /* rounding */
+	auto rv(yesod::multiply(m, other.m));
+	rv.second += rv.first >> 63; /* rounding */
 	return float_t(
-		uint64_t(acc >> 64), exp + other.exp + 64
+		rv.second, exp + other.exp + 64
 	);
 }
 
 template <>
 auto float_t<128>::operator*(float_t other) const -> float_t
 {
-	uint64_t mh(m >> 64), ml(m);
-	uint64_t oh(other.m >> 64), ol(other.m);
-
-	uint128_t acc_h(mh);
-	acc_h *= oh;
-	uint128_t acc_l(ml);
-	acc_l *= ol;
-	uint128_t acc_m(mh >= ml ? mh - ml : ml - mh);
-	acc_m *= oh >= ol ? oh - ol : ol - oh;
-
-	if ((mh >= ml) != (oh >= ol))
-		acc_m += acc_h + acc_l;
-	else
-		acc_m = acc_h + acc_l - acc_m;
-
-	acc_m += acc_l >> 64;
-	acc_h += acc_m >> 64;
-	acc_h += acc_m >> 127; /* rounding */
-
+	auto rv(yesod::multiply(m, other.m));
+	rv.second += rv.first >> 127; /* rounding */
 	return float_t(
-		acc_h, exp + other.exp + 128
+		rv.second, exp + other.exp + 128
 	);
 }
 

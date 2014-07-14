@@ -104,7 +104,7 @@ struct numeric_limits<ucpf::yesod::float128> {
 
 	constexpr static ucpf::yesod::float128 infinity() noexcept
 	{
-		return __builtin_huge_valq();
+		return __builtin_infq();
 	}
 
 	constexpr static ucpf::yesod::float128 quiet_NaN() noexcept

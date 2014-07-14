@@ -9,33 +9,55 @@
 #if !defined(UCPF_MINA_DETAIL_BIGINT_20140706T1800)
 #define UCPF_MINA_DETAIL_BIGINT_20140706T1800
 
-#include <gmp.h>
-#include <array>
 #include <vector>
 
 namespace ucpf { namespace mina { namespace detail {
 
-constexpr std::array<uint64_t, 20> small_power_10 = {{
+constexpr uint64_t small_power_10[20] = {
 	1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000,
 	1000000000, 10000000000, 100000000000, 1000000000000, 10000000000000,
 	100000000000000, 1000000000000000, 10000000000000000,
-	100000000000000000, 1000000000000000000, 10000000000000000000ull
-}};
+	100000000000000000, 1000000000000000000ull
+};
 
 constexpr int small_power_10_estimate(int order_2)
 {
 	return (order_2 * 1233) >> 12;
 }
 
+template <unsigned int N>
+struct bigint_calc_traits;
+
+template <>
+struct bigint_calc_traits<32> {
+	typedef uint32_t limb_type;
+	typedef uint64_t acc_type;
+	constexpr static unsigned int limb_bits = 32;
+	constexpr static unsigned int limb_digits_10 = 9;
+};
+
+template <>
+struct bigint_calc_traits<64> {
+	typedef uint64_t limb_type;
+	typedef uint128_t acc_type;
+	constexpr static unsigned int limb_bits = 64;
+	constexpr static unsigned int limb_digits_10 = 18;
+};
+
 struct bigint {
-	typedef mp_limb_t limb_type;
-	constexpr static int limb_bits = GMP_NUMB_BITS;
-	constexpr static int limb_decimal_order = small_power_10_estimate(
-		limb_bits
-	);
+	typedef typename std::conditional<
+		std::is_fundamental<uint128_t>::value,
+		bigint_calc_traits<64>, bigint_calc_traits<32>
+	>::type traits_type;
+
+	typedef typename traits_type::limb_type limb_type;
+	typedef typename traits_type::acc_type acc_type;
+	constexpr static unsigned int limb_bits = traits_type::limb_bits;
+	constexpr static unsigned int limb_digits_10
+	= traits_type::limb_digits_10;
 
 	template <typename Vector>
-	static auto to_ascii_decimal(Vector const &v)
+	static auto to_ascii_hex(Vector const &v)
 	{
 		typedef std::vector<
 			uint8_t,
@@ -44,14 +66,17 @@ struct bigint {
 			>::template rebind_alloc<uint8_t>
 		> string_type;
 
-		auto xv(v);
-		auto str_sz(v.size() * limb_decimal_order + v.size() + 1);
-		string_type str(str_sz, v.get_allocator());
-		auto sz(mpn_get_str(&str.front(), 10, &xv.front(), xv.size()));
-		for (auto c(0); c < sz; c++)
-			str[c] += '0';
-
-		str.resize(sz + 1);
+		string_type str(v.get_allocator());
+		std::for_each(
+			v.rbegin(), v.rend(), [&str](limb_type d) -> void {
+				for (auto c(limb_bits); c > 0; c -= 4) {
+					auto h((d >> (c - 4)) & 0xf);
+					str.push_back(
+						h < 10 ? h + '0' : h + 'W'
+					);
+				}
+			}
+		);
 		return str;
 	}
 
@@ -59,6 +84,9 @@ struct bigint {
 	static void assign_scalar(Vector &v, T value, size_t order = 0)
 	{
 		size_t bit_pos(0);
+		v.reserve(
+			(yesod::fls(value) + order) / limb_bits  + 1
+		);
 		while ((bit_pos + limb_bits) <= order) {
 			v.push_back(0);
 			bit_pos += limb_bits;
@@ -67,14 +95,12 @@ struct bigint {
 		auto bit_off(order - bit_pos);
 		limb_type x(value);
 		x <<= bit_off;
-		x &= GMP_NUMB_MASK;
 		v.push_back(x);
 
 		value -= x >> bit_off;
 		while (value) {
 			value >>= limb_bits - bit_off;
 			limb_type x(value);
-			x &= GMP_NUMB_MASK;
 			v.push_back(x);
 			value -= x;
 			bit_off = limb_bits;
@@ -84,39 +110,46 @@ struct bigint {
 	template <typename Vector>
 	static void shift_left(Vector &v, size_t order)
 	{
-		constexpr static int max_order(GMP_NUMB_BITS - 1);
+		v.reserve(v.size() + (order / limb_bits + 1));
+		auto s_off(order / limb_bits);
+		if (s_off)
+			v.insert(v.begin(), s_off, 0);
 
-		v.reserve(v.size() + (order / max_order + 1));
-		auto c(mpn_lshift(
-			&v.front(), &v.front(), v.size(), order % max_order
-		));
+		auto shift(order % limb_bits);
+		if (!shift)
+			return;
+
+		limb_type c(0);
+		for (auto iter(v.begin() + s_off); iter != v.end(); ++iter) {
+			limb_type x(*iter << shift);
+			x |= c;
+			c = *iter >> (limb_bits - shift);
+			*iter = x;
+		}
 		if (c)
 			v.push_back(c);
-
-		order -= order % max_order;
-		for (; order; order -= max_order) {
-			c = mpn_lshift(
-				&v.front(), &v.front(), v.size(), max_order
-			);
-			if (c)
-				v.push_back(c);
-		}
 	}
 
 	template <typename Vector>
 	static void assign_pow10(Vector &v, size_t order)
 	{
 		v.clear();
-		v.reserve(order / limb_decimal_order + 1);
-		v.push_back(small_power_10[order % limb_decimal_order]);
-		order -= order % limb_decimal_order;
-		for(; order; order -= limb_decimal_order) {
-			auto c(mpn_mul_1(
-				&v.front(), &v.front(), v.size(),
-				small_power_10[limb_decimal_order]
-			));
-			if (c)
-				v.push_back(c);
+		v.reserve(order / (limb_digits_10 + 1) + 1);
+
+		v.push_back(small_power_10[order % (limb_digits_10 + 1)]);
+		order -= order % (limb_digits_10 + 1);
+		for(; order; order -= (limb_digits_10 + 1)) {
+			auto m(std::make_pair(limb_type(0), limb_type(0)));
+			for (auto iter(v.begin()); iter != v.end(); ++iter) {
+				*iter += m.second;
+				m = yesod::multiply(
+					*iter,
+					small_power_10[limb_digits_10 + 1]
+				);
+				*iter = m.first;
+			}
+			if (m.second)
+				v.push_back(m.second);
 		}
 	}
 
@@ -141,12 +174,22 @@ struct bigint {
 	template <typename Vector>
 	static int compare(Vector const &l, Vector const &r)
 	{
-		if (l.size() > r.size())
+		auto l_sz(l.size() * limb_bits - yesod::clz(l.back()));
+		auto r_sz(r.size() * limb_bits - yesod::clz(r.back()));
+
+		if (l_sz > r.sz)
 			return 1;
-		else if (r.size() > l.size())
+		else if (r_sz > l_sz)
 			return -1;
-		else
-			return mpn_cmp(&l.front(), &r.front(), l.size());
+
+		auto rv(std::mismatch(l.rbegin(), l.rend(), r.rbegin()));
+		if (rv.first != l.rend()) {
+			if (*rv.first > *rv.second)
+				return 1;
+			else
+				return -1;
+		} else
+			return 0;
 	}
 
 	template <typename Vector>
@@ -154,43 +197,89 @@ struct bigint {
 		Vector const &l0, Vector const &l1, Vector const &r
 	)
 	{
-		auto l_sz(std::max(l0.size(), l1.size()) + 1);
+		constexpr static limb_type max_value = ~limb_type(0);
 
-		if (r.size() > l_sz)
-			return -1;
-		else if ((l_sz - r.size()) > 1)
+		auto l0_sz(l0.size() * limb_bits - yesod::clz(l0.back()));
+		auto l1_sz(l1.size() * limb_bits - yesod::clz(l1.back()));
+		auto r_sz(r.size() * limb_bits - yesod::clz(r.back()));
+
+		auto l_sz(std::max(l0_sz, l1_sz));
+
+		if (l_sz > r_sz)
 			return 1;
+		else if (r_sz > (l_sz + 1))
+			return -1;
 
-		limb_type sum[l_sz];
+		auto const &l_min(l0_sz <= l1_sz ? l0 : l1);
+		auto const &l_max(l0_sz <= l1_sz ? l1 : l0);
 
-		if (l0.size() >= l1.size())
-			sum[l_sz - 1] = mpn_add(
-				sum, &l0.front(), l0.size(), &l1.front(),
-				l1.size()
-			);
-		else
-			sum[l_sz - 1] = mpn_add(
-				sum, &l1.front(), l1.size(), &l0.front(),
-				l0.size()
-			);
+		limb_type b(0);
+		size_t pos(0);
+		bool zero(true);
+		for (; pos < l_min.size(); ++pos) {
+			auto xr(r[pos]);
+			if (xr >= b) {
+				xr -= b;
+				b = 0;
+			} else {
+				xr += max_value - b;
+				b = 1;
+			}
 
-		if (sum[l_sz - 1]) {
-			if (r.size() == l_sz)
-				return mpn_cmp(sum, &r.front(), l_sz);
-			else
-				return 1;
-		} else {
-			if (r.size() == (l_sz - 1))
-				return mpn_cmp(sum, &r.front(), l_sz - 1);
-			else
-				return -1;
+			if (xr >= l_min[pos])
+				xr -= l_min[pos];
+			else {
+				xr += max_value - l_min[pos];
+				++b;
+			}
+
+			if (xr >= l_max[pos])
+				xr -= l_max[pos];
+			else {
+				xr += max_value - l_max[pos];
+				++b;
+			}
+			zero = zero && !xr;
 		}
+
+		for (; pos < l_max.size(); ++pos) {
+			auto xr(r[pos]);
+			if (xr >= b) {
+				xr -= b;
+				b = 0;
+			} else {
+				xr += max_value - b;
+				b = 1;
+			}
+
+			if (xr >= l_max[pos])
+				xr -= l_max[pos];
+			else {
+				xr += max_value - l_max[pos];
+				++b;
+			}
+			zero = zero && !xr;
+		}
+
+		if (pos < r.size()) {
+			auto xr(r[pos]);
+			if (xr >= b) {
+				xr -= b;
+				b = 0;
+			} else {
+				xr += max_value - b;
+				b = 1;
+			}
+			zero = zero && !xr;
+		}
+
+		return zero ? (b ? 1 : 0) : (b ? 1 : -1);
 	}
 
 	template <typename Vector, typename T>
 	static void multiply_scalar(Vector &l, T r)
 	{
-		static int value_bits(yesod::order_base_2(r));
+		static int value_bits(yesod::fls(r));
 
 		if (value_bits <= limb_bits) {
 			auto c(mpn_mul_1(
@@ -228,8 +317,6 @@ struct bigint {
 		);
 	}
 };
-
-constexpr int bigint::limb_bits;
 
 }}}
 #endif
