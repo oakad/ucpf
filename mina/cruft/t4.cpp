@@ -92,6 +92,7 @@ int main(int argc, char **argv)
 	print_flt(2.20260073e+12);
 	print_dbl(2.20260073e+12);
 */
+	print_dbl_s(2.20260073e+12);
 /*
 	float_generator<64> fg;
 	fg([](double v) -> bool {
@@ -99,6 +100,6 @@ int main(int argc, char **argv)
 		return true;
 	});
 */
-	test_mul();
+//	test_mul();
 	return 0;
 }

@@ -10,6 +10,7 @@
 #define UCPF_MINA_DETAIL_BIGINT_20140706T1800
 
 #include <vector>
+#include <algorithm>
 
 namespace ucpf { namespace mina { namespace detail {
 
@@ -138,37 +139,8 @@ struct bigint {
 
 		v.push_back(small_power_10[order % (limb_digits_10 + 1)]);
 		order -= order % (limb_digits_10 + 1);
-		for(; order; order -= (limb_digits_10 + 1)) {
-			auto m(std::make_pair(limb_type(0), limb_type(0)));
-			for (auto iter(v.begin()); iter != v.end(); ++iter) {
-				*iter += m.second;
-				m = yesod::multiply(
-					*iter,
-					small_power_10[limb_digits_10 + 1]
-				);
-				*iter = m.first;
-			}
-			if (m.second)
-				v.push_back(m.second);
-		}
-	}
-
-	template <typename Vector>
-	static void multiply(Vector &l, Vector const &r)
-	{
-		Vector acc(l.size() + r.size(), 0, l.get_allocator());
-		if (l.size() >= r.size())
-			mpn_mul(
-				&acc.front(), &l.front(), l.size(),
-				&r.front(), r.size()
-			);
-		else
-			mpn_mul(
-				&acc.front(), &r.front(), r.size(),
-				&l.front(), l.size()
-			);
-
-		l.swap(acc);
+		for(; order; order -= (limb_digits_10 + 1))
+			multiply(v, small_power_10[limb_digits_10 + 1]);
 	}
 
 	template <typename Vector>
@@ -177,7 +149,7 @@ struct bigint {
 		auto l_sz(l.size() * limb_bits - yesod::clz(l.back()));
 		auto r_sz(r.size() * limb_bits - yesod::clz(r.back()));
 
-		if (l_sz > r.sz)
+		if (l_sz > r_sz)
 			return 1;
 		else if (r_sz > l_sz)
 			return -1;
@@ -213,108 +185,151 @@ struct bigint {
 		auto const &l_min(l0_sz <= l1_sz ? l0 : l1);
 		auto const &l_max(l0_sz <= l1_sz ? l1 : l0);
 
-		limb_type b(0);
+		limb_type c(0);
 		size_t pos(0);
-		bool zero(true);
+		int rv(0);
 		for (; pos < l_min.size(); ++pos) {
+			acc_type acc(l_min[pos]);
+			acc += l_max[pos];
+			acc += c;
+			auto xl(l_min[pos] + l_max[pos] + c);
+			c = acc >> limb_bits;
+			if (limb_type(acc) > r[pos])
+				rv = 1;
+			else if (limb_type(acc) < r[pos])
+				rv = -1;
+		}
+
+		for (++pos; pos < l_max.size(); ++pos) {
+			auto xl(l_max[pos] + c);
+			c = (l_max[pos] == max_value) && c ? 1 : 0;
+			if (xl > r[pos])
+				rv = 1;
+			else if (xl < r[pos])
+				rv = -1;
+		}
+
+		if (++pos < r.size()) {
 			auto xr(r[pos]);
-			if (xr >= b) {
-				xr -= b;
-				b = 0;
-			} else {
-				xr += max_value - b;
-				b = 1;
-			}
-
-			if (xr >= l_min[pos])
-				xr -= l_min[pos];
-			else {
-				xr += max_value - l_min[pos];
-				++b;
-			}
-
-			if (xr >= l_max[pos])
-				xr -= l_max[pos];
-			else {
-				xr += max_value - l_max[pos];
-				++b;
-			}
-			zero = zero && !xr;
+			if (xr > c)
+				rv = -1;
 		}
 
-		for (; pos < l_max.size(); ++pos) {
-			auto xr(r[pos]);
-			if (xr >= b) {
-				xr -= b;
-				b = 0;
-			} else {
-				xr += max_value - b;
-				b = 1;
-			}
-
-			if (xr >= l_max[pos])
-				xr -= l_max[pos];
-			else {
-				xr += max_value - l_max[pos];
-				++b;
-			}
-			zero = zero && !xr;
-		}
-
-		if (pos < r.size()) {
-			auto xr(r[pos]);
-			if (xr >= b) {
-				xr -= b;
-				b = 0;
-			} else {
-				xr += max_value - b;
-				b = 1;
-			}
-			zero = zero && !xr;
-		}
-
-		return zero ? (b ? 1 : 0) : (b ? 1 : -1);
-	}
-
-	template <typename Vector, typename T>
-	static void multiply_scalar(Vector &l, T r)
-	{
-		static int value_bits(yesod::fls(r));
-
-		if (value_bits <= limb_bits) {
-			auto c(mpn_mul_1(
-				&l.front(), &l.front(), l.size(),
-				static_cast<limb_type>(r)
-			));
-			if (c)
-				l.push_back(c);
-		} else {
-			Vector rx(l.get_allocator());
-			assign_scalar(rx, r);
-			multiply(l, rx);
-		}
+		return rv;
 	}
 
 	template <typename Vector>
-	static void divide(
-		Vector &quot, Vector &rem, Vector const &num,
-		Vector const &denom
+	static void multiply(Vector &l, limb_type r)
+	{
+		limb_type c(0);
+		for (auto &d: l) {
+			acc_type acc(r);
+			acc *= d;
+			acc += c;
+			c = acc >> limb_bits;
+			d = acc;
+		}
+		if (c)
+			l.push_back(c);
+	}
+
+	template <typename Vector>
+	static void multiply(Vector &l, Vector const &r)
+	{
+		Vector m(l.size() + r.size(), 0, l.get_allocator());
+		size_t m_pos(0);
+		for (auto ld: l) {
+			auto n_pos(m_pos);
+			limb_type c(0);
+			for (auto rd: r) {
+				acc_type acc(rd);
+				acc *= ld;
+				acc += m[n_pos];
+				acc += c;
+				c = acc >> limb_bits;
+				m[n_pos++] = acc;
+			}
+			++m_pos;
+		}
+		l.swap(m);
+	}
+
+	template <typename Vector>
+	static void subtract_scaled(
+		Vector &l, Vector const &r, size_t order
 	)
 	{
-		quot.clear();
-		rem.clear();
+		auto r_iter(r.begin());
+		auto l_iter(l.begin());
+		std::advance(l_iter, order / limb_bits);
+		auto shift(order % limb_bits);
 
-		if (denom.size() > num.size()) {
-			quot.push_back(0);
-			rem = denom;
-			return;
+		limb_type sc(0);
+		limb_type b(0);
+		for (; r_iter < r.end(); ++r_iter) {
+			limb_type xr(*r_iter << shift);
+			xr |= sc;
+			sc = *r_iter >> (limb_bits - shift);
+
+			acc_type acc(1);
+			acc <<= limb_bits;
+			acc += *l_iter;
+			acc -= xr;
+			acc -= b;
+
+			*l_iter = acc;
+			b = 1 - (acc >> limb_bits);
 		}
-		quot.resize(num.size() - denom.size() + 1, 0);
-		rem.resize(denom.size(), 0);
-		mpn_tdiv_qr(
-			&quot.front(), &rem.front(), 0, &num.front(),
-			num.size(), &denom.front(), denom.size()
+
+		if (l_iter != l.end()) {
+			acc_type acc(1);
+			acc <<= limb_bits;
+			acc += *l_iter;
+			acc -= sc;
+			acc -= b;
+			*l_iter = acc;
+			b = 1 - (acc >> limb_bits);
+		}
+
+		for (; b && (l_iter != l.end()); ++l_iter) {
+			if (*l_iter) {
+				*l_iter -= b;
+				b = 0;
+			} else
+				*l_iter = ~*l_iter;
+		}
+
+		while (!l.back())
+			l.pop_back();
+	}
+
+	template <typename Vector>
+	static limb_type divide_near(Vector &num, Vector const &denom)
+	{
+		auto denom_sz(
+			denom.size() * limb_bits - yesod::clz(denom.back())
 		);
+		limb_type rv(0);
+
+		while (true) {
+			auto num_sz(
+				num.size() * limb_bits - yesod::clz(num.back())
+			);
+
+			auto order(num_sz - denom_sz);
+			if (!order)
+				break;
+
+			subtract_scaled(num, denom, order - 1);
+			rv += limb_type(1) << (order - 1);
+		}
+
+		if (compare(num, denom) >= 0) {
+			subtract_scaled(num, denom, 0);
+			++rv;
+		}
+
+		return rv;
 	}
 };
 

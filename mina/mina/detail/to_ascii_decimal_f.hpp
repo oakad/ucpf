@@ -264,16 +264,16 @@ struct to_ascii_decimal_f {
 			);
 			bigint::assign_pow10(denom, exponent);
 			bigint::shift_left(denom, 1 +  extra_shift);
-			bigint::assign_scalar(bd_low, 1, xv.exp);
+			bigint::assign_scalar(bd_low, 1u, xv.exp);
 		} else if (exponent >= 0) {
 			bigint::assign_scalar(num, xv.m, 1 + extra_shift);
 			bigint::assign_pow10(denom, exponent);
 			bigint::shift_left(denom, -xv.exp + 1 + extra_shift);
-			bigint::assign_scalar(bd_low, 1);
+			bigint::assign_scalar(bd_low, 1u);
 		} else {
 			bigint::assign_scalar(num, xv.m);
 			bigint::assign_scalar(
-				denom, 1, -xv.exp + 1 + extra_shift
+				denom, 1u, -xv.exp + 1 + extra_shift
 			);
 			bigint::assign_pow10(bd_low, -exponent);
 			bigint::multiply(num, bd_low);
@@ -297,27 +297,28 @@ struct to_ascii_decimal_f {
 		if (in_range)
 			++exponent;
 		else {
-			bigint::multiply_scalar(num, 10u);
+			bigint::multiply(num, 10);
 			if (bd_high == bd_low) {
-				bigint::multiply_scalar(bd_low, 10u);
+				bigint::multiply(bd_low, 10);
 				bd_high = bd_low;
 			} else {
-				bigint::multiply_scalar(bd_low, 10u);
-				bigint::multiply_scalar(bd_high, 10u);
+				bigint::multiply(bd_low, 10);
+				bigint::multiply(bd_high, 10);
 			}
 		}
 
-		bigint_type q(a);
-		bigint_type r(a);
+		//bigint_type q(a);
+		//bigint_type r(a);
 		std::array<
 			uint32_t, traits_type::decimal_limb_count
 		> bv;
 		std::fill(bv.begin(), bv.end(), 0);
 		int dp(0);
 		while (true) {
-			bigint::divide(q, r, num, denom);
-			int32_t digit(q[0]);
-			num.swap(r);
+			//bigint::divide(q, r, num, denom);
+			//int32_t digit(q[0]);
+			//num.swap(r);
+			int32_t digit(bigint::divide_near(num, denom));
 			int bd_test(0);
 			if (xv.m & 1) {
 				bd_test |= bigint::compare(
@@ -339,9 +340,9 @@ struct to_ascii_decimal_f {
 			case 0:
 				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
 				++dp;
-				bigint::multiply_scalar(num, 10u);
-				bigint::multiply_scalar(bd_low, 10u);
-				bigint::multiply_scalar(bd_high, 10u);
+				bigint::multiply(num, 10);
+				bigint::multiply(bd_low, 10);
+				bigint::multiply(bd_high, 10);
 				break;
 			case 1:
 				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
