@@ -307,17 +307,12 @@ struct to_ascii_decimal_f {
 			}
 		}
 
-		//bigint_type q(a);
-		//bigint_type r(a);
 		std::array<
 			uint32_t, traits_type::decimal_limb_count
 		> bv;
 		std::fill(bv.begin(), bv.end(), 0);
 		int dp(0);
 		while (true) {
-			//bigint::divide(q, r, num, denom);
-			//int32_t digit(q[0]);
-			//num.swap(r);
 			int32_t digit(bigint::divide_near(num, denom));
 			int bd_test(0);
 			if (xv.m & 1) {

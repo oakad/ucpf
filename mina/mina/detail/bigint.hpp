@@ -11,6 +11,7 @@
 
 #include <vector>
 #include <algorithm>
+#include <yesod/bitops.hpp>
 
 namespace ucpf { namespace mina { namespace detail {
 
@@ -73,7 +74,7 @@ struct bigint {
 				for (auto c(limb_bits); c > 0; c -= 4) {
 					auto h((d >> (c - 4)) & 0xf);
 					str.push_back(
-						h < 10 ? h + '0' : h + 'W'
+						h < 10 ? h + '0' : h + '7'
 					);
 				}
 			}
@@ -135,12 +136,12 @@ struct bigint {
 	static void assign_pow10(Vector &v, size_t order)
 	{
 		v.clear();
-		v.reserve(order / (limb_digits_10 + 1) + 1);
+		v.reserve(order / limb_digits_10 + 1);
 
-		v.push_back(small_power_10[order % (limb_digits_10 + 1)]);
-		order -= order % (limb_digits_10 + 1);
-		for(; order; order -= (limb_digits_10 + 1))
-			multiply(v, small_power_10[limb_digits_10 + 1]);
+		v.push_back(small_power_10[order % limb_digits_10]);
+		order -= order % limb_digits_10;
+		for(; order; order -= limb_digits_10)
+			multiply(v, small_power_10[limb_digits_10]);
 	}
 
 	template <typename Vector>
@@ -238,10 +239,10 @@ struct bigint {
 	{
 		Vector m(l.size() + r.size(), 0, l.get_allocator());
 		size_t m_pos(0);
-		for (auto ld: l) {
+		for (auto rd: r) {
 			auto n_pos(m_pos);
 			limb_type c(0);
-			for (auto rd: r) {
+			for (auto ld: l) {
 				acc_type acc(rd);
 				acc *= ld;
 				acc += m[n_pos];
@@ -249,9 +250,18 @@ struct bigint {
 				c = acc >> limb_bits;
 				m[n_pos++] = acc;
 			}
+			m[n_pos] = c;
 			++m_pos;
 		}
-		l.swap(m);
+
+		while (!m.back())
+			m.pop_back();
+
+		if (m.empty()) {
+			l.clear();
+			l.push_back(0);
+		} else
+			l.swap(m);
 	}
 
 	template <typename Vector>
@@ -259,35 +269,48 @@ struct bigint {
 		Vector &l, Vector const &r, size_t order
 	)
 	{
-		auto r_iter(r.begin());
 		auto l_iter(l.begin());
 		std::advance(l_iter, order / limb_bits);
 		auto shift(order % limb_bits);
 
-		limb_type sc(0);
 		limb_type b(0);
-		for (; r_iter < r.end(); ++r_iter) {
-			limb_type xr(*r_iter << shift);
-			xr |= sc;
-			sc = *r_iter >> (limb_bits - shift);
+		limb_type sc(0);
 
-			acc_type acc(1);
-			acc <<= limb_bits;
-			acc += *l_iter;
-			acc -= xr;
-			acc -= b;
+		if (shift) {
+			for (auto rd: r) {
+				limb_type xr(rd << shift);
+				xr |= sc;
+				sc = rd >> (limb_bits - shift);
 
-			*l_iter = acc;
-			b = 1 - (acc >> limb_bits);
+				acc_type acc(1);
+				acc <<= limb_bits;
+				acc += *l_iter;
+				acc -= xr;
+				acc -= b;
+
+				*l_iter++ = acc;
+				b = 1 - (acc >> limb_bits);
+			}
+		} else {
+			for (auto rd: r) {
+				acc_type acc(1);
+				acc <<= limb_bits;
+				acc += *l_iter;
+				acc -= rd;
+				acc -= b;
+
+				*l_iter++ = acc;
+				b = 1 - (acc >> limb_bits);
+			}
 		}
 
-		if (l_iter != l.end()) {
+		if ((sc || b) && (l_iter != l.end())) {
 			acc_type acc(1);
 			acc <<= limb_bits;
 			acc += *l_iter;
 			acc -= sc;
 			acc -= b;
-			*l_iter = acc;
+			*l_iter++ = acc;
 			b = 1 - (acc >> limb_bits);
 		}
 
@@ -301,6 +324,9 @@ struct bigint {
 
 		while (!l.back())
 			l.pop_back();
+
+		if (l.empty())
+			l.push_back(0);
 	}
 
 	template <typename Vector>
@@ -309,22 +335,23 @@ struct bigint {
 		auto denom_sz(
 			denom.size() * limb_bits - yesod::clz(denom.back())
 		);
+		auto num_sz(num.size() * limb_bits - yesod::clz(num.back()));
+
+		if (num_sz < denom_sz)
+			return 0;
+
+		auto order(num_sz - denom_sz);
 		limb_type rv(0);
 
-		while (true) {
-			auto num_sz(
-				num.size() * limb_bits - yesod::clz(num.back())
-			);
-
-			auto order(num_sz - denom_sz);
-			if (!order)
-				break;
-
+		while (order > 1) {
 			subtract_scaled(num, denom, order - 1);
 			rv += limb_type(1) << (order - 1);
+			num_sz = num.size() * limb_bits
+				 - yesod::clz(num.back());
+			order = num_sz - denom_sz;
 		}
 
-		if (compare(num, denom) >= 0) {
+		while (compare(num, denom) >= 0) {
 			subtract_scaled(num, denom, 0);
 			++rv;
 		}
