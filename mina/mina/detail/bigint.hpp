@@ -193,7 +193,6 @@ struct bigint {
 			acc_type acc(l_min[pos]);
 			acc += l_max[pos];
 			acc += c;
-			auto xl(l_min[pos] + l_max[pos] + c);
 			c = acc >> limb_bits;
 			if (limb_type(acc) > r[pos])
 				rv = 1;
@@ -201,7 +200,7 @@ struct bigint {
 				rv = -1;
 		}
 
-		for (++pos; pos < l_max.size(); ++pos) {
+		for (; pos < l_max.size(); ++pos) {
 			auto xl(l_max[pos] + c);
 			c = (l_max[pos] == max_value) && c ? 1 : 0;
 			if (xl > r[pos])
@@ -210,7 +209,7 @@ struct bigint {
 				rv = -1;
 		}
 
-		if (++pos < r.size()) {
+		if (pos < r.size()) {
 			auto xr(r[pos]);
 			if (xr > c)
 				rv = -1;
@@ -340,15 +339,14 @@ struct bigint {
 		if (num_sz < denom_sz)
 			return 0;
 
-		auto order(num_sz - denom_sz);
 		limb_type rv(0);
 
-		while (order > 1) {
+		while (num_sz > (denom_sz + 1)) {
+			auto order(num_sz - denom_sz);
 			subtract_scaled(num, denom, order - 1);
 			rv += limb_type(1) << (order - 1);
 			num_sz = num.size() * limb_bits
 				 - yesod::clz(num.back());
-			order = num_sz - denom_sz;
 		}
 
 		while (compare(num, denom) >= 0) {

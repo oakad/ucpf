@@ -13,7 +13,7 @@
 #include <mina/to_ascii_decimal.hpp>
 #include "float_generator.hpp"
 
-#define CASE_COUNT 100000
+#define CASE_COUNT 10000
 
 namespace std {
 
@@ -102,6 +102,7 @@ BOOST_AUTO_TEST_CASE(to_ascii_decimal2_2)
 
 	std::generate_n(test::null_sink(), CASE_COUNT, [&fg]() -> bool {
 		return fg([](float v) -> bool {
+			std::cerr << "r " << v << std::endl;
 			char buf[40] = {0};
 			char *ptr(buf);
 			to_ascii_decimal(ptr, v);

@@ -1,5 +1,5 @@
 CC=g++
-CXXFLAGS=-std=gnu++1y  -m32 -I.. -I../../yesod -lgmp -lmpfr
+CXXFLAGS+=-std=gnu++1y -I.. -I../../yesod
 
 t5 : t5.cpp
 	$(CC) $(CXXFLAGS) -o $@ $^
@@ -17,4 +17,4 @@ magic_div : magic_div.cpp
 	$(CC) $(CXXFLAGS) -o $@ $^
 
 pow_5 : pow_5.cpp
-	$(CC) $(CXXFLAGS) -o $@ $^
+	$(CC) $(CXXFLAGS) -lmpfr -lgmp -o $@ $^

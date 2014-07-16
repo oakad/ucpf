@@ -294,7 +294,7 @@ struct binary_pow_10 {
 		{0xdd82b7ab5ffc462dull, 0xfdc12e13381e6d80ull, 3362, 1012}
 	}};
 
-	static auto lookup_exp_10(int exp_10)
+	static auto lookup_exp_10(int exp_10) -> entry
 	{
 		constexpr static double inv_log2_10 = 0.30102999566398114;
 		constexpr static int bits = sizeof(T) * 8;

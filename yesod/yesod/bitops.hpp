@@ -16,19 +16,20 @@ namespace ucpf { namespace yesod {
 
 constexpr int clz(uint32_t v)
 {
-	return __builtin_clz(v);
+	return v ? __builtin_clz(v) : 32;
 }
 
 constexpr int clz(uint64_t v)
 {
-	return __builtin_clzll(v);
+	return v ? __builtin_clzll(v) : 64;
 }
 
 constexpr int clz(uint128_t v)
 {
-	return (v >> 64)
-	       ? __builtin_clzll(static_cast<uint64_t>(v >> 64))
-	       : (64 + __builtin_clzll(static_cast<uint64_t>(v)));
+	return v ? (
+		(v >> 64) ? __builtin_clzll(static_cast<uint64_t>(v >> 64))
+			  : (64 + __builtin_clzll(static_cast<uint64_t>(v)))
+	) : 128;
 }
 
 constexpr int fls(uint32_t v)

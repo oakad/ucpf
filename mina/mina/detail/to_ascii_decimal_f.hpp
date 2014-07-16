@@ -312,7 +312,9 @@ struct to_ascii_decimal_f {
 		> bv;
 		std::fill(bv.begin(), bv.end(), 0);
 		int dp(0);
+
 		while (true) {
+			printf("xx %s, %s\n", bigint::to_ascii_hex(num).data(), bigint::to_ascii_hex(denom).data());
 			int32_t digit(bigint::divide_near(num, denom));
 			int bd_test(0);
 			if (xv.m & 1) {
@@ -330,7 +332,7 @@ struct to_ascii_decimal_f {
 					num, bd_high, denom
 				) >= 0 ? 2 : 0;
 			}
-
+			printf("yy %d, %d\n", digit, bd_test);
 			switch (bd_test) {
 			case 0:
 				bv[dp >> 3] |= digit << ((7 - (dp & 7)) << 2);
