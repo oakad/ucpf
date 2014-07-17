@@ -4,7 +4,7 @@
 #include <gmp.h>
 
 using ucpf::mina::to_ascii_decimal;
-using ucpf::mina::test::float_generator;
+using ucpf::mina::test::float_generator_r;
 using ucpf::mina::detail::to_ascii_decimal_f;
 
 void print_flt(float v)
@@ -92,7 +92,7 @@ int main(int argc, char **argv)
 	print_flt(2.20260073e+12);
 	print_dbl(2.20260073e+12);
 */
-	print_dbl(8.517281238612595e+37);
+//	print_dbl(8.517281238612595e+37);
 	print_dbl_s(8.517281238612595e+37);
 /*
 	float_generator<64> fg;

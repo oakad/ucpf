@@ -213,7 +213,8 @@ struct bigint {
 			auto xr(r[pos]);
 			if (xr > c)
 				rv = -1;
-		}
+		} else if (c)
+			rv = 1;
 
 		return rv;
 	}

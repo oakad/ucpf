@@ -19,7 +19,7 @@ namespace ucpf { namespace yesod {
 inline std::pair<uint64_t, uint64_t> multiply(uint64_t x, uint64_t y)
 {
 	int128_t acc(x);
-	x *= y;
+	acc *= y;
 	return std::make_pair(uint64_t(acc), uint64_t(acc >> 64));
 }
 

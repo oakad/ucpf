@@ -15,7 +15,7 @@
 namespace ucpf { namespace mina { namespace test {
 
 template <unsigned int N>
-struct float_generator {
+struct float_generator_r {
 	typedef yesod::float_t<N> wrapper_type;
 	typedef typename wrapper_type::storage_type gen_type;
 	typedef typename wrapper_type::machine_type value_type;
@@ -34,6 +34,38 @@ struct float_generator {
 
 	std::random_device dev;
 	std::uniform_int_distribution<gen_type> dist;
+};
+
+template <unsigned int N>
+struct float_generator_e {
+	typedef yesod::float_t<N> wrapper_type;
+	typedef typename wrapper_type::storage_type gen_type;
+	typedef typename wrapper_type::machine_type value_type;
+	constexpr static uint32_t mantissa_bits
+	= wrapper_type::traits_type::mantissa_bits;
+	constexpr static uint32_t exponent_bits
+	= wrapper_type::traits_type::exponent_bits;
+
+	template <typename Func>
+	auto operator()(Func &&f)
+	-> typename std::result_of<Func(value_type)>::type
+	{
+		while (true) {
+			auto x(wrapper_type(dist(dev)).get_mantissa());
+			x |= gen_type(last_exponent) << (mantissa_bits - 1);
+			++last_exponent;
+			wrapper_type w(x);
+			if (w.is_special()) {
+				last_exponent = 0;
+				continue;
+			}
+			return f(w.get());
+		}
+	}
+
+	std::random_device dev;
+	std::uniform_int_distribution<gen_type> dist;
+	uint32_t last_exponent = 0;
 };
 
 }}}
