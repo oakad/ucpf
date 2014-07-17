@@ -85,6 +85,11 @@ struct bigint {
 	template <typename Vector, typename T>
 	static void assign_scalar(Vector &v, T value, size_t order = 0)
 	{
+		constexpr static int max_shift(
+			sizeof(limb_type) > sizeof(value)
+			? 4 * sizeof(value) : 4 * sizeof(limb_type)
+		);
+
 		size_t bit_pos(0);
 		v.reserve(
 			(yesod::fls(value) + order) / limb_bits  + 1
@@ -100,12 +105,15 @@ struct bigint {
 		v.push_back(x);
 
 		value -= x >> bit_off;
+		value >>= limb_bits - bit_off;
+
 		while (value) {
-			value >>= limb_bits - bit_off;
 			limb_type x(value);
 			v.push_back(x);
-			value -= x;
-			bit_off = limb_bits;
+			/* If value happens to be of same bit size as limb,
+			 * shift by limb_bits will do nothing. */
+			value >>= max_shift;
+			value >>= max_shift;
 		}
 	}
 

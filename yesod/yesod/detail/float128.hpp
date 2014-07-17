@@ -9,11 +9,6 @@
 #if !defined(UCPF_YESOD_DETAIL_FLOAT128_20140713T2300)
 #define UCPF_YESOD_DETAIL_FLOAT128_20140713T2300
 
-namespace ucpf { namespace yesod { namespace detail {
-
-
-}}}
-
 #if defined(_GLIBCXX_USE_FLOAT128)
 #include <quadmath.h>
 

@@ -5,7 +5,7 @@ t5 : t5.cpp
 	$(CC) $(CXXFLAGS) -o $@ $^
 
 t4 : t4.cpp
-	$(CC) $(CXXFLAGS) -o $@ $^
+	$(CC) $(CXXFLAGS) -lquadmath -o $@ $^
 
 t3 : t3.cpp
 	$(CC) $(CXXFLAGS) -o $@ $^

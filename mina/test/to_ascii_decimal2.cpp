@@ -13,7 +13,7 @@
 #include <mina/to_ascii_decimal.hpp>
 #include "float_generator.hpp"
 
-#define CASE_COUNT 100000
+#define CASE_COUNT 100
 
 namespace std {
 
@@ -22,11 +22,11 @@ std::basic_ostream<CharType, TraitsType> &operator<<(
 	std::basic_ostream<CharType, TraitsType> &os, ucpf::yesod::float128 x
 )
 {
-	auto sz(quadmath_snprintf(nullptr, 0, "%Qg", x));
+	auto sz(quadmath_snprintf(nullptr, 0, "%.40Qg", x));
 	if (sz > 0) {
 		char str[sz + 1];
 		str[sz] = 0;
-		quadmath_snprintf(str, sz + 1, "%Qg", x);
+		quadmath_snprintf(str, sz + 1, "%.40Qg", x);
 		for (decltype(sz) c(0); c <= sz; ++c)
 			os << os.widen(str[c]);
 	}
@@ -68,7 +68,7 @@ struct null_sink {
 };
 
 }
-
+#if 0
 BOOST_AUTO_TEST_CASE(to_ascii_decimal2_2)
 {
 	test::float_generator_r<32> fg_r;
@@ -174,10 +174,11 @@ BOOST_AUTO_TEST_CASE(to_ascii_decimal2_3)
 		});
 	});
 }
-#if 0
+#endif
+#if 1
 BOOST_AUTO_TEST_CASE(to_ascii_decimal2_4)
 {
-	test::float_generator<128> fg;
+	test::float_generator_r<128> fg_r;
 	{
 		char buf[40] = {0};
 		char *ptr(buf);
@@ -211,8 +212,8 @@ BOOST_AUTO_TEST_CASE(to_ascii_decimal2_4)
 		);
 	}
 
-	std::generate_n(test::null_sink(), CASE_COUNT, [&fg]() -> bool {
-		return fg([](yesod::float128 v) -> bool {
+	std::generate_n(test::null_sink(), CASE_COUNT, [&fg_r]() -> bool {
+		return fg_r([](yesod::float128 v) -> bool {
 			char buf[80] = {0};
 			char *ptr(buf);
 			to_ascii_decimal(ptr, v);

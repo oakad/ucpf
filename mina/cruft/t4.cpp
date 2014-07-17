@@ -1,11 +1,32 @@
 #include <mina/to_ascii_decimal.hpp>
 #include <test/float_generator.hpp>
 
-#include <gmp.h>
+#include <iostream>
 
 using ucpf::mina::to_ascii_decimal;
 using ucpf::mina::test::float_generator_r;
 using ucpf::mina::detail::to_ascii_decimal_f;
+using ucpf::yesod::float128;
+
+namespace std {
+
+template <typename CharType, typename TraitsType>
+std::basic_ostream<CharType, TraitsType> &operator<<(
+	std::basic_ostream<CharType, TraitsType> &os, ucpf::yesod::float128 x
+)
+{
+	auto sz(quadmath_snprintf(nullptr, 0, "%.40Qg", x));
+	if (sz > 0) {
+		char str[sz + 1];
+		str[sz] = 0;
+		quadmath_snprintf(str, sz + 1, "%.40Qg", x);
+		for (decltype(sz) c(0); c <= sz; ++c)
+			os << os.widen(str[c]);
+	}
+	return os;
+}
+
+}
 
 void print_flt(float v)
 {
@@ -52,6 +73,30 @@ void print_dbl_s(double v)
 	printf("^^^ imp: %s\n", buf);
 }
 
+void print_flt128(float128 v)
+{
+	char buf[120] = {0};
+	char *ptr(buf);
+	to_ascii_decimal_f<float128>(ptr, v, std::allocator<void>());
+	auto xv(strtoflt128(buf, nullptr));
+	std::cout << "--- std: " << v << '(' << xv << "), "
+		  << (v == xv) << '\n';
+	printf("^^^ imp: %s\n", buf);
+}
+
+void print_flt128_s(float128 v)
+{
+	char buf[120] = {0};
+	char *ptr(buf);
+	to_ascii_decimal_f<float128>::bigint_convert(
+		ptr, v, std::allocator<void>()
+	);
+	auto xv(strtoflt128(buf, nullptr));
+	std::cout << "--- std: " << v << '(' << xv << "), "
+		  << (v == xv) << '\n';
+	printf("^^^ imp: %s\n", buf);
+}
+/*
 void test_mul()
 {
 	uint64_t xm(3298753947549ull);
@@ -82,7 +127,7 @@ void test_mul()
 		mv[3], mv[2], mv[1], mv[0]
 	);
 };
-
+*/
 int main(int argc, char **argv)
 {
 /*
@@ -93,7 +138,16 @@ int main(int argc, char **argv)
 	print_dbl(2.20260073e+12);
 */
 //	print_dbl(8.517281238612595e+37);
-	print_dbl_s(8.517281238612595e+37);
+//	print_dbl_s(8.517281238612595e+37);
+	uint8_t rr[] = {
+		0xaa, 0x34, 0x72, 0x1a, 0x08, 0x3b, 0x2b, 0x84,
+		0xf8, 0x8d, 0x58, 0xb0, 0x6d, 0xb1, 0x4b, 0x51
+	};
+//	auto x(reinterpret_cast<float128 *>(rr));
+//	std::cout << *x << '\n';
+//	print_flt128_s(*x);
+	print_flt128_s(1.299156547977642741607182298748798609224e-372Q);
+	print_flt128(1.299156547977642741607182298748798609224e-372Q);
 /*
 	float_generator<64> fg;
 	fg([](double v) -> bool {
