@@ -27,8 +27,8 @@ constexpr int clz(uint64_t v)
 constexpr int clz(uint128_t v)
 {
 	return v ? (
-		(v >> 64) ? __builtin_clzll(static_cast<uint64_t>(v >> 64))
-			  : (64 + __builtin_clzll(static_cast<uint64_t>(v)))
+		(v >> 64u) ? __builtin_clzll(static_cast<uint64_t>(v >> 64u))
+			   : (64 + __builtin_clzll(static_cast<uint64_t>(v)))
 	) : 128;
 }
 
@@ -67,7 +67,7 @@ constexpr int ffs(uint128_t v)
 {
 	return static_cast<uint64_t>(v)
 	       ? ffs(static_cast<uint64_t>(v))
-	       : (ffs(static_cast<uint64_t>(v >> 64)) + 64);
+	       : (ffs(static_cast<uint64_t>(v >> 64u)) + 64);
 }
 
 constexpr int popcount(uint32_t v)
@@ -82,26 +82,26 @@ constexpr int popcount(uint64_t v)
 
 constexpr int popcount(uint128_t v)
 {
-	return __builtin_popcountll(static_cast<uint64_t>(v >> 64))
+	return __builtin_popcountll(static_cast<uint64_t>(v >> 64u))
 	       + __builtin_popcountll(static_cast<uint64_t>(v));
 }
 
-constexpr uint32_t shiftr(uint32_t v, int c)
+constexpr uint32_t shiftr(uint32_t v, unsigned int c)
 {
 	return c < 32 ? v >> c : uint32_t(0);
 }
 
-constexpr uint64_t shiftr(uint64_t v, int c)
+constexpr uint64_t shiftr(uint64_t v, unsigned int c)
 {
 	return c < 64 ? v >> c : uint64_t(0);
 }
 
-constexpr uint128_t shiftr(uint128_t v, int c)
+constexpr uint128_t shiftr(uint128_t v, unsigned int c)
 {
 	return c < 128 ? v >> c : uint128_t(0);
 }
 
-constexpr uint32_t rotl(uint32_t v, int c)
+constexpr uint32_t rotl(uint32_t v, unsigned int c)
 {
 	return (v << c) | (v >> (32 - c));
 }

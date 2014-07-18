@@ -27,6 +27,25 @@ constexpr int small_power_10_estimate(int order_2)
 	return (order_2 * 1233) >> 12;
 }
 
+inline uint32_t divide_near(uint32_t &num, uint64_t denom)
+{
+	auto rv(num / uint32_t(denom));
+	num %= uint32_t(denom);
+	return rv;
+}
+
+inline uint32_t divide_near(uint64_t &num, uint64_t denom)
+{
+	auto rv(num / denom);
+	num %= denom;
+	return rv;
+}
+
+inline uint32_t divide_near(uint128_t &num, uint64_t denom)
+{
+	return yesod::detail::divide_near(num, denom);
+}
+
 template <unsigned int N>
 struct bigint_calc_traits;
 

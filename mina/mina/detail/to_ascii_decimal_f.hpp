@@ -145,11 +145,11 @@ struct float_t {
 		= wrapper_type::traits_type::mantissa_bits
 		  + wrapper_type::traits_type::exponent_bias;
 
-		float_t high((m << 1) + 1, exp - 1);
+		float_t high((m << 1u) + 1, exp - 1);
 		high.normalize();
-		float_t low((m << 1) - 1, exp - 1);
+		float_t low((m << 1u) - 1, exp - 1);
 		if (!m && (exp != exponent_bias)) {
-			low.m = (m << 2) - 1;
+			low.m = (m << 2u) - 1;
 			low.exp = exp - 2;
 		}
 		low.m <<= low.exp - high.exp;
@@ -173,7 +173,7 @@ auto float_t<32>::operator*(float_t other) const -> float_t
 {
 	uint64_t acc(m);
 	acc *= other.m;
-	acc += 1ull << 31; /* rounding */
+	acc += uint64_t(1) << 31u; /* rounding */
 	return float_t(
 		uint32_t(acc >> 32), exp + other.exp + 32
 	);
@@ -182,8 +182,8 @@ auto float_t<32>::operator*(float_t other) const -> float_t
 template <>
 auto float_t<64>::operator*(float_t other) const -> float_t
 {
-	auto rv(yesod::multiply(m, other.m));
-	rv.second += rv.first >> 63; /* rounding */
+	auto rv(yesod::detail::multiply(m, other.m));
+	rv.second += rv.first >> 63u; /* rounding */
 	return float_t(
 		rv.second, exp + other.exp + 64
 	);
@@ -192,8 +192,8 @@ auto float_t<64>::operator*(float_t other) const -> float_t
 template <>
 auto float_t<128>::operator*(float_t other) const -> float_t
 {
-	auto rv(yesod::multiply(m, other.m));
-	rv.second += rv.first >> 127; /* rounding */
+	auto rv(yesod::detail::multiply(m, other.m));
+	rv.second += rv.first >> 127u; /* rounding */
 	return float_t(
 		rv.second, exp + other.exp + 128
 	);
@@ -288,7 +288,7 @@ struct to_ascii_decimal_f {
 			bigint::shift_left(bd_high, extra_shift);
 
 		bool in_range(false);
-		if (xv.m & 1)
+		if (xv.m & 1u)
 			in_range = bigint::compare_sum(
 				num, bd_high, denom
 			) > 0;
@@ -319,7 +319,7 @@ struct to_ascii_decimal_f {
 		while (true) {
 			int32_t digit(bigint::divide_near(num, denom));
 			int bd_test(0);
-			if (xv.m & 1) {
+			if (xv.m & 1u) {
 				bd_test |= bigint::compare(
 					num, bd_low
 				) < 0 ? 1 : 0;
@@ -494,20 +494,20 @@ struct to_ascii_decimal_f {
 		auto x_exp(small_power_10_estimate(
 			wrapper_type::bit_size + unity.exp + 1
 		));
+
 		if (integral < small_power_10[x_exp])
 			--x_exp;
 
 		auto exponent(std::make_pair(
-			small_power_10[x_exp], x_exp + 1)
-		);
+			small_power_10[x_exp], x_exp + 1
+		));
 
 		std::array<uint32_t, traits_type::decimal_limb_count> bv;
 		std::fill(bv.begin(), bv.end(), 0);
 		int dp(0);
 		storage_type scale(1);
 		while (exponent.second > 0) {
-			uint32_t digit(integral / exponent.first);
-			integral %= exponent.first;
+			uint32_t digit(divide_near(integral, exponent.first));
 			--exponent.second;
 			auto remainder((integral << (-unity.exp)) + fractional);
 

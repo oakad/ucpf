@@ -136,7 +136,7 @@ struct float_t {
 	int32_t get_exponent_value() const
 	{
 		return static_cast<int32_t>(
-			get_exponent() ? get_exponent() : 1
+			get_exponent() ? get_exponent() : storage_type(1)
 		) - traits_type::exponent_bias;
 	}
 
@@ -178,6 +178,9 @@ private:
 		storage_type storable;
 	};
 };
+
+template <unsigned int N>
+constexpr typename float_t<N>::storage_type float_t<N>::exponent_mask;
 
 namespace detail {
 

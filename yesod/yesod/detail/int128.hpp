@@ -10,13 +10,13 @@
 #define UCPF_YESOD_DETAIL_INT128_20140709T2300
 
 #include <cstdint>
-
+#include <cstdio>
 #if defined(_GLIBCXX_USE_INT128)
 
 typedef __int128 int128_t;
 typedef unsigned __int128 uint128_t;
 
-namespace ucpf { namespace yesod {
+namespace ucpf { namespace yesod { namespace detail {
 
 inline std::pair<uint64_t, uint64_t> multiply(uint64_t l, uint64_t r)
 {
@@ -49,11 +49,18 @@ inline std::pair<uint128_t, uint128_t> multiply(uint128_t l, uint128_t r)
 	return rv;
 }
 
-}}
+inline uint32_t divide_near(uint128_t &num, uint64_t denom)
+{
+	auto rv(num / denom);
+	num %= denom;
+	return rv;
+}
+
+}}}
 
 #else
 
-namespace ucpf { namespace yesod {
+namespace ucpf { namespace yesod { namespace detail {
 
 inline std::pair<uint64_t, uint64_t> multiply(uint64_t l, uint64_t r)
 {
@@ -79,7 +86,7 @@ inline std::pair<uint64_t, uint64_t> multiply(uint64_t l, uint64_t r)
 	return rv;
 }
 
-}}
+}}}
 
 struct [[gnu::packed]] int128_t {
 	uint64_t v[2];
@@ -89,7 +96,7 @@ struct [[gnu::packed]] int128_t {
 	{}
 
 	constexpr int128_t(int64_t other)
-	: v{other, other >= 0 ? uint64_t(0) : ~uint64_t(0)}
+	: v{uint64_t(other), other >= 0 ? uint64_t(0) : ~uint64_t(0)}
 	{}
 };
 
@@ -112,22 +119,56 @@ struct [[gnu::packed]] uint128_t {
 	: v{other.first, other.second}
 	{}
 
-	constexpr uint128_t operator>>(int shift) const
+	constexpr uint128_t operator>>(unsigned int shift) const
 	{
 		return (shift & 0x40)
 		       ? uint128_t{v[1] >> (shift & 0x3f), 0}
 		       : uint128_t{
 				(v[0] >> (shift & 0x3f))
-				| v[1] << (0x80 - (shift & 0x3f)),
+				| (v[1] << (0x80 - (shift & 0x3f))),
 				v[1] >> (shift & 0x3f)
 			};
 	}
 
-	uint128_t operator+(uint64_t other) const
+	constexpr uint128_t operator<<(unsigned int shift) const
 	{
-		auto xl(v[0] + other);
-		auto c(((v[0] & other) | ((v[0] | other) & ~xl)) >> 63);
-		return uint128_t(xl, v[1] + c);
+		return (shift & 0x40)
+		       ? uint128_t{0, v[0] << (shift & 0x3f)}
+		       : uint128_t{
+			       v[0] << (shift & 0x3f),
+			       (v[0] >> (0x80 - (shift & 0x3f)))
+			       | (v[1] << (shift & 0x3f))
+			};
+	}
+
+	constexpr uint128_t operator>>(int shift) const
+	{
+		return (shift >= 0)
+		       ? *this >> (unsigned int)shift
+		       : *this << (unsigned int)-shift;
+	}
+
+	constexpr uint128_t operator<<(int shift) const
+	{
+		return (shift >= 0)
+		       ? *this << (unsigned int)shift
+		       : *this >> (unsigned int)-shift;
+	}
+
+	constexpr uint128_t operator+(int other) const
+	{
+		return (other >= 0)
+		       ? *this + uint64_t(other)
+		       : *this - uint64_t(-other);
+	}
+
+	constexpr uint128_t operator+(uint64_t other) const
+	{
+		return (
+			other <= ((~uint64_t(0)) - v[0])
+		) ? uint128_t(v[0] + other, v[1]) : uint128_t(
+			other - ((~uint64_t(0)) - v[0]) - 1, v[1] + 1
+		);
 	}
 
 	uint128_t operator+(uint128_t other) const
@@ -139,11 +180,20 @@ struct [[gnu::packed]] uint128_t {
 		return uint128_t(xl, v[1] + other.v[1] + c);
 	}
 
-	uint128_t operator-(uint64_t other) const
+	constexpr uint128_t operator-(int other) const
 	{
-		auto xl(v[0] - other);
-		auto c(((~v[0] & other) | ((~v[0] | other) & xl)) >> 63);
-		return uint128_t(xl, v[1] - c);
+		return (other >= 0)
+		       ? *this - uint64_t(other)
+		       : *this + uint64_t(-other);
+	}
+
+	constexpr uint128_t operator-(uint64_t other) const
+	{
+		return (
+			other <= v[0]
+		) ? uint128_t(v[0] - other, v[1]) : uint128_t(
+			(~uint64_t(0)) - (other - v[0]) + 1, v[1] - 1
+		);
 	}
 
 	uint128_t operator-(uint128_t other) const
@@ -155,12 +205,55 @@ struct [[gnu::packed]] uint128_t {
 		return uint128_t(xl, v[1] - other.v[1] - c);
 	}
 
+	uint128_t operator&(uint32_t other) const
+	{
+		return uint128_t(v[0] & other, 0);
+	}
+
+	uint128_t operator&(uint128_t other) const
+	{
+		return uint128_t(v[0] & other.v[0], v[1] & other.v[1]);
+	}
+
+	constexpr bool operator<(uint64_t other) const
+	{
+		return v[1] ? true : (v[0] > other);
+	}
+
+	constexpr bool operator<(uint128_t other) const
+	{
+		return v[1] == other.v[1]
+		       ? (v[0] > other.v[0]) : (v[1] > other.v[1]);
+	}
+
 	constexpr operator uint64_t() const
 	{
 		return v[0];
 	}
 
-	uint128_t &operator<<=(int shift)
+	uint128_t &operator++()
+	{
+		if (~v[0])
+			++v[0];
+		else {
+			v[0] = ~v[0];
+			++v[1];
+		}
+		return *this;
+	}
+
+	uint128_t &operator--()
+	{
+		if (v[0])
+			--v[0];
+		else {
+			v[0] = ~v[0];
+			--v[1];
+		}
+		return *this;
+	}
+
+	uint128_t &operator<<=(unsigned int shift)
 	{
 		if (shift & 0x40) {
 			v[1] = v[0] << (shift & 0x3f);
@@ -169,6 +262,19 @@ struct [[gnu::packed]] uint128_t {
 			v[1] <<= shift & 0x3f;
 			v[1] |= v[0] >> (0x80 - (shift & 0x3f));
 			v[0] <<= shift & 0x3f;
+		}
+		return *this;
+	}
+
+	uint128_t &operator>>=(unsigned int shift)
+	{
+		if (shift & 0x40) {
+			v[0] = v[1] >> (shift & 0x3f);
+			v[1] = 0;
+		} else {
+			v[0] >>= shift & 0x3f;
+			v[0] |= v[1] << (0x80 - (shift & 0x3f));
+			v[1] >>= shift & 0x3f;
 		}
 		return *this;
 	}
@@ -188,17 +294,45 @@ struct [[gnu::packed]] uint128_t {
 		return *this;
 	}
 
+	uint128_t &operator+=(uint128_t other)
+	{
+		auto xl(v[0] + other.v[0]);
+		auto c((
+			(v[0] & other.v[0]) | ((v[0] | other.v[0]) & ~xl)
+		) >> 63);
+		v[0] = xl;
+		v[1] += c;
+		v[1] += other.v[1];
+		return *this;
+	}
+
+	uint128_t &operator-=(uint64_t other)
+	{
+		auto xl(v[0] - other);
+		auto c(((~v[0] & other) | ((~v[0] | other) & xl)) >> 63);
+		v[0] = xl;
+		v[1] -= c;
+		return *this;
+	}
+
 	uint128_t &operator*=(uint64_t other)
 	{
-		auto acc_l(ucpf::yesod::multiply(v[0], other));
+		auto acc_l(ucpf::yesod::detail::multiply(v[0], other));
 		v[0] = acc_l.first;
-		auto acc_h(ucpf::yesod::multiply(v[1], other));
+		auto acc_h(ucpf::yesod::detail::multiply(v[1], other));
 		v[1] = acc_h.first + acc_l.second;
+		return *this;
+	}
+
+	uint128_t &operator&=(uint128_t other)
+	{
+		v[0] &= other.v[0];
+		v[1] &= other.v[1];
 		return *this;
 	}
 };
 
-namespace ucpf { namespace yesod {
+namespace ucpf { namespace yesod { namespace detail {
 
 inline std::pair<uint128_t, uint128_t> multiply(uint128_t l, uint128_t r)
 {
@@ -208,25 +342,56 @@ inline std::pair<uint128_t, uint128_t> multiply(uint128_t l, uint128_t r)
 		auto n_pos(m_pos);
 		uint64_t c(0);
 		for (int lc(0); lc < 2; ++lc) {
-			uint128_t acc(r[rc]);
-			acc *= l[lc];
+			uint128_t acc(r.v[rc]);
+			acc *= l.v[lc];
 			acc += m[n_pos];
 			acc += c;
-			c = acc[1];
-			m[n_pos++] = acc[0];
+			c = acc.v[1];
+			m[n_pos++] = acc.v[0];
 		}
 		m[n_pos] = c;
 		++m_pos;
 	}
-	std::pair<uint128_t, uint128_t> rv;
-	rv.first[0] = m[0];
-	rv.first[1] = m[1];
-	rv.second[2] = m[2];
-	rv.second[3] = m[3];
-	return rv;
+
+	return std::make_pair(uint128_t(m[0], m[1]), uint128_t(m[2], m[3]));
 }
 
-}}
+inline uint32_t divide_near(uint128_t &num, uint64_t denom)
+{
+	auto denom_sz(64 - __builtin_clzll(denom));
+	uint32_t rv(0);
+
+	while (true) {
+		if (!num.v[1]) {
+			rv += num.v[0] / denom;
+			num.v[0] %= denom;
+			return rv;
+		}
+
+		auto num_sz(128 - __builtin_clzll(num.v[1]));
+		if (num_sz <= (denom_sz + 1)) {
+			while (num.v[1] || (num.v[0] >= denom)) {
+				num -= denom;
+				++rv;
+			}
+			return rv;
+		}
+
+		auto order(num_sz - denom_sz - 1);
+		auto ol(denom << order);
+		auto oh(denom >> (64 - order));
+		if (ol <= num.v[0]) {
+			num.v[0] -= ol;
+			num.v[1] -= oh;
+		} else {
+			num.v[0] = (~uint64_t(0)) - (ol - num.v[0]) + 1;
+			num.v[1] -= oh + 1;
+		}
+		rv += uint32_t(1) << order;
+	}
+}
+
+}}}
 
 #endif
 

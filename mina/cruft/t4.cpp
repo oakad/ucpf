@@ -27,7 +27,7 @@ std::basic_ostream<CharType, TraitsType> &operator<<(
 }
 
 }
-
+#if 0
 void print_flt(float v)
 {
 	char buf[80] = {0};
@@ -72,7 +72,7 @@ void print_dbl_s(double v)
 	printf("--- std: %e (%e), %d\n", v, xv, v == xv);
 	printf("^^^ imp: %s\n", buf);
 }
-
+#endif
 void print_flt128(float128 v)
 {
 	char buf[120] = {0};
