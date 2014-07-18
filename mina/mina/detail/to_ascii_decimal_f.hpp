@@ -91,6 +91,9 @@ void bcd_to_ascii_f(
 		if (exp >= 0) {
 			*sink++ = '+';
 			exp += length - 1;
+		} else if (dot_pos > 0) {
+			*sink++ = '+';
+			exp = length + exp - 1;
 		} else {
 			*sink++ = '-';
 			exp = -exp;
@@ -215,7 +218,7 @@ struct to_ascii_decimal_f_traits<double> {
 
 template <>
 struct to_ascii_decimal_f_traits<yesod::float128> {
-	constexpr static int minimal_target_exp = -120;
+	constexpr static int minimal_target_exp = -124;
 	constexpr static int decimal_limb_count = 5;
 	constexpr static int mantissa_bits = 113;
 };

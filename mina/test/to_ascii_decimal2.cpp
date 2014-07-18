@@ -13,7 +13,7 @@
 #include <mina/to_ascii_decimal.hpp>
 #include "float_generator.hpp"
 
-#define CASE_COUNT 100
+#define CASE_COUNT 100000
 
 namespace std {
 
@@ -68,7 +68,7 @@ struct null_sink {
 };
 
 }
-#if 0
+
 BOOST_AUTO_TEST_CASE(to_ascii_decimal2_2)
 {
 	test::float_generator_r<32> fg_r;
@@ -174,11 +174,11 @@ BOOST_AUTO_TEST_CASE(to_ascii_decimal2_3)
 		});
 	});
 }
-#endif
-#if 1
+
 BOOST_AUTO_TEST_CASE(to_ascii_decimal2_4)
 {
 	test::float_generator_r<128> fg_r;
+	test::float_generator_e<128> fg_e;
 	{
 		char buf[40] = {0};
 		char *ptr(buf);
@@ -222,6 +222,16 @@ BOOST_AUTO_TEST_CASE(to_ascii_decimal2_4)
 			return v == xv;
 		});
 	});
+	std::generate_n(test::null_sink(), CASE_COUNT, [&fg_e]() -> bool {
+		return fg_e([](yesod::float128 v) -> bool {
+			char buf[80] = {0};
+			char *ptr(buf);
+			to_ascii_decimal(ptr, v);
+			auto xv(strtoflt128(buf, nullptr));
+			BOOST_CHECK_EQUAL(v, xv);
+			return v == xv;
+		});
+	});
 }
-#endif
+
 }}
