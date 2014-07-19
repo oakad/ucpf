@@ -119,114 +119,17 @@ struct [[gnu::packed]] uint128_t {
 	: v{other.first, other.second}
 	{}
 
-	constexpr uint128_t operator>>(unsigned int shift) const
+	constexpr explicit operator bool() const
 	{
-		return (shift & 0x40)
-		       ? uint128_t{v[1] >> (shift & 0x3f), 0}
-		       : uint128_t{
-				(v[0] >> (shift & 0x3f))
-				| (v[1] << (0x80 - (shift & 0x3f))),
-				v[1] >> (shift & 0x3f)
-			};
+		return v[0] || v[1];
 	}
 
-	constexpr uint128_t operator<<(unsigned int shift) const
+	constexpr explicit operator uint32_t() const
 	{
-		return (shift & 0x40)
-		       ? uint128_t{0, v[0] << (shift & 0x3f)}
-		       : uint128_t{
-			       v[0] << (shift & 0x3f),
-			       (v[0] >> (0x80 - (shift & 0x3f)))
-			       | (v[1] << (shift & 0x3f))
-			};
+		return v[0];
 	}
 
-	constexpr uint128_t operator>>(int shift) const
-	{
-		return (shift >= 0)
-		       ? *this >> (unsigned int)shift
-		       : *this << (unsigned int)-shift;
-	}
-
-	constexpr uint128_t operator<<(int shift) const
-	{
-		return (shift >= 0)
-		       ? *this << (unsigned int)shift
-		       : *this >> (unsigned int)-shift;
-	}
-
-	constexpr uint128_t operator+(int other) const
-	{
-		return (other >= 0)
-		       ? *this + uint64_t(other)
-		       : *this - uint64_t(-other);
-	}
-
-	constexpr uint128_t operator+(uint64_t other) const
-	{
-		return (
-			other <= ((~uint64_t(0)) - v[0])
-		) ? uint128_t(v[0] + other, v[1]) : uint128_t(
-			other - ((~uint64_t(0)) - v[0]) - 1, v[1] + 1
-		);
-	}
-
-	uint128_t operator+(uint128_t other) const
-	{
-		auto xl(v[0] + other.v[0]);
-		auto c((
-			(v[0] & other.v[0]) | ((v[0] | other.v[0]) & ~xl)
-		) >> 63);
-		return uint128_t(xl, v[1] + other.v[1] + c);
-	}
-
-	constexpr uint128_t operator-(int other) const
-	{
-		return (other >= 0)
-		       ? *this - uint64_t(other)
-		       : *this + uint64_t(-other);
-	}
-
-	constexpr uint128_t operator-(uint64_t other) const
-	{
-		return (
-			other <= v[0]
-		) ? uint128_t(v[0] - other, v[1]) : uint128_t(
-			(~uint64_t(0)) - (other - v[0]) + 1, v[1] - 1
-		);
-	}
-
-	uint128_t operator-(uint128_t other) const
-	{
-		auto xl(v[0] - other.v[0]);
-		auto c((
-			(~v[0] & other.v[0]) | ((~v[0] | other.v[0]) & xl)
-		) >> 63);
-		return uint128_t(xl, v[1] - other.v[1] - c);
-	}
-
-	uint128_t operator&(uint32_t other) const
-	{
-		return uint128_t(v[0] & other, 0);
-	}
-
-	uint128_t operator&(uint128_t other) const
-	{
-		return uint128_t(v[0] & other.v[0], v[1] & other.v[1]);
-	}
-
-	constexpr bool operator<(uint64_t other) const
-	{
-		return v[1] ? true : (v[0] > other);
-	}
-
-	constexpr bool operator<(uint128_t other) const
-	{
-		return v[1] == other.v[1]
-		       ? (v[0] > other.v[0]) : (v[1] > other.v[1]);
-	}
-
-	constexpr operator uint64_t() const
+	constexpr explicit operator uint64_t() const
 	{
 		return v[0];
 	}
@@ -253,65 +156,50 @@ struct [[gnu::packed]] uint128_t {
 		return *this;
 	}
 
-	uint128_t &operator<<=(unsigned int shift)
-	{
-		if (shift & 0x40) {
-			v[1] = v[0] << (shift & 0x3f);
-			v[0] = 0;
-		} else {
-			v[1] <<= shift & 0x3f;
-			v[1] |= v[0] >> (0x80 - (shift & 0x3f));
-			v[0] <<= shift & 0x3f;
-		}
-		return *this;
-	}
-
-	uint128_t &operator>>=(unsigned int shift)
-	{
-		if (shift & 0x40) {
-			v[0] = v[1] >> (shift & 0x3f);
-			v[1] = 0;
-		} else {
-			v[0] >>= shift & 0x3f;
-			v[0] |= v[1] << (0x80 - (shift & 0x3f));
-			v[1] >>= shift & 0x3f;
-		}
-		return *this;
-	}
-
 	uint128_t &operator|=(uint64_t other)
 	{
 		v[0] |= other;
 		return *this;
 	}
 
+	uint128_t &operator&=(uint128_t other)
+	{
+		v[0] &= other.v[0];
+		v[1] &= other.v[1];
+		return *this;
+	}
+
 	uint128_t &operator+=(uint64_t other)
 	{
-		auto xl(v[0] + other);
-		auto c(((v[0] & other) | ((v[0] | other) & ~xl)) >> 63);
-		v[0] = xl;
-		v[1] += c;
+		if ((~uint64_t(0) - v[0]) >= other)
+			v[0] += other;
+		else {
+			v[0] = other - (~uint64_t(0) - v[0]) - 1;
+			++v[1];
+		}
 		return *this;
 	}
 
 	uint128_t &operator+=(uint128_t other)
 	{
-		auto xl(v[0] + other.v[0]);
-		auto c((
-			(v[0] & other.v[0]) | ((v[0] | other.v[0]) & ~xl)
-		) >> 63);
-		v[0] = xl;
-		v[1] += c;
-		v[1] += other.v[1];
+		if ((~uint64_t(0) - v[0]) <= other.v[0]) {
+			v[0] += other.v[0];
+			v[1] += other.v[1];
+		} else {
+			v[0] = other.v[0] - (~uint64_t(0) - v[0]) - 1;
+			v[1] += other.v[1] + 1;
+		}
 		return *this;
 	}
 
 	uint128_t &operator-=(uint64_t other)
 	{
-		auto xl(v[0] - other);
-		auto c(((~v[0] & other) | ((~v[0] | other) & xl)) >> 63);
-		v[0] = xl;
-		v[1] -= c;
+		if (v[0] >= other)
+			v[0] -= other;
+		else {
+			v[0] = ~uint64_t(0) - (other - v[0]) + 1;
+			--v[1];
+		}
 		return *this;
 	}
 
@@ -324,11 +212,133 @@ struct [[gnu::packed]] uint128_t {
 		return *this;
 	}
 
-	uint128_t &operator&=(uint128_t other)
+	uint128_t &operator<<=(uint32_t shift)
 	{
-		v[0] &= other.v[0];
-		v[1] &= other.v[1];
+		if (shift & 0x40) {
+			v[1] = v[0] << (shift & 0x3f);
+			v[0] = 0;
+		} else {
+			v[1] <<= shift & 0x3f;
+			v[1] |= v[0] >> (0x40 - (shift & 0x3f));
+			v[0] <<= shift & 0x3f;
+		}
 		return *this;
+	}
+
+	uint128_t &operator>>=(uint32_t shift)
+	{
+		if (shift & 0x40) {
+			v[0] = v[1] >> (shift & 0x3f);
+			v[1] = 0;
+		} else {
+			v[0] >>= shift & 0x3f;
+			v[0] |= v[1] << (0x40 - (shift & 0x3f));
+			v[1] >>= shift & 0x3f;
+		}
+		return *this;
+	}
+
+	constexpr uint128_t operator&(uint128_t other) const
+	{
+		return uint128_t(v[0] & other.v[0], v[1] & other.v[1]);
+	}
+
+	constexpr uint128_t operator+(uint128_t other) const
+	{
+		return ((~uint64_t(0) - v[0]) >= other.v[0]) ? uint128_t(
+			v[0] + other.v[0], v[1] + other.v[1]
+		) : uint128_t(
+			other.v[0] - (~uint64_t(0) - v[0]) - 1,
+			v[1] + other.v[1] + 1
+		);
+	}
+
+	constexpr uint128_t operator-(uint64_t other) const
+	{
+		return (v[0] >= other) ? uint128_t(
+			v[0] - other, v[1]
+		) : uint128_t(
+			~uint64_t(0) - (other - v[0]) + 1, v[1] - 1
+		);
+	}
+
+	constexpr uint128_t operator-(uint128_t other) const
+	{
+		return (v[0] >= other.v[0]) ? uint128_t(
+			v[0] - other.v[0], v[1] - other.v[1]
+		) : uint128_t(
+			~uint64_t(0) - (other.v[0] - v[0]) + 1,
+			v[1] - other.v[1] - 1
+		);
+	}
+
+	uint128_t operator*(uint64_t other) const
+	{
+		auto acc_l(ucpf::yesod::detail::multiply(v[0], other));
+		auto acc_h(ucpf::yesod::detail::multiply(v[1], other));
+		return uint128_t(acc_l.first, acc_h.first + acc_l.second);
+	}
+
+	uint128_t operator*(uint128_t other) const;
+
+	constexpr uint128_t operator<<(uint32_t shift) const
+	{
+		return (shift & 0x40) ? uint128_t(
+			0, v[0] << (shift & 0x3f)
+		) : uint128_t(
+			v[0] << (shift & 0x3f),
+			(v[0] >> (0x40 - (shift & 0x3f)))
+			| v[1] << (shift & 0x3f)
+		);
+	}
+
+	constexpr uint128_t operator>>(uint32_t shift) const
+	{
+		return (shift & 0x40) ? uint128_t(
+			v[1] >> (shift & 0x3f), 0
+		) : uint128_t(
+			(v[0] >> (shift & 0x3f))
+			| (v[1] << (0x40 - (shift & 0x3f))),
+			v[1] >> (shift & 0x3f)
+		);
+	}
+
+	constexpr bool operator==(uint128_t other) const
+	{
+		return (v[0] == other.v[0]) && (v[1] == other.v[1]);
+	}
+
+	constexpr bool operator<(uint64_t other) const
+	{
+		return (!v[1]) && (v[0] < other);
+	}
+
+	constexpr bool operator<(uint128_t other) const
+	{
+		return (v[1] == other.v[1]) ? (
+			v[0] < other.v[0]
+		) : (v[1] < other.v[1]);
+	}
+
+	constexpr bool operator<=(uint128_t other) const
+	{
+		return (v[1] == other.v[1]) ? (
+			v[0] <= other.v[0]
+		) : (v[1] < other.v[1]);
+	}
+
+	constexpr bool operator>(uint128_t other) const
+	{
+		return (v[1] == other.v[1]) ? (
+			v[0] > other.v[0]
+		) : (v[1] > other.v[1]);
+	}
+
+	constexpr bool operator>=(uint128_t other) const
+	{
+		return (v[1] == other.v[1]) ? (
+			v[0] >= other.v[0]
+		) : (v[1] > other.v[1]);
 	}
 };
 
@@ -392,6 +402,11 @@ inline uint32_t divide_near(uint128_t &num, uint64_t denom)
 }
 
 }}}
+
+inline uint128_t uint128_t::operator*(uint128_t other) const
+{
+	return ucpf::yesod::detail::multiply(*this, other).first;
+}
 
 #endif
 

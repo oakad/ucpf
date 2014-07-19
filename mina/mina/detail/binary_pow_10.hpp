@@ -316,7 +316,7 @@ binary_pow_10<uint32_t>::entry::entry(
 	binary_pow_10<uint32_t>::u_entry const &e
 ) : m(e.m_high >> 32), exp_2(e.exp_2 - 32), exp_5(e.exp_5)
 {
-	constexpr static uint64_t round_mask = 1ull << 31;
+	constexpr static uint64_t round_mask = uint64_t(1) << 31;
 
 	if (e.m_high & round_mask)
 		m += 1;
@@ -327,7 +327,7 @@ binary_pow_10<uint64_t>::entry::entry(
 	binary_pow_10<uint64_t>::u_entry const &e
 ) : m(e.m_high), exp_2(e.exp_2 - 64), exp_5(e.exp_5)
 {
-	constexpr static uint64_t round_mask = 1ull << 63;
+	constexpr static uint64_t round_mask = uint64_t(1) << 63;
 
 	if (e.m_low & round_mask)
 		m += 1;
@@ -338,7 +338,7 @@ binary_pow_10<uint128_t>::entry::entry(
 	binary_pow_10<uint128_t>::u_entry const &e
 ) : m(e.m_high), exp_2(e.exp_2 - 128), exp_5(e.exp_5)
 {
-	m <<= 64;
+	m <<= 64u;
 	m |= e.m_low;
 }
 

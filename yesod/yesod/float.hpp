@@ -135,9 +135,9 @@ struct float_t {
 
 	int32_t get_exponent_value() const
 	{
-		return static_cast<int32_t>(
+		return static_cast<int32_t>(uint32_t(
 			get_exponent() ? get_exponent() : storage_type(1)
-		) - traits_type::exponent_bias;
+		)) - traits_type::exponent_bias;
 	}
 
 	bool get_sign() const

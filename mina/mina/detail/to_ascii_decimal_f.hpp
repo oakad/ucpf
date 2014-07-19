@@ -487,8 +487,10 @@ struct to_ascii_decimal_f {
 		++s_bd.second.m;
 
 		auto unsafe(s_bd.second - s_bd.first);
-		adapter_type unity(storage_type(1) << -s_xv.exp, s_xv.exp);
-		auto integral(s_bd.second.m >> -s_xv.exp);
+		adapter_type unity(
+			storage_type(1) << uint32_t(-s_xv.exp), s_xv.exp
+		);
+		auto integral(s_bd.second.m >> uint32_t(-s_xv.exp));
 		auto fractional(s_bd.second.m & (unity.m - 1));
 
 		auto x_exp(small_power_10_estimate(

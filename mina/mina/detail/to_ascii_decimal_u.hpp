@@ -158,7 +158,7 @@ struct to_ascii_decimal_u<uint64_t> {
 			acc += c;
 			c = (acc * divider_10e8) >> (64 + shift_10e8);
 			bv[2 - dp] = to_ascii_decimal_u<uint32_t>::to_bcd(
-				acc - c * 100000000
+				uint32_t(acc - c * 100000000)
 			)[1];
 			++dp;
 		}
@@ -201,9 +201,11 @@ struct to_ascii_decimal_u<uint128_t> {
 		for (uint64_t d: xy) {
 			uint128_t acc(d);
 			acc += c;
-			c = (acc * divider_10e8) >> (64 + shift_10e8);
+			c = uint64_t(
+				(acc * divider_10e8) >> (64 + shift_10e8)
+			);
 			bv[4 - dp] = to_ascii_decimal_u<uint32_t>::to_bcd(
-				acc - c * 100000000
+				uint32_t(acc - c * 100000000)
 			)[1];
 			++dp;
 		}
