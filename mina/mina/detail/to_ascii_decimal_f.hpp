@@ -592,8 +592,7 @@ struct to_ascii_decimal_f<yesod::float8> {
 	)
 	{
 		to_ascii_decimal_f<float>::to_ascii_decimal_f(
-			std::forward<OutputIterator>(sink),
-			yesod::float8::to_float32(v), a
+			std::forward<OutputIterator>(sink), float(v), a
 		);
 	}
 };
@@ -606,8 +605,7 @@ struct to_ascii_decimal_f<yesod::float16> {
 	)
 	{
 		to_ascii_decimal_f<float>::to_ascii_decimal_f(
-			std::forward<OutputIterator>(sink),
-			yesod::float16::to_float32(v), a
+			std::forward<OutputIterator>(sink), float(v), a
 		);
 	}
 };

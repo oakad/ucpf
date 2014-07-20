@@ -20,11 +20,11 @@ struct float8 {
 
 	uint8_t v;
 
-	static float to_float32(float8 v)
+	explicit operator float() const
 	{
-		uint32_t m(v.v & mantissa_mask);
-		int32_t exp((v.v & exp_mask) >> 3);
-		uint32_t sign(v.v & sign_mask ? 0x80000000u : 0u);
+		uint32_t m(v & mantissa_mask);
+		int32_t exp((v & exp_mask) >> 3);
+		uint32_t sign(v & sign_mask ? 0x80000000u : 0u);
 
 		union {
 			float rv;
@@ -32,7 +32,7 @@ struct float8 {
 		};
 
 		if (exp) {
-			if ((v.v & exp_mask) == exp_mask) {
+			if ((v & exp_mask) == exp_mask) {
 				s = 0x7f800000;
 				if (m & 4)
 					s |= 0x00400000;

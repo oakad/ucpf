@@ -162,6 +162,13 @@ struct [[gnu::packed]] uint128_t {
 		return *this;
 	}
 
+	uint128_t &operator|=(uint128_t other)
+	{
+		v[0] |= other.v[0];
+		v[1] |= other.v[1];
+		return *this;
+	}
+
 	uint128_t &operator&=(uint128_t other)
 	{
 		v[0] &= other.v[0];
@@ -182,7 +189,7 @@ struct [[gnu::packed]] uint128_t {
 
 	uint128_t &operator+=(uint128_t other)
 	{
-		if ((~uint64_t(0) - v[0]) <= other.v[0]) {
+		if ((~uint64_t(0) - v[0]) >= other.v[0]) {
 			v[0] += other.v[0];
 			v[1] += other.v[1];
 		} else {
