@@ -2,7 +2,7 @@ CC=g++
 CXXFLAGS+=-std=gnu++1y -I.. -I../../yesod
 
 test_m32 : test_m32.cpp
-	$(CC) $(CXXFLAGS) -m32 -O3 -lquadmath -o $@ $^
+	$(CC) $(CXXFLAGS) -O3 -lquadmath -o $@ $^
 
 t5 : t5.cpp
 	$(CC) $(CXXFLAGS) -m32 -O3 -o $@ $^
