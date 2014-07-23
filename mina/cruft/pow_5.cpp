@@ -28,7 +28,8 @@ bool round_up_hex(char *s, int last)
 
 int main(int argc, char **argv)
 {
-	int min(-348 - 672), max(340 + 672), step(8);
+	//int min(-348 - 672), max(340 + 672), step(8);
+	int min(-10), max(10), step(1);
 	mpfr_t x;
 	mpfr_t y;
 	mpz_t z;

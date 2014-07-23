@@ -9,6 +9,8 @@
 #if !defined(UCPF_MINA_DETAIL_FROM_ASCII_DECIMAL_F_20140721T2300)
 #define UCPF_MINA_DETAIL_FROM_ASCII_DECIMAL_F_20140721T2300
 
+#include <mina/detail/float.hpp>
+
 namespace ucpf { namespace mina { namespace detail {
 
 template <typename T>
@@ -16,8 +18,11 @@ struct from_ascii_decimal_f;
 
 template <>
 struct from_ascii_decimal_f<double> {
-	typedef yesod::float_t<64> wrapper_type;
-	typedef typename wrapper_type::storage_type mantissa_type;
+	typedef typename yesod::fp_adapter_type<double>::type wrapper_type;
+	typedef float_t<wrapper_type::bit_size> adapter_type;
+	typedef typename wrapper_type::storage_type storage_type;
+	typedef to_ascii_decimal_f_traits<double> traits_type;
+
 
 	template <typename InputIterator>
 	static bool parse_special(
@@ -29,13 +34,14 @@ struct from_ascii_decimal_f<double> {
 
 	template <typename InputIterator>
 	static bool parse_value(
-		mantissa_type &m, int32_t &exp_10, bool &sign,
+		storage_type &m, int32_t &exp_10, bool &sign, bool &exact,
 		InputIterator &first, InputIterator last
 	)
 	{
 		auto x_first(first);
 		m = 0;
 		exp_10 = 0;
+		exact = true;
 		sign = *x_first == '-';
 
 		if (sign || (*x_first == '+'))
@@ -123,17 +129,40 @@ struct from_ascii_decimal_f<double> {
 		if (valid)
 			return;
 
+		bool exact(true);
 		bool sign(false);
-		mantissa_type m(0);
+		storage_type m(0);
 		int32_t exp_10(0);
 
-		valid = parse_value(m, exp_10, sign, first, last);
+		valid = parse_value(m, exp_10, sign, exact, first, last);
 		if (!valid)
 			return;
 
 		parse_exponent(exp_10, first, last);
 
-		
+		if (!m) {
+			value = sign ? -double(0) : double(0);
+			return;
+		}
+
+		storage_type error(exact ? 0 : 4);
+		adapter_type xv(m, 0);
+		xv.normalize();
+		error <<= -xv.exp;
+
+		auto exp_bd(binary_pow_10<storage_type>::lookup_exp_2(exp_10));
+		if (exp_bd.exp_5 != exp_10) {
+			auto adj_bd(binary_pow_10<
+				storage_type
+			>::lookup_exp_10_rem(exp_10 - exp_bd.exp_5));
+			adapter_type adj_v(adj_bd.m, adj_bd.exp_2);
+			xv *= adj_v;
+		}
+
+		{
+			adapter_type adj_v(exp_bd.m, exp_bd.exp_2);
+			xv *= adj_v;
+		}
 	}
 
 	double value;

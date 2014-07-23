@@ -36,6 +36,16 @@ struct binary_pow_10 {
 	};
 
 	constexpr static size_t pow_5_step = 8;
+	constexpr static std::array<u_entry, 8> rem_pow_5_list = {{
+		{0xa000000000000000ull, 0x0000000000000000ull, 4, 1},
+		{0xc800000000000000ull, 0x0000000000000000ull, 7, 2},
+		{0xfa00000000000000ull, 0x0000000000000000ull, 10, 3},
+		{0x9c40000000000000ull, 0x0000000000000000ull, 14, 4},
+		{0xc350000000000000ull, 0x0000000000000000ull, 17, 5},
+		{0xf424000000000000ull, 0x0000000000000000ull, 20, 6},
+		{0x9896800000000000ull, 0x0000000000000000ull, 24, 7}
+	}};
+
 	constexpr static std::array<u_entry, 255> pow_5_list = {{
 		{0xc68c427b75081ec7ull, 0x5c1624a46fa03e85ull, -3388, -1020},
 		{0x93ee0129fbd5676full, 0x9498faf7b82f7609ull, -3361, -1012},
@@ -294,12 +304,12 @@ struct binary_pow_10 {
 		{0xdd82b7ab5ffc462dull, 0xfdc12e13381e6d80ull, 3362, 1012}
 	}};
 
-	static auto lookup_exp_10(int exp_10) -> entry
+	static entry lookup_exp_10(int exp_2)
 	{
 		constexpr static double inv_log2_10 = 0.30102999566398114;
 		constexpr static int bits = sizeof(T) * 8;
 
-		double k(std::ceil(inv_log2_10 * (exp_10 + bits - 1)));
+		double k(std::ceil(inv_log2_10 * (exp_2 + bits - 1)));
 		auto idx(std::lround(k));
 		idx -= pow_5_list.front().exp_5 + 1;
 		idx /= pow_5_step;
@@ -308,6 +318,18 @@ struct binary_pow_10 {
 			return entry();
 		else
 			return entry(pow_5_list[idx + 1]);
+	}
+
+	static entry lookup_exp_2(int exp_10)
+	{
+		auto idx(exp_10 - pow_5_list.front().exp_5);
+		idx /= pow_5_step;
+		return entry(pow_5_list[idx]);
+	}
+
+	static entry lookup_exp_10_rem(int exp_10)
+	{
+		return entry(rem_pow_5_list[(exp_10 % pow_5_step) - 1]);
 	}
 };
 
