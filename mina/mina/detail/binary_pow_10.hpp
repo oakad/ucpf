@@ -366,6 +366,11 @@ binary_pow_10<uint128_t>::entry::entry(
 
 template <typename T>
 constexpr std::array<
+	typename binary_pow_10<T>::u_entry, 8
+> binary_pow_10<T>::rem_pow_5_list;
+
+template <typename T>
+constexpr std::array<
 	typename binary_pow_10<T>::u_entry, 255
 > binary_pow_10<T>::pow_5_list;
 

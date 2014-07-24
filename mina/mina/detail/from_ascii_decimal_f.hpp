@@ -10,6 +10,7 @@
 #define UCPF_MINA_DETAIL_FROM_ASCII_DECIMAL_F_20140721T2300
 
 #include <mina/detail/float.hpp>
+#include <mina/detail/binary_pow_10.hpp>
 
 namespace ucpf { namespace mina { namespace detail {
 
@@ -18,15 +19,16 @@ struct from_ascii_decimal_f;
 
 template <>
 struct from_ascii_decimal_f<double> {
-	typedef typename yesod::fp_adapter_type<double>::type wrapper_type;
+	typedef double value_type;
+	typedef typename yesod::fp_adapter_type<value_type>::type wrapper_type;
 	typedef float_t<wrapper_type::bit_size> adapter_type;
 	typedef typename wrapper_type::storage_type storage_type;
-	typedef to_ascii_decimal_f_traits<double> traits_type;
+	typedef to_ascii_decimal_f_traits<value_type> traits_type;
 
 
 	template <typename InputIterator>
 	static bool parse_special(
-		double &v, InputIterator &first, InputIterator last
+		value_type &v, InputIterator &first, InputIterator last
 	)
 	{
 		return false;
@@ -70,7 +72,7 @@ struct from_ascii_decimal_f<double> {
 		bool has_frac((x_first != last) && std::isdigit(*x_first));
 		while ((x_first != last) && std::isdigit(*x_first)) {
 			m *= 10;
-			m += *first - '0';
+			m += *x_first - '0';
 			--exp_10;
 			++x_first;
 		}
@@ -123,7 +125,7 @@ struct from_ascii_decimal_f<double> {
 	template <typename InputIterator, typename Alloc>
 	from_ascii_decimal_f(
 		InputIterator &first, InputIterator last, Alloc const &a
-	) : value(std::numeric_limits<T>::quiet_NaN()), valid(false)
+	) : value(std::numeric_limits<value_type>::quiet_NaN()), valid(false)
 	{
 		valid = parse_special(value, first, last);
 		if (valid)
@@ -141,13 +143,15 @@ struct from_ascii_decimal_f<double> {
 		parse_exponent(exp_10, first, last);
 
 		if (!m) {
-			value = sign ? -double(0) : double(0);
+			value = sign ? -value_type(0) : value_type(0);
 			return;
 		}
 
 		storage_type error(exact ? 0 : 4);
 		adapter_type xv(m, 0);
+		printf("--1- %016zX, %d\n", xv.m, xv.exp);
 		xv.normalize();
+		printf("--2- %016zX, %d\n", xv.m, xv.exp);
 		error <<= -xv.exp;
 
 		auto exp_bd(binary_pow_10<storage_type>::lookup_exp_2(exp_10));
@@ -163,9 +167,11 @@ struct from_ascii_decimal_f<double> {
 			adapter_type adj_v(exp_bd.m, exp_bd.exp_2);
 			xv *= adj_v;
 		}
+
+		printf("--3- %016zX, %d\n", xv.m, xv.exp);
 	}
 
-	double value;
+	value_type value;
 	bool valid;
 };
 
