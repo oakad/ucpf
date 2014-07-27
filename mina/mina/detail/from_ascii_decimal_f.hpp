@@ -11,6 +11,7 @@
 
 #include <mina/detail/float.hpp>
 #include <mina/detail/binary_pow_10.hpp>
+#include <mina/detail/from_ascii_decimal_u.hpp>
 
 namespace ucpf { namespace mina { namespace detail {
 
@@ -168,12 +169,21 @@ struct from_ascii_decimal_f<double> {
 			xv *= adj_v;
 		}
 
+		error += 8 + (error ? 1 : 0);
 		printf("--3- %016zX, %d\n", xv.m, xv.exp);
 	}
 
 	value_type value;
 	bool valid;
 };
-
+/*
+ static int SignificandSizeForOrderOfMagnitude(int order) {
+    if (order >= (kDenormalExponent + kSignificandSize)) {
+      return kSignificandSize;
+    }
+    if (order <= kDenormalExponent) return 0;
+    return order - kDenormalExponent;
+  }
+  */
 }}}
 #endif
