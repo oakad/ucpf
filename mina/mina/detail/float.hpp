@@ -20,21 +20,18 @@ template <>
 struct to_ascii_decimal_f_traits<float> {
 	constexpr static int minimal_target_exp = -28;
 	constexpr static int decimal_limb_count = 2;
-	constexpr static int mantissa_bits = 24;
 };
 
 template <>
 struct to_ascii_decimal_f_traits<double> {
 	constexpr static int minimal_target_exp = -60;
 	constexpr static int decimal_limb_count = 3;
-	constexpr static int mantissa_bits = 53;
 };
 
 template <>
 struct to_ascii_decimal_f_traits<yesod::float128> {
 	constexpr static int minimal_target_exp = -124;
 	constexpr static int decimal_limb_count = 5;
-	constexpr static int mantissa_bits = 113;
 };
 
 template <unsigned int N>
