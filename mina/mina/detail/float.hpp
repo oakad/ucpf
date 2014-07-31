@@ -34,10 +34,11 @@ struct to_ascii_decimal_f_traits<yesod::float128> {
 	constexpr static int decimal_limb_count = 5;
 };
 
-template <unsigned int N>
+template <size_t N>
 struct float_t {
 	typedef yesod::float_t<N> wrapper_type;
 	typedef typename wrapper_type::storage_type mantissa_type;
+	typedef typename wrapper_type::machine_type value_type;
 
 	float_t(mantissa_type m_, int32_t exp_)
 	: m(m_), exp(exp_)
@@ -97,6 +98,46 @@ struct float_t {
 		auto l(yesod::clz(m));
 		m <<= l;
 		exp -= l;
+	}
+
+	explicit operator value_type() const
+	{
+		constexpr static auto mantissa_bits(
+			wrapper_type::traits_type::mantissa_bits
+		);
+		constexpr static auto exponent_bits(
+			wrapper_type::traits_type::exponent_bits
+		);
+		constexpr static auto exponent_bias(
+			wrapper_type::traits_type::exponent_bias
+		);
+
+		auto x_m(m);
+		auto x_exp(exp);
+		printf("aa %016zx, %d\n", x_m, x_exp);
+		auto lz(yesod::clz(x_m));
+		if (lz < exponent_bits) {
+			x_m >>= exponent_bits - lz;
+			x_exp += exponent_bits - lz;
+		}
+		printf("bb %016zx, %d\n", x_m, x_exp);
+		x_exp += exponent_bias + mantissa_bits - 1;
+		if (x_exp >= (1 << exponent_bits))
+			return std::numeric_limits<value_type>::infinity();
+
+		if (x_exp < 0)
+			return value_type(0);
+
+		if (x_exp && (lz > exponent_bits)) {
+			x_m <<= lz - exponent_bits;
+			x_exp -= lz - exponent_bits;
+		}
+		printf("cc %016zx, %x\n", x_m, x_exp);
+		mantissa_type rv(x_exp);
+		rv <<= mantissa_bits - 1;
+		rv |= x_m;
+		printf("dd %016zx\n", rv);
+		return wrapper_type(rv).get();
 	}
 
 	mantissa_type m;

@@ -77,10 +77,10 @@ struct fp_util {
 
 }
 
-template <unsigned int N>
+template <size_t N>
 struct float_t {
 	typedef detail::float_tag tag;
-	constexpr static unsigned int bit_size = N;
+	constexpr static size_t bit_size = N;
 
 	typedef typename mpl::at<
 		detail::fp_storage_types,
@@ -179,7 +179,7 @@ private:
 	};
 };
 
-template <unsigned int N>
+template <size_t N>
 constexpr typename float_t<N>::storage_type float_t<N>::exponent_mask;
 
 namespace detail {

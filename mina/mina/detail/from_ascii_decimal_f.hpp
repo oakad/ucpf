@@ -113,6 +113,10 @@ struct from_ascii_decimal_f<double> {
 		}
 	}
 
+	void adjust_value()
+	{
+	}
+
 	template <typename InputIterator, typename Alloc>
 	from_ascii_decimal_f(
 		InputIterator &first, InputIterator last, Alloc const &a
@@ -237,7 +241,11 @@ struct from_ascii_decimal_f<double> {
 		if (x_m >= (half + error))
 			xv.m += 1;
 
-		
+		printf("--7- %016zX, %d\n", xv.m, xv.exp);
+		value = value_type(xv);
+		if (((half - error) < m_size) && ((half + error) > m_size)) {
+			adjust_value();
+		}
 	}
 
 	value_type value;
