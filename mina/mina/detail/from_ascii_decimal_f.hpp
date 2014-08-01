@@ -25,7 +25,7 @@ struct from_ascii_decimal_f<double> {
 	typedef float_t<wrapper_type::bit_size> adapter_type;
 	typedef typename wrapper_type::storage_type storage_type;
 	typedef to_ascii_decimal_f_traits<value_type> traits_type;
-	constexpr static size_t mantissa_digits = 16;
+	constexpr static size_t mantissa_digits = 19;
 	constexpr static size_t exponent_digits = 3;
 
 	struct m_int_policy {
@@ -115,6 +115,7 @@ struct from_ascii_decimal_f<double> {
 
 	void adjust_value()
 	{
+		value = 0;
 	}
 
 	template <typename InputIterator, typename Alloc>
@@ -136,7 +137,7 @@ struct from_ascii_decimal_f<double> {
 		auto x_first(first);
 		bool sign(*x_first == '-');
 
-		if (!sign && (*x_first == '+'))
+		if (sign || (*x_first == '+'))
 			++x_first;
 
 		valid = parse_special(value, first, last);
@@ -159,6 +160,7 @@ struct from_ascii_decimal_f<double> {
 		valid = true;
 		bool inexact(m_int.tail_cnt);
 		int32_t exp_10(0);
+		auto digits(m_int.converted);
 
 		if (*x_first == '.') {
 			++x_first;
@@ -166,8 +168,8 @@ struct from_ascii_decimal_f<double> {
 				storage_type, m_frac_policy
 			> m_frac(
 				x_first, last, m, m_frac_policy(
-					(m_int.converted < 16)
-					? (16 - m_int.converted)
+					(m_int.converted < mantissa_digits)
+					? (mantissa_digits - m_int.converted)
 					: 0
 				)
 			);
@@ -177,6 +179,7 @@ struct from_ascii_decimal_f<double> {
 				exp_10 -= m_frac.converted;
 				first = x_first;
 				inexact |= m_frac.tail_cnt && !m_frac.zero_tail;
+				digits += m_frac.converted;
 			}
 		} else
 			exp_10 += m_int.tail_cnt;
@@ -203,15 +206,26 @@ struct from_ascii_decimal_f<double> {
 			>::lookup_exp_10_rem(exp_10 - exp_bd.exp_5));
 			adapter_type adj_v(adj_bd.m, adj_bd.exp_2);
 			xv *= adj_v;
+			printf("-x3- %016zX, %d\n", xv.m, xv.exp);
+			if (
+				(mantissa_digits - digits)
+				< (exp_10 - exp_bd.exp_5)
+			)
+				error += 4;
 		}
 
 		{
 			adapter_type adj_v(exp_bd.m, exp_bd.exp_2);
+			printf("-y3- %016zX, %d * %016zX, %d, err %d\n", xv.m, xv.exp, adj_v.m, adj_v.exp, error);
 			xv *= adj_v;
+			auto x_exp(xv.exp);
+			xv.normalize();
+			error += 8 + (error ? 1 : 0);
+			printf("-z3- %d, %d, %d\n", error, x_exp, xv.exp);
+			error <<= x_exp - xv.exp;
 		}
 
-		error += 8 + (error ? 1 : 0);
-		printf("--4- %016zX, %d err %d, %d\n", xv.m, xv.exp, error, denormal_exponent);
+		printf("--4- %016zX, %d err %d\n", xv.m, xv.exp, error);
 
 		auto m_size(xv.exp + significand_size);
 		if (m_size >= (denormal_exponent + mantissa_bits))
@@ -246,6 +260,9 @@ struct from_ascii_decimal_f<double> {
 		if (((half - error) < m_size) && ((half + error) > m_size)) {
 			adjust_value();
 		}
+
+		if (sign)
+			value = -value;
 	}
 
 	value_type value;

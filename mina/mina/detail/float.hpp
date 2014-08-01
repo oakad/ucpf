@@ -73,6 +73,7 @@ struct float_t {
 		auto x(*this * other);
 		m = x.m;
 		exp = x.exp;
+		return *this;
 	}
 
 	std::pair<float_t, float_t> boundaries() const
@@ -135,7 +136,7 @@ struct float_t {
 		printf("cc %016zx, %x\n", x_m, x_exp);
 		mantissa_type rv(x_exp);
 		rv <<= mantissa_bits - 1;
-		rv |= x_m;
+		rv |= x_m & ((mantissa_type(1) << (mantissa_bits - 1)) - 1);
 		printf("dd %016zx\n", rv);
 		return wrapper_type(rv).get();
 	}
