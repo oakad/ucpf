@@ -14,7 +14,7 @@
 
 namespace ucpf { namespace mina { namespace test {
 
-template <unsigned int N>
+template <size_t N>
 struct float_generator_r {
 	typedef yesod::float_t<N> wrapper_type;
 	typedef typename wrapper_type::storage_type gen_type;
@@ -36,7 +36,7 @@ struct float_generator_r {
 	std::uniform_int_distribution<gen_type> dist;
 };
 
-template <unsigned int N>
+template <size_t N>
 struct float_generator_e {
 	typedef yesod::float_t<N> wrapper_type;
 	typedef typename wrapper_type::storage_type gen_type;
@@ -66,6 +66,92 @@ struct float_generator_e {
 	std::random_device dev;
 	std::uniform_int_distribution<gen_type> dist;
 	uint32_t last_exponent = 0;
+};
+
+template <size_t MaxDigits, size_t MaxExpDigits>
+struct dec_float_generator {
+	constexpr static size_t buffer_size
+	= 5 + MaxDigits + MaxExpDigits;
+	constexpr static size_t digits_per_word = 19;
+
+	static_assert(buffer_size <= 64, "buffer_size < 64");
+
+	template <typename Func>
+	auto operator()(Func &&f)
+	-> typename std::result_of<Func(char *, char *)>::type
+	{
+		size_t i_cnt(0), f_cnt(0), e_cnt(0);
+		bool m_sign(false), e_sign(false);
+
+		while (true) {
+			auto r(dist(dev));
+			m_sign = r & 1;
+			e_sign = r & 2;
+			r >>= 2;
+			e_cnt = r % (MaxExpDigits + 1);
+			r /= (MaxExpDigits + 1);
+			i_cnt = r % (MaxDigits + 1);
+			if (i_cnt) {
+				r /= (MaxDigits + 1);
+				f_cnt = r % (i_cnt + 1);
+				i_cnt -= f_cnt;
+				break;
+			}
+		}
+
+		auto last(buf);
+		*last++ = m_sign ? '-' : '+';
+		auto r(dist(dev));
+		auto r_digits(digits_per_word);
+
+		while (i_cnt) {
+			if (!r_digits) {
+				r = dist(dev);
+				r_digits = digits_per_word;
+			}
+			*last++ = '0' + (r % 10);
+			r /= 10;
+			--r_digits;
+			--i_cnt;
+		}
+
+		if (f_cnt)
+			*last++ = '.';
+
+		while (f_cnt) {
+			if (!r_digits) {
+				r = dist(dev);
+				r_digits = digits_per_word;
+			}
+			*last++ = '0' + (r % 10);
+			r /= 10;
+			--r_digits;
+			--f_cnt;
+		}
+
+		if (e_cnt) {
+			*last++ = 'e';
+			*last++ = e_sign ? '-' : '+';
+		}
+
+		while (e_cnt) {
+			if (!r_digits) {
+				r = dist(dev);
+				r_digits = digits_per_word;
+			}
+			*last++ = '0' + (r % 10);
+			r /= 10;
+			--r_digits;
+			--e_cnt;
+		}
+
+		*last = 0;
+		return f(buf, last);
+	}
+
+	std::random_device dev;
+	std::uniform_int_distribution<uint64_t> dist;
+	char buf[buffer_size];
 };
 
 #if !defined(_GLIBCXX_USE_INT128)

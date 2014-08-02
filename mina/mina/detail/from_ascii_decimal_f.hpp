@@ -175,11 +175,16 @@ struct from_ascii_decimal_f<double> {
 			);
 
 			if (m_frac.consumed()) {
-				m = m_frac.value;
-				exp_10 -= m_frac.converted;
+				if (!inexact) {
+					m = m_frac.value;
+					exp_10 -= m_frac.converted;
+					inexact = m_frac.tail_cnt
+						  && !m_frac.zero_tail;
+					digits += m_frac.converted;
+				} else
+					exp_10 += m_int.tail_cnt;
+
 				first = x_first;
-				inexact |= m_frac.tail_cnt && !m_frac.zero_tail;
-				digits += m_frac.converted;
 			}
 		} else
 			exp_10 += m_int.tail_cnt;
@@ -193,14 +198,14 @@ struct from_ascii_decimal_f<double> {
 
 		int32_t error(inexact ? 4 : 0);
 		adapter_type xv(m, 0);
-		printf("--1- %016zX, %d\n", xv.m, xv.exp);
+		printf("--1- %016zX, %d, exp_10 %d\n", xv.m, xv.exp, exp_10);
 		xv.normalize();
 		printf("--2- %016zX, %d\n", xv.m, xv.exp);
 		error <<= -xv.exp;
 
 		auto exp_bd(binary_pow_10<storage_type>::lookup_exp_2(exp_10));
+		printf("--3- ref %d, exp %d\n", exp_bd.exp_5, exp_10);
 		if (exp_bd.exp_5 != exp_10) {
-			printf("--3- ref %d, exp %d\n", exp_bd.exp_5, exp_10);
 			auto adj_bd(binary_pow_10<
 				storage_type
 			>::lookup_exp_10_rem(exp_10 - exp_bd.exp_5));

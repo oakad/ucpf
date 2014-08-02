@@ -12,7 +12,7 @@
 #include <mina/detail/from_ascii_decimal_f.hpp>
 #include "../test/float_generator.hpp"
 
-#define CASE_COUNT 50
+#define CASE_COUNT 5000
 
 namespace std {
 
@@ -146,7 +146,7 @@ void test_float32()
 void test_float64()
 {
 #if XS
-	char const *v = "-9.89908872992659623852752215483e-116";
+	char const *v = "957000140073330481088036.32625719713682e+3";
 	char const *xv(v);
 
 	detail::from_ascii_decimal_f<double> cv(
@@ -156,7 +156,7 @@ void test_float64()
 	printf("v (%d) %.40g, eq %d\n", cv.valid, cv.value, cv.value == rv);
 	printf("rv    %.40g\n", rv);
 #endif
-	test::float_generator_r<64> fg_r;
+	test::dec_float_generator<40, 3> fg_r;
 #if 0
 	test::float_generator_e<64> fg_e;
 	{
@@ -189,14 +189,13 @@ void test_float64()
 #if XM
 	printf("-- random\n");
 	std::generate_n(test::null_sink(), CASE_COUNT, [&fg_r]() -> bool {
-		return fg_r([](double v) -> bool {
-			char buf[40] = {0};
-			char *ptr(buf);
-			char *last(ptr + snprintf(buf, 40, "%.30g", v));
-			printf("---- %s\n", buf);
-			auto xv(strtod(buf, nullptr));
+		return fg_r([](char *first, char *last) -> bool {
+			printf("---- %s\n", first);
+			auto xv(strtod(
+				const_cast<char const *>(first), nullptr
+			));
 			detail::from_ascii_decimal_f<double> cv(
-				ptr, last, std::allocator<void>()
+				first, last, std::allocator<void>()
 			);
 			CHECK_EQUAL(cv.value, xv);
 			return cv.valid && (cv.value == xv);

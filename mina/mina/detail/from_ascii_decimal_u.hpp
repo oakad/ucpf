@@ -68,7 +68,7 @@ struct from_ascii_decimal_u {
 			}
 
 			if (Policy::skip_leading_zeros) {
-				if (converted && (*first == '0')) {
+				if (!converted && (*first == '0')) {
 					++first;
 					++head_cnt;
 					continue;
