@@ -29,6 +29,24 @@ struct has_max_digits {
 	static constexpr bool value = type::value;
 };
 
+template <typename T>
+struct has_push_digit {
+	template <typename U, U>
+	struct wrapper {};
+
+	template <typename U>
+	static std::true_type test(
+		U *, wrapper<
+			void (U::*)(int c), &U::push_digit
+		> * = nullptr
+	);
+	static std::false_type test(...);
+
+	typedef decltype(test(static_cast<T *>(nullptr))) type;
+
+	static constexpr bool value = type::value;
+};
+
 template <typename Policy, bool HasMaxDigits = true>
 struct get_max_digits {
 	static size_t apply(Policy const &p)
@@ -45,16 +63,40 @@ struct get_max_digits<Policy, false> {
 	}
 };
 
+template <typename Policy, bool HasPushDigit = true>
+struct push_digit {
+	static void apply(Policy &p, int c)
+	{
+		return p.push_digit(c);
+	}
+};
+
+template <typename Policy>
+struct push_digit<Policy, false> {
+	static void apply(Policy &p, int c)
+	{
+	}
+};
+
 template <typename T, typename Policy>
 struct from_ascii_decimal_u {
 	template <typename InputIterator>
 	from_ascii_decimal_u(
+		InputIterator &first, InputIterator last, T initial = 0
+	) : from_ascii_decimal_u(first, last, Policy(), initial)
+	{}
+
+	template <typename InputIterator>
+	from_ascii_decimal_u(
 		InputIterator &first, InputIterator last,
-		T initial = 0, Policy const &p = Policy()
+		Policy &&p, T initial = 0
 	) : converted(0), head_cnt(0), tail_cnt(0), zero_tail(true),
 	    value(initial)
 	{
-		constexpr bool counted(has_max_digits<Policy>::value);
+		constexpr static bool counted(has_max_digits<Policy>::value);
+		constexpr static bool save_digits(
+			has_push_digit<Policy>::value
+		);
 
 		while (true) {
 			if ((first == last) || !std::isdigit(*first))
@@ -77,11 +119,12 @@ struct from_ascii_decimal_u {
 
 			value *= T(10);
 			value += *first - '0';
+			push_digit<Policy, save_digits>::apply(p, *first - '0');
 			++converted;
 			++first;
 		}
 
-		if (!Policy::consume_trailing_digits)
+		if (!Policy::consume_trailing_digits && !save_digits)
 			return;
 
 		if (Policy::round_tail) {
@@ -91,6 +134,9 @@ struct from_ascii_decimal_u {
 				else if (*first != '0')
 					zero_tail = false;
 
+				push_digit<Policy, save_digits>::apply(
+					p, *first - '0'
+				);
 				++tail_cnt;
 				++first;
 			}
@@ -100,6 +146,7 @@ struct from_ascii_decimal_u {
 			if (*first != '0')
 				zero_tail = false;
 
+			push_digit<Policy, save_digits>::apply(p, *first - '0');
 			++tail_cnt;
 			++first;
 		}

@@ -10,6 +10,7 @@
 #define UCPF_MINA_DETAIL_FROM_ASCII_DECIMAL_F_20140721T2300
 
 #include <mina/detail/float.hpp>
+#include <mina/detail/bigint.hpp>
 #include <mina/detail/binary_pow_10.hpp>
 #include <mina/detail/from_ascii_decimal_u.hpp>
 
@@ -27,36 +28,70 @@ struct from_ascii_decimal_f<double> {
 	typedef to_ascii_decimal_f_traits<value_type> traits_type;
 	constexpr static size_t mantissa_digits = 19;
 	constexpr static size_t exponent_digits = 3;
+	constexpr static size_t digits_per_limb = sizeof(uintptr_t) * 2;
 
-	struct m_int_policy {
+	template <typename V>
+	struct int_policy {
 		constexpr static bool skip_leading_zeros = true;
 		constexpr static bool consume_trailing_digits = true;
 		constexpr static bool round_tail = true;
+
+		int_policy(V &digits_, size_t pos_)
+		: digits(digits_), pos(pos_)
+		{
+			if (digits.size() < (pos / digits_per_limb + 1))
+				digits.resize(pos / digits_per_limb + 1, 0);
+		}
 
 		constexpr size_t max_digits() const
 		{
 			return mantissa_digits;
 		}
+
+		void push_digit(int c)
+		{
+			uintptr_t xm(0xf);
+			uintptr_t xc(c & 0xf);
+			auto shift((
+				digits_per_limb - (pos % digits_per_limb) - 1
+			) * 4);
+			xc <<= shift;
+			xm <<= shift;
+			digits[pos / digits_per_limb] &= ~xm;
+			digits[pos / digits_per_limb] |= xc;
+			++pos;
+			if (!(pos % digits_per_limb))
+				digits.push_back(0);
+		}
+
+		V &digits;
+		size_t pos;
 	};
 
-	struct m_frac_policy {
+	template <typename V>
+	struct frac_policy : int_policy<V> {
 		constexpr static bool skip_leading_zeros = false;
 		constexpr static bool consume_trailing_digits = true;
 		constexpr static bool round_tail = true;
+
+		frac_policy(V &digits_, size_t pos_, size_t max_digit_cnt_)
+		: int_policy<V>(digits_, pos_), max_digit_cnt(max_digit_cnt_)
+		{}
 
 		size_t max_digits() const
 		{
 			return max_digit_cnt;
 		}
 
-		m_frac_policy(size_t max_digit_cnt_)
-		: max_digit_cnt(max_digit_cnt_)
-		{}
+		void push_digit(int c)
+		{
+			int_policy<V>::push_digit(c);
+		}
 
 		size_t max_digit_cnt;
 	};
 
-	struct m_exp_policy {
+	struct exp_policy {
 		constexpr static bool skip_leading_zeros = true;
 		constexpr static bool consume_trailing_digits = false;
 		constexpr static bool round_tail = false;
@@ -99,9 +134,7 @@ struct from_ascii_decimal_f<double> {
 				return;
 		}
 
-		from_ascii_decimal_u<
-			int32_t, m_exp_policy
-		> exp(x_first, last);
+		from_ascii_decimal_u<int32_t, exp_policy> exp(x_first, last);
 
 		if (exp.consumed()) {
 			if (exp_sign)
@@ -134,6 +167,20 @@ struct from_ascii_decimal_f<double> {
 			- mantissa_bits
 		);
 
+		typedef std::vector<
+			bigint::limb_type,
+			typename std::allocator_traits<
+				Alloc
+			>::template rebind_alloc<bigint::limb_type>
+		> bigint_type;
+
+		typedef std::vector<
+			uintptr_t,
+			typename std::allocator_traits<
+				Alloc
+			>::template rebind_alloc<uintptr_t>
+		> bcd_type;
+
 		auto x_first(first);
 		bool sign(*x_first == '-');
 
@@ -145,10 +192,15 @@ struct from_ascii_decimal_f<double> {
 			return;
 
 		storage_type m(0);
+		bcd_type digits(a);
+		int_policy<bcd_type> int_p(digits, 0);
 
 		from_ascii_decimal_u<
-			storage_type, m_int_policy
-		> m_int(x_first, last);
+			storage_type, int_policy<bcd_type>
+		> m_int(
+			x_first, last,
+			std::forward<decltype(int_p)>(int_p), 0
+		);
 
 		if (!m_int.consumed()) {
 			if (*x_first != '.')
@@ -160,19 +212,23 @@ struct from_ascii_decimal_f<double> {
 		valid = true;
 		bool inexact(m_int.tail_cnt);
 		int32_t exp_10(0);
-		auto digits(m_int.converted);
+		auto digit_cnt(m_int.converted);
+		auto full_digit_cnt(int_p.pos);
 
 		if (*x_first == '.') {
 			++x_first;
-			from_ascii_decimal_u<
-				storage_type, m_frac_policy
-			> m_frac(
-				x_first, last, m, m_frac_policy(
-					(m_int.converted < mantissa_digits)
-					? (mantissa_digits - m_int.converted)
-					: 0
-				)
+			frac_policy<bcd_type> frac_p(
+				digits, int_p.pos,
+				(m_int.converted < mantissa_digits)
+				? (mantissa_digits - m_int.converted) : 0
 			);
+			from_ascii_decimal_u<
+				storage_type, frac_policy<bcd_type>
+			> m_frac(
+				x_first, last,
+				std::forward<decltype(frac_p)>(frac_p), m
+			);
+			full_digit_cnt = frac_p.pos;
 
 			if (m_frac.consumed()) {
 				if (!inexact) {
@@ -180,7 +236,7 @@ struct from_ascii_decimal_f<double> {
 					exp_10 -= m_frac.converted;
 					inexact = m_frac.tail_cnt
 						  && !m_frac.zero_tail;
-					digits += m_frac.converted;
+					digit_cnt += m_frac.converted;
 				} else
 					exp_10 += m_int.tail_cnt;
 
@@ -195,6 +251,11 @@ struct from_ascii_decimal_f<double> {
 			value = sign ? -value_type(0) : value_type(0);
 			return;
 		}
+
+		printf("aa %zd ", full_digit_cnt);
+		for (auto d: digits)
+			printf("%016zX ", d);
+		printf("\n");
 
 		int32_t error(inexact ? 4 : 0);
 		adapter_type xv(m, 0);
@@ -213,7 +274,7 @@ struct from_ascii_decimal_f<double> {
 			xv *= adj_v;
 			printf("-x3- %016zX, %d\n", xv.m, xv.exp);
 			if (
-				(mantissa_digits - digits)
+				(mantissa_digits - digit_cnt)
 				< (exp_10 - exp_bd.exp_5)
 			)
 				error += 4;
@@ -260,9 +321,14 @@ struct from_ascii_decimal_f<double> {
 		if (x_m >= (half + error))
 			xv.m += 1;
 
-		printf("--7- %016zX, %d\n", xv.m, xv.exp);
+		printf("--7- %016zX, %d, h %016zX, err %d\n", xv.m, xv.exp, half, error);
 		value = value_type(xv);
-		if (((half - error) < m_size) && ((half + error) > m_size)) {
+		if (((half - error) < x_m) && ((half + error) > x_m)) {
+			auto upper(xv);
+			upper.m <<= 1;
+			upper.m += 1;
+			upper.exp -= 1;
+			printf("--8- %016zX, %d\n", upper.m, upper.exp);
 			adjust_value();
 		}
 

@@ -140,13 +140,13 @@ void test_float32()
 
 #endif
 
-#define XS 0
-#define XM 1
+#define XS 1
+#define XM 0
 
 void test_float64()
 {
 #if XS
-	char const *v = "957000140073330481088036.32625719713682e+3";
+	char const *v = "+0426969676625732173810.38e-22";
 	char const *xv(v);
 
 	detail::from_ascii_decimal_f<double> cv(
@@ -156,7 +156,7 @@ void test_float64()
 	printf("v (%d) %.40g, eq %d\n", cv.valid, cv.value, cv.value == rv);
 	printf("rv    %.40g\n", rv);
 #endif
-	test::dec_float_generator<40, 3> fg_r;
+	test::dec_float_generator<40, 325, 310> fg_r;
 #if 0
 	test::float_generator_e<64> fg_e;
 	{
