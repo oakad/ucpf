@@ -88,19 +88,19 @@ int main(int argc, char **argv)
 
 	printf("Div %lu, ", dr);
 
-	auto rv(generate_mul<uint64_t>(dr));
+	auto rv(generate_mul<unsigned __int128>(dr));
 	printf("adj %d, ", std::get<2>(rv));
 	printf("shift %d, ", std::get<1>(rv));
-	printf("M %zx\n", std::get<0>(rv));
+	printf("M %zx, %zx\n", uint64_t(std::get<0>(rv) >> 64), uint64_t(std::get<0>(rv)));
 
 	if (test) {
 		auto M(std::get<0>(rv));
 		auto s(std::get<1>(rv));
 
-		uint32_t v1(tv);
+		uint64_t v1(tv);
 		unsigned __int128 v2(M);
 		v2 *= v1;
-		v2 = (v2 >> 64) & 0xffffffffffffffffllu;
+		v2 = (v2 >> 64) & ~0llu;
 
 		if (std::get<2>(rv))
 			v2 += v1;

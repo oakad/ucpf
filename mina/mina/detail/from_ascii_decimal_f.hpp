@@ -26,9 +26,9 @@ struct from_ascii_decimal_f<double> {
 	typedef float_t<wrapper_type::bit_size> adapter_type;
 	typedef typename wrapper_type::storage_type storage_type;
 	typedef to_ascii_decimal_f_traits<value_type> traits_type;
+	constexpr static auto limb_digits_10 = bigint::limb_digits_10;
 	constexpr static size_t mantissa_digits = 19;
 	constexpr static size_t exponent_digits = 3;
-	constexpr static size_t digits_per_limb = sizeof(uintptr_t) * 2;
 
 	template <typename V>
 	struct int_policy {
@@ -38,10 +38,7 @@ struct from_ascii_decimal_f<double> {
 
 		int_policy(V &digits_, size_t pos_)
 		: digits(digits_), pos(pos_)
-		{
-			if (digits.size() < (pos / digits_per_limb + 1))
-				digits.resize(pos / digits_per_limb + 1, 0);
-		}
+		{}
 
 		constexpr size_t max_digits() const
 		{
@@ -50,18 +47,12 @@ struct from_ascii_decimal_f<double> {
 
 		void push_digit(int c)
 		{
-			uintptr_t xm(0xf);
-			uintptr_t xc(c & 0xf);
-			auto shift((
-				digits_per_limb - (pos % digits_per_limb) - 1
-			) * 4);
-			xc <<= shift;
-			xm <<= shift;
-			digits[pos / digits_per_limb] &= ~xm;
-			digits[pos / digits_per_limb] |= xc;
-			++pos;
-			if (!(pos % digits_per_limb))
+			if (!(pos % limb_digits_10))
 				digits.push_back(0);
+
+			digits.back() *= 10;
+			digits.back() += c & 0xf;
+			++pos;
 		}
 
 		V &digits;
@@ -174,13 +165,6 @@ struct from_ascii_decimal_f<double> {
 			>::template rebind_alloc<bigint::limb_type>
 		> bigint_type;
 
-		typedef std::vector<
-			uintptr_t,
-			typename std::allocator_traits<
-				Alloc
-			>::template rebind_alloc<uintptr_t>
-		> bcd_type;
-
 		auto x_first(first);
 		bool sign(*x_first == '-');
 
@@ -192,12 +176,10 @@ struct from_ascii_decimal_f<double> {
 			return;
 
 		storage_type m(0);
-		bcd_type digits(a);
-		int_policy<bcd_type> int_p(digits, 0);
+		bigint_type digits(a);
+		int_policy<bigint_type> int_p(digits, 0);
 
-		from_ascii_decimal_u<
-			storage_type, int_policy<bcd_type>
-		> m_int(
+		from_ascii_decimal_u<storage_type, decltype(int_p)> m_int(
 			x_first, last,
 			std::forward<decltype(int_p)>(int_p), 0
 		);
@@ -217,13 +199,13 @@ struct from_ascii_decimal_f<double> {
 
 		if (*x_first == '.') {
 			++x_first;
-			frac_policy<bcd_type> frac_p(
+			frac_policy<bigint_type> frac_p(
 				digits, int_p.pos,
 				(m_int.converted < mantissa_digits)
 				? (mantissa_digits - m_int.converted) : 0
 			);
 			from_ascii_decimal_u<
-				storage_type, frac_policy<bcd_type>
+				storage_type, decltype(frac_p)
 			> m_frac(
 				x_first, last,
 				std::forward<decltype(frac_p)>(frac_p), m
@@ -251,11 +233,6 @@ struct from_ascii_decimal_f<double> {
 			value = sign ? -value_type(0) : value_type(0);
 			return;
 		}
-
-		printf("aa %zd ", full_digit_cnt);
-		for (auto d: digits)
-			printf("%016zX ", d);
-		printf("\n");
 
 		int32_t error(inexact ? 4 : 0);
 		adapter_type xv(m, 0);
@@ -324,11 +301,44 @@ struct from_ascii_decimal_f<double> {
 		printf("--7- %016zX, %d, h %016zX, err %d\n", xv.m, xv.exp, half, error);
 		value = value_type(xv);
 		if (((half - error) < x_m) && ((half + error) > x_m)) {
+			auto c_exp_10(0);
+			if (full_digit_cnt % limb_digits_10) {
+				c_exp_10 = limb_digits_10
+					   - full_digit_cnt % limb_digits_10;
+				digits.back() *= small_power_10[c_exp_10];
+			}
+			std::reverse(digits.begin(), digits.end());
+
+			printf("aa %zd ", full_digit_cnt);
+			for (auto d: digits)
+				printf("%zd ", d);
+			printf("\n");
+
+			bigint::dec_to_bin(digits);
+
+			printf("bb %zd ", full_digit_cnt);
+			for (auto d: digits)
+				printf("%zu ", d);
+			printf("\n");
+
 			auto upper(xv);
 			upper.m <<= 1;
 			upper.m += 1;
 			upper.exp -= 1;
 			printf("--8- %016zX, %d\n", upper.m, upper.exp);
+			bigint_type x_upper;
+			bigint::assign_scalar(x_upper, upper.m);
+			/*
+			if ((exp_10 - c_exp_10) >= 0)
+				bigint::multiply_pow10(
+					digits, exp_10 - c_exp_10
+				);
+			else
+				bigint::multiply_pow10(
+					x_upper, c_exp_10 - exp_10
+				);
+
+			*/
 			adjust_value();
 		}
 

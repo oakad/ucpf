@@ -19,7 +19,7 @@ constexpr uint64_t small_power_10[20] = {
 	1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000,
 	1000000000, 10000000000, 100000000000, 1000000000000, 10000000000000,
 	100000000000000, 1000000000000000, 10000000000000000,
-	100000000000000000, 1000000000000000000ull
+	100000000000000000ull, 1000000000000000000ull, 10000000000000000000ull
 };
 
 constexpr int small_power_10_estimate(int order_2)
@@ -53,16 +53,16 @@ template <>
 struct bigint_calc_traits<32> {
 	typedef uint32_t limb_type;
 	typedef uint64_t acc_type;
-	constexpr static unsigned int limb_bits = 32;
-	constexpr static unsigned int limb_digits_10 = 9;
+	constexpr static size_t limb_bits = 32;
+	constexpr static size_t limb_digits_10 = 9;
 };
 
 template <>
 struct bigint_calc_traits<64> {
 	typedef uint64_t limb_type;
 	typedef uint128_t acc_type;
-	constexpr static unsigned int limb_bits = 64;
-	constexpr static unsigned int limb_digits_10 = 18;
+	constexpr static size_t limb_bits = 64;
+	constexpr static size_t limb_digits_10 = 19;
 };
 
 struct bigint {
@@ -73,9 +73,8 @@ struct bigint {
 
 	typedef typename traits_type::limb_type limb_type;
 	typedef typename traits_type::acc_type acc_type;
-	constexpr static unsigned int limb_bits = traits_type::limb_bits;
-	constexpr static unsigned int limb_digits_10
-	= traits_type::limb_digits_10;
+	constexpr static auto limb_bits = traits_type::limb_bits;
+	constexpr static auto limb_digits_10 = traits_type::limb_digits_10;
 
 	template <typename Vector>
 	static auto to_ascii_hex(Vector const &v)
@@ -126,6 +125,81 @@ struct bigint {
 			v.push_back(x);
 			value = yesod::shiftr(value, limb_bits);
 		}
+	}
+
+	template <typename Vector>
+	static void dec_to_bin(Vector &v)
+	{
+		constexpr static auto dec_radix(
+			small_power_10[limb_digits_10]
+		);
+		constexpr static auto r(~dec_radix + 1);
+		constexpr static acc_type rec(
+			(acc_type(0x760f253edb4ab0d2) << limb_bits)
+			| 0x9598f4f1e8361973
+		);
+		constexpr static size_t rec_shift(62);
+
+		printf("---aaa %016zX\n", r);
+		Vector dst(
+			v.size() + v.size() / limb_bits + 1, 0,
+			v.get_allocator()
+		);
+		limb_type kx, ky, kz;
+		std::pair<limb_type, limb_type> c(0, 0);
+
+		auto dec_mul_step(
+			[](
+				limb_type c, limb_type u
+			) -> std::pair<limb_type, limb_type> {
+				acc_type acc(u);
+				acc *= r;
+				acc += c;
+				if (!(acc >> limb_bits))
+					return std::make_pair(
+						acc % dec_radix,
+						acc / dec_radix
+					);
+
+				auto x_acc(yesod::detail::multiply(
+					acc, rec
+				).second);
+				x_acc >>= rec_shift;
+				x_acc &= ~limb_type(0);
+				std::pair<limb_type, limb_type> rv(
+					0, x_acc
+				);
+				x_acc *= dec_radix;
+				x_acc = acc - x_acc;
+				rv.first = x_acc;
+				return rv;
+			}
+		);
+
+		for (auto &d: dst) {
+			kx = 0;
+			for (auto &s: v) {
+				ky = s;
+				kz = c.second + kx;
+				printf("--a kz %zu, s %zu\n", kz, s);
+				if (!s)
+					c = std::make_pair(
+						kz % dec_radix, kz / dec_radix
+					);
+				else
+					c = dec_mul_step(kz, s);
+
+				printf("--x %zu, %zu\n", c.second, c.first);
+				s = c.first;
+				kx = ky;
+			}
+			d = kx + c.second;
+		}
+
+		while (!dst.back())
+			dst.pop_back();
+
+		v.swap(dst);
 	}
 
 	template <typename Vector>
