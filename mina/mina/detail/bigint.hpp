@@ -130,74 +130,15 @@ struct bigint {
 	template <typename Vector>
 	static void dec_to_bin(Vector &v)
 	{
-		constexpr static auto dec_radix(
-			small_power_10[limb_digits_10]
-		);
-		constexpr static auto r(~dec_radix + 1);
-		constexpr static acc_type rec(
-			(acc_type(0x760f253edb4ab0d2) << limb_bits)
-			| 0x9598f4f1e8361973
-		);
-		constexpr static size_t rec_shift(62);
+		/* Decimal bigint is most significant limb first. */
+		Vector dst(v.get_allocator());
+		dst.reserve(v.size() + v.size() / limb_bits + 1);
+		dst.push_back(v.front());
 
-		printf("---aaa %016zX\n", r);
-		Vector dst(
-			v.size() + v.size() / limb_bits + 1, 0,
-			v.get_allocator()
-		);
-		limb_type kx, ky, kz;
-		std::pair<limb_type, limb_type> c(0, 0);
-
-		auto dec_mul_step(
-			[](
-				limb_type c, limb_type u
-			) -> std::pair<limb_type, limb_type> {
-				acc_type acc(u);
-				acc *= r;
-				acc += c;
-				if (!(acc >> limb_bits))
-					return std::make_pair(
-						acc % dec_radix,
-						acc / dec_radix
-					);
-
-				auto x_acc(yesod::detail::multiply(
-					acc, rec
-				).second);
-				x_acc >>= rec_shift;
-				x_acc &= ~limb_type(0);
-				std::pair<limb_type, limb_type> rv(
-					0, x_acc
-				);
-				x_acc *= dec_radix;
-				x_acc = acc - x_acc;
-				rv.first = x_acc;
-				return rv;
-			}
-		);
-
-		for (auto &d: dst) {
-			kx = 0;
-			for (auto &s: v) {
-				ky = s;
-				kz = c.second + kx;
-				printf("--a kz %zu, s %zu\n", kz, s);
-				if (!s)
-					c = std::make_pair(
-						kz % dec_radix, kz / dec_radix
-					);
-				else
-					c = dec_mul_step(kz, s);
-
-				printf("--x %zu, %zu\n", c.second, c.first);
-				s = c.first;
-				kx = ky;
-			}
-			d = kx + c.second;
+		for (auto iter(++v.begin()); iter != v.end(); ++iter) {
+			multiply(dst, small_power_10[limb_digits_10]);
+			add(dst, *iter);
 		}
-
-		while (!dst.back())
-			dst.pop_back();
 
 		v.swap(dst);
 	}
@@ -310,6 +251,37 @@ struct bigint {
 			rv = 1;
 
 		return rv;
+	}
+
+	template <typename Vector>
+	static void add(Vector &l, limb_type r)
+	{
+		acc_type acc(l.front());
+		acc += r;
+		l.front() = acc;
+		if (!(acc >> limb_bits))
+			return;
+
+		for (auto iter(++l.begin()); iter != l.end(); ++iter) {
+			if (*iter < ~limb_type(0)) {
+				*iter += 1;
+				return;
+			} else
+				*iter = 0;
+		}
+		l.push_back(1);
+	}
+
+	template <typename Vector>
+	static void multiply_pow10(Vector &v, size_t order)
+	{
+		if (order % limb_digits_10) {
+			multiply(v, small_power_10[order % limb_digits_10]);
+			order -= order % limb_digits_10;
+		}
+
+		for(; order; order -= limb_digits_10)
+			multiply(v, small_power_10[limb_digits_10]);
 	}
 
 	template <typename Vector>

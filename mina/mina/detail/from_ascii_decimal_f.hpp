@@ -137,11 +137,6 @@ struct from_ascii_decimal_f<double> {
 		}
 	}
 
-	void adjust_value()
-	{
-		value = 0;
-	}
-
 	template <typename InputIterator, typename Alloc>
 	from_ascii_decimal_f(
 		InputIterator &first, InputIterator last, Alloc const &a
@@ -193,7 +188,7 @@ struct from_ascii_decimal_f<double> {
 		m = m_int.value;
 		valid = true;
 		bool inexact(m_int.tail_cnt);
-		int32_t exp_10(0);
+		int32_t exp_10(0), d_exp_10(0);
 		auto digit_cnt(m_int.converted);
 		auto full_digit_cnt(int_p.pos);
 
@@ -216,6 +211,7 @@ struct from_ascii_decimal_f<double> {
 				if (!inexact) {
 					m = m_frac.value;
 					exp_10 -= m_frac.converted;
+					d_exp_10 -= m_frac.consumed();
 					inexact = m_frac.tail_cnt
 						  && !m_frac.zero_tail;
 					digit_cnt += m_frac.converted;
@@ -224,9 +220,12 @@ struct from_ascii_decimal_f<double> {
 
 				first = x_first;
 			}
-		} else
+		} else {
 			exp_10 += m_int.tail_cnt;
+			d_exp_10 = exp_10;
+		}
 
+		d_exp_10 -= exp_10;
 		parse_exponent(exp_10, first, last);
 
 		if (!m) {
@@ -302,16 +301,18 @@ struct from_ascii_decimal_f<double> {
 		value = value_type(xv);
 		if (((half - error) < x_m) && ((half + error) > x_m)) {
 			auto c_exp_10(0);
-			if (full_digit_cnt % limb_digits_10) {
+			if (
+				(digits.size() > 1)
+				&& (full_digit_cnt % limb_digits_10)
+			) {
 				c_exp_10 = limb_digits_10
 					   - full_digit_cnt % limb_digits_10;
 				digits.back() *= small_power_10[c_exp_10];
 			}
-			std::reverse(digits.begin(), digits.end());
 
 			printf("aa %zd ", full_digit_cnt);
 			for (auto d: digits)
-				printf("%zd ", d);
+				printf("%zu ", d);
 			printf("\n");
 
 			bigint::dec_to_bin(digits);
@@ -325,21 +326,53 @@ struct from_ascii_decimal_f<double> {
 			upper.m <<= 1;
 			upper.m += 1;
 			upper.exp -= 1;
-			printf("--8- %016zX, %d\n", upper.m, upper.exp);
+
 			bigint_type x_upper;
-			bigint::assign_scalar(x_upper, upper.m);
-			/*
-			if ((exp_10 - c_exp_10) >= 0)
+			bigint::assign_scalar(
+				x_upper, upper.m//, yesod::clz(upper.m)
+			);
+			printf("-x7- exp_10 %d, exp_2 %d, d_exp_10 %d\n", exp_10, upper.exp, d_exp_10);
+
+			d_exp_10 += exp_10;
+
+			printf("dig1 %s\n", bigint::to_ascii_hex(digits).data());
+			printf("upp1 %s\n", bigint::to_ascii_hex(x_upper).data());
+			if ((d_exp_10 - c_exp_10) >= 0)
 				bigint::multiply_pow10(
-					digits, exp_10 - c_exp_10
+					digits, d_exp_10 - c_exp_10
 				);
 			else
 				bigint::multiply_pow10(
-					x_upper, c_exp_10 - exp_10
+					x_upper, c_exp_10 - d_exp_10
 				);
 
-			*/
-			adjust_value();
+			printf("dig2 %s\n", bigint::to_ascii_hex(digits).data());
+			printf("upp2 %s\n", bigint::to_ascii_hex(x_upper).data());
+			if (upper.exp >= 0)
+				bigint::shift_left(x_upper, upper.exp);
+			else
+				bigint::shift_left(digits, -upper.exp);
+
+			auto ld(yesod::clz(digits.back()));
+			auto lu(yesod::clz(x_upper.back()));
+			if (ld >= lu)
+				bigint::shift_left(digits, ld - lu);
+			else
+				bigint::shift_left(x_upper, lu - ld);
+
+			printf("dig3 %s\n", bigint::to_ascii_hex(digits).data());
+			printf("upp3 %s\n", bigint::to_ascii_hex(x_upper).data());
+			bigint::shift_left(digits, yesod::clz(digits.back()));
+			bigint::shift_left(x_upper, yesod::clz(x_upper.back()));
+			
+			int c(bigint::compare(digits, x_upper));
+			printf("--8- %016zX, %d, c %d\n", upper.m, upper.exp, c);
+
+			if ((c > 0) || (!c && (wrapper_type(value).get_mantissa() & 1))) {
+				//xv.m += sign ? -1 : 1;
+				xv.m += 1;
+				value = value_type(xv);
+			}
 		}
 
 		if (sign)

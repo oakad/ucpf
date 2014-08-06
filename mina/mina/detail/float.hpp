@@ -109,8 +109,14 @@ struct float_t {
 		constexpr static auto exponent_bits(
 			wrapper_type::traits_type::exponent_bits
 		);
-		constexpr static auto exponent_bias(
+		constexpr static int32_t exponent_bias(
 			wrapper_type::traits_type::exponent_bias
+		);
+		constexpr static int32_t denormal_exponent(
+			2 - exponent_bias - mantissa_bits
+		);
+		constexpr static int32_t max_exponent(
+			2 + exponent_bias - mantissa_bits
 		);
 
 		auto x_m(m);
@@ -121,20 +127,33 @@ struct float_t {
 			x_m >>= exponent_bits - lz;
 			x_exp += exponent_bits - lz;
 		}
-		printf("bb %016zx, %d\n", x_m, x_exp);
-		x_exp += exponent_bias + mantissa_bits - 1;
-		if (x_exp >= (1 << exponent_bits))
+		printf("bb %016zx, %d, %d\n", x_m, x_exp, denormal_exponent);
+		if (x_exp >= max_exponent)
 			return std::numeric_limits<value_type>::infinity();
 
-		if (x_exp < 0)
+		if (x_exp < denormal_exponent)
 			return value_type(0);
 
-		if (x_exp && (lz > exponent_bits)) {
-			x_m <<= lz - exponent_bits;
-			x_exp -= lz - exponent_bits;
+		lz = yesod::clz(x_m);
+		auto shift(std::min(
+			x_exp - denormal_exponent, lz - int(exponent_bits) - 2
+		));
+		if (shift > 0) {
+			x_m <<= shift;
+			x_exp -= shift;
 		}
-		printf("cc %016zx, %x\n", x_m, x_exp);
-		mantissa_type rv(x_exp);
+
+		printf("cc %016zx, %x, %d\n", x_m, x_exp, shift);
+
+		mantissa_type rv;
+		if (
+			(x_exp == denormal_exponent)
+			&& !(x_m & (mantissa_type(1) << mantissa_bits))
+		)
+			rv = 0;
+		else
+			rv = x_exp + exponent_bias + mantissa_bits - 1;
+		
 		rv <<= mantissa_bits - 1;
 		rv |= x_m & ((mantissa_type(1) << (mantissa_bits - 1)) - 1);
 		printf("dd %016zx\n", rv);
