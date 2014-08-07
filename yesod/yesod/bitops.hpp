@@ -27,8 +27,26 @@ constexpr int clz(uint64_t v)
 constexpr int clz(uint128_t v)
 {
 	return v ? (
-		(v >> 64u) ? __builtin_clzll(static_cast<uint64_t>(v >> 64u))
-			   : (64 + __builtin_clzll(static_cast<uint64_t>(v)))
+		(v >> 64u) ? __builtin_clzll(uint64_t(v >> 64u))
+			   : (64 + __builtin_clzll(uint64_t(v)))
+	) : 128;
+}
+
+constexpr int ctz(uint32_t v)
+{
+	return v ? (__builtin_ffs(v) - 1) : 32;
+}
+
+constexpr int ctz(uint64_t v)
+{
+	return v ? (__builtin_ffsll(v) - 1) : 64;
+}
+
+constexpr int ctz(uint128_t v)
+{
+	return v ? (
+		uint64_t(v) ? (__builtin_ffsll(uint64_t(v)) - 1)
+			    : (__builtin_ffsll(uint64_t(v >> 64u)) + 63)
 	) : 128;
 }
 

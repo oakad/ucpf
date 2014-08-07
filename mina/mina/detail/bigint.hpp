@@ -128,22 +128,6 @@ struct bigint {
 	}
 
 	template <typename Vector>
-	static void dec_to_bin(Vector &v)
-	{
-		/* Decimal bigint is most significant limb first. */
-		Vector dst(v.get_allocator());
-		dst.reserve(v.size() + v.size() / limb_bits + 1);
-		dst.push_back(v.front());
-
-		for (auto iter(++v.begin()); iter != v.end(); ++iter) {
-			multiply(dst, small_power_10[limb_digits_10]);
-			add(dst, *iter);
-		}
-
-		v.swap(dst);
-	}
-
-	template <typename Vector>
 	static void shift_left(Vector &v, size_t order)
 	{
 		v.reserve(v.size() + (order / limb_bits + 1));

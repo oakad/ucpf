@@ -12,6 +12,7 @@
 #include <mina/detail/float.hpp>
 #include <mina/detail/bigint.hpp>
 #include <mina/detail/binary_pow_10.hpp>
+#include <mina/detail/from_ascii_decimal_u.hpp>
 
 namespace ucpf { namespace mina { namespace detail {
 
@@ -25,95 +26,72 @@ struct from_ascii_decimal_f<double> {
 	typedef float_t<wrapper_type::bit_size> adapter_type;
 	typedef typename wrapper_type::storage_type storage_type;
 	typedef to_ascii_decimal_f_traits<value_type> traits_type;
-	constexpr static auto limb_bits = bigint::limb_bits;
 	constexpr static auto limb_digits_10 = bigint::limb_digits_10;
 	constexpr static size_t mantissa_digits = 19;
 	constexpr static size_t exponent_digits = 3;
 
-	template <typename Vector>
-	struct num_reader {
-		num_reader(Vector &digits_)
-		: digits(digits_), pos(0), z_tail(0)
+	template <typename V>
+	struct int_policy {
+		constexpr static bool skip_leading_zeros = true;
+		constexpr static bool consume_trailing_digits = true;
+		constexpr static bool round_tail = true;
+
+		int_policy(V &digits_, size_t pos_)
+		: digits(digits_), pos(pos_)
 		{}
 
-		template <typename InputIterator>
-		size_t append(InputIterator &first, InputIterator last)
+		constexpr size_t max_digits() const
 		{
-			size_t rv(0);
-			while ((first != last) && std::isdigit(*first)) {
-				if (!(pos % limb_digits_10))
-					digits.push_back(0);
-
-				digits.back() *= 10;
-				if (*first != '0') {
-					digits.back() += *first - '0';
-					z_tail = 0;
-				} else
-					++z_tail;
-				++pos;
-				++first;
-				++rv;
-			}
-			return rv;
+			return mantissa_digits;
 		}
 
-		template <typename InputIterator>
-		size_t append_trailing(
-			InputIterator &first, InputIterator last
-		)
+		void push_digit(int c)
 		{
-			size_t rv(0);
-			while ((first != last) && std::isdigit(*first)) {
-				if (*first != '0')
-					return rv + append(first, last);
+			if (!(pos % limb_digits_10))
+				digits.push_back(0);
 
-				++first;
-				++rv;
-			}
-			return rv;
+			digits.back() *= 10;
+			digits.back() += c & 0xf;
+			++pos;
 		}
 
-		void adjust_tail()
-		{
-			if (!digits.back()) {
-				auto diff(
-					(pos % limb_digits_10)
-					? (pos % limb_digits_10)
-					: limb_digits_10
-				);
-				pos -= diff;
-				z_tail -= diff;
-
-				digits.pop_back();
-
-				while (!digits.back()) {
-					pos -= limb_digits_10;
-					z_tail -= limb_digits_10;
-					digits.pop_back();
-				}
-
-				if (digits.empty())
-					return;
-			} else if (digits.size() > 1) {
-				if (pos % limb_digits_10) {
-					digits.back() *= small_power_10[
-						limb_digits_10
-						- pos % limb_digits_10
-					];
-					z_tail += limb_digits_10
-						  - pos % limb_digits_10;
-				}
-			}
-
-			if (z_tail)
-				pos -= z_tail;
-		}
-
-		Vector &digits;
+		V &digits;
 		size_t pos;
-		size_t z_tail;
 	};
 
+	template <typename V>
+	struct frac_policy : int_policy<V> {
+		constexpr static bool skip_leading_zeros = false;
+		constexpr static bool consume_trailing_digits = true;
+		constexpr static bool round_tail = true;
+
+		frac_policy(V &digits_, size_t pos_, size_t max_digit_cnt_)
+		: int_policy<V>(digits_, pos_), max_digit_cnt(max_digit_cnt_)
+		{}
+
+		size_t max_digits() const
+		{
+			return max_digit_cnt;
+		}
+
+		void push_digit(int c)
+		{
+			int_policy<V>::push_digit(c);
+		}
+
+		size_t max_digit_cnt;
+	};
+
+	struct exp_policy {
+		constexpr static bool skip_leading_zeros = true;
+		constexpr static bool consume_trailing_digits = false;
+		constexpr static bool round_tail = false;
+
+		constexpr size_t max_digits() const
+		{
+			return exponent_digits;
+		}
+	};
 
 	template <typename InputIterator>
 	static bool parse_special(
@@ -123,10 +101,9 @@ struct from_ascii_decimal_f<double> {
 		return false;
 	}
 
-	template <typename Vector, typename InputIterator>
+	template <typename InputIterator>
 	static void parse_exponent(
-		Vector &digits, bool &sign, InputIterator &first,
-		InputIterator last
+		int32_t &exp_10, InputIterator &first, InputIterator last
 	)
 	{
 		if (first == last)
@@ -141,94 +118,23 @@ struct from_ascii_decimal_f<double> {
 		if (x_first == last)
 			return;
 
-		sign = *x_first == '-';
-		if (sign || (*x_first == '+')) {
+		bool exp_sign(*x_first == '-');
+		if (exp_sign || (*x_first == '+')) {
 			++x_first;
 			if (x_first == last)
 				return;
 		}
 
-		num_reader<Vector> r(digits);
-		if (r.append_trailing(x_first, last)) {
-			r.adjust_tail();
+		from_ascii_decimal_u<int32_t, exp_policy> exp(x_first, last);
+
+		if (exp.consumed()) {
+			if (exp_sign)
+				exp_10 -= exp.value;
+			else
+				exp_10 += exp.value;
+
 			first = x_first;
 		}
-	}
-
-	template <typename Vector, typename U>
-	static std::pair<size_t, bool> bigdec_to_scalar(U &dst, Vector &src)
-	{
-		constexpr static auto dst_digits_10(
-			std::numeric_limits<U>::digits10
-		);
-		auto dd(dst_digits_10);
-		auto iter(src.begin());
-		auto r_val(small_power_10[limb_digits_10] >> 1);
-		size_t rv(0);
-		dst = 0;
-
-		if (dst_digits_10 > limb_digits_10) {
-			while (iter != src.end()) {
-				dst *= small_power_10[limb_digits_10];
-				dst += *iter++;
-				dd -= limb_digits_10;
-				rv += limb_digits_10;
-				if (dd < limb_digits_10)
-					break;
-			}
-
-			dst *= small_power_10[dd];
-
-			if (iter == src.end())
-				return std::make_pair(rv, true);
-
-			if (!dd) {
-				if (*iter >= r_val)
-					++dst;
-
-				return std::make_pair(rv, false);
-			}
-		}
-
-		if (dd < limb_digits_10) {
-			r_val = small_power_10[limb_digits_10 - dd] >> 1;
-			auto rem(*iter % small_power_10[limb_digits_10 - dd]);
-			dst += *iter / small_power_10[limb_digits_10 - dd];
-			rv += dd;
-
-			if (rem) {
-				if (rem >= r_val)
-					++dst;
-				return std::make_pair(rv, false);
-			} else {
-				++iter;
-				return std::make_pair(rv, iter == src.end());
-			}
-		} else {
-			dst += *iter++;
-			rv += limb_digits_10;
-			if (iter != src.end()) {
-				if (*iter >= r_val)
-					++dst;
-				return std::make_pair(rv, false);
-			} else
-				return std::make_pair(rv, true);
-		}
-	}
-
-	template <typename Vector>
-	static void bigdec_to_bigint(Vector &v)
-	{
-		Vector dst(v.get_allocator());
-		dst.reserve(v.size() + v.size() / limb_bits + 1);
-		dst.push_back(v.front());
-
-		for (auto iter(++v.begin()); iter != v.end(); ++iter) {
-			bigint::multiply(dst, small_power_10[limb_digits_10]);
-			bigint::add(dst, *iter);
-		}
-
-		v.swap(dst);
 	}
 
 	template <typename InputIterator, typename Alloc>
@@ -264,73 +170,70 @@ struct from_ascii_decimal_f<double> {
 		if (valid)
 			return;
 
+		storage_type m(0);
 		bigint_type digits(a);
-		num_reader<bigint_type> m_r(digits);
-		if (!m_r.append_trailing(x_first, last)) {
+		int_policy<bigint_type> int_p(digits, 0);
+
+		from_ascii_decimal_u<storage_type, decltype(int_p)> m_int(
+			x_first, last,
+			std::forward<decltype(int_p)>(int_p), 0
+		);
+
+		if (!m_int.consumed()) {
 			if (*x_first != '.')
 				return;
-		} else {
-			first = x_first;
-			valid = true;
 		}
 
-		bool check_for_exp(true);
-		auto int_pos(m_r.pos);
-		printf("aaa %zd\n", int_pos);
+		first = x_first;
+		m = m_int.value;
+		valid = true;
+		bool inexact(m_int.tail_cnt);
+		int32_t exp_10(0), d_exp_10(0);
+		auto digit_cnt(m_int.converted);
+		auto full_digit_cnt(int_p.pos);
 
 		if (*x_first == '.') {
 			++x_first;
-			if (digits.empty()) {
-				auto 
-			}
-			if (m_r.append(x_first, last)) {
+			frac_policy<bigint_type> frac_p(
+				digits, int_p.pos,
+				(m_int.converted < mantissa_digits)
+				? (mantissa_digits - m_int.converted) : 0
+			);
+			from_ascii_decimal_u<
+				storage_type, decltype(frac_p)
+			> m_frac(
+				x_first, last,
+				std::forward<decltype(frac_p)>(frac_p), m
+			);
+			full_digit_cnt = frac_p.pos;
+
+			if (m_frac.consumed()) {
+				if (!inexact) {
+					m = m_frac.value;
+					exp_10 -= m_frac.converted;
+					d_exp_10 -= m_frac.consumed();
+					inexact = m_frac.tail_cnt
+						  && !m_frac.zero_tail;
+					digit_cnt += m_frac.converted;
+				} else
+					exp_10 += m_int.tail_cnt;
+
 				first = x_first;
-				valid = true;
-			} else
-				check_for_exp = false;
-		}
-
-		if (!valid)
-			return;
-		printf("bbb %zd\n", m_r.pos);
-		m_r.adjust_tail();
-
-		int32_t exp_10(0);
-		if (check_for_exp) {
-			bigint_type exp_digits(a);
-			bool exp_sign(false);
-			parse_exponent(exp_digits, exp_sign, first, last);
-			if (
-				!exp_digits.empty()
-				&& !bigdec_to_scalar(exp_10, exp_digits).second
-			) {
-				if (exp_sign)
-					value = value_type(0);
-				else
-					value = std::numeric_limits<
-						value_type
-					>::infinity();
-
-				if (sign)
-					value = -value;
-
-				return;
 			}
+		} else {
+			exp_10 += m_int.tail_cnt;
+			d_exp_10 = exp_10;
 		}
-		printf("ccc %zd\n", m_r.pos);
-		if (int_pos >= m_r.pos)
-			exp_10 += int_pos - m_r.pos;
-		else
-			exp_10 -= m_r.pos - int_pos;
 
-		if (!m_r.pos) {
+		d_exp_10 -= exp_10;
+		parse_exponent(exp_10, first, last);
+
+		if (!m) {
 			value = sign ? -value_type(0) : value_type(0);
 			return;
 		}
 
-		storage_type m(0);
-		auto m_cnt(bigdec_to_scalar(m, digits));
-		int32_t error(m_cnt.second ? 0 : 4);
+		int32_t error(inexact ? 4 : 0);
 		adapter_type xv(m, 0);
 		printf("--1- %016zX, %d, exp_10 %d\n", xv.m, xv.exp, exp_10);
 		xv.normalize();
@@ -347,7 +250,7 @@ struct from_ascii_decimal_f<double> {
 			xv *= adj_v;
 			printf("-x3- %016zX, %d\n", xv.m, xv.exp);
 			if (
-				(mantissa_digits - m_cnt.first)
+				(mantissa_digits - digit_cnt)
 				< (exp_10 - exp_bd.exp_5)
 			)
 				error += 4;
@@ -398,15 +301,23 @@ struct from_ascii_decimal_f<double> {
 		value = value_type(xv);
 		if (((half - error) < x_m) && ((half + error) > x_m)) {
 			auto c_exp_10(0);
+			if (
+				(digits.size() > 1)
+				&& (full_digit_cnt % limb_digits_10)
+			) {
+				c_exp_10 = limb_digits_10
+					   - full_digit_cnt % limb_digits_10;
+				digits.back() *= small_power_10[c_exp_10];
+			}
 
-			printf("aa %zd ", m_r.pos);
+			printf("aa %zd ", full_digit_cnt);
 			for (auto d: digits)
 				printf("%zu ", d);
 			printf("\n");
 
-			bigdec_to_bigint(digits);
+			bigint::dec_to_bin(digits);
 
-			printf("bb %zd ", m_r.pos);
+			printf("bb %zd ", full_digit_cnt);
 			for (auto d: digits)
 				printf("%zu ", d);
 			printf("\n");
@@ -420,7 +331,6 @@ struct from_ascii_decimal_f<double> {
 			bigint::assign_scalar(
 				x_upper, upper.m//, yesod::clz(upper.m)
 			);
-			int32_t d_exp_10(0);
 			printf("-x7- exp_10 %d, exp_2 %d, d_exp_10 %d\n", exp_10, upper.exp, d_exp_10);
 
 			d_exp_10 += exp_10;
@@ -458,9 +368,8 @@ struct from_ascii_decimal_f<double> {
 			int c(bigint::compare(digits, x_upper));
 			printf("--8- %016zX, %d, c %d\n", upper.m, upper.exp, c);
 
-			if ((c > 0) || (
-				!c && (wrapper_type(value).get_mantissa() & 1)
-			)) {
+			if ((c > 0) || (!c && (wrapper_type(value).get_mantissa() & 1))) {
+				//xv.m += sign ? -1 : 1;
 				xv.m += 1;
 				value = value_type(xv);
 			}
