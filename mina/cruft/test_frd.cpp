@@ -140,17 +140,14 @@ void test_float32()
 
 #endif
 
-#define XS 1
-#define XM 0
+#define XS 0
+#define XM 1
 
 void test_float64()
 {
 #if XS
-	//char const *v = "-9646109091079555";
-	//char const *v = "-.001742470112180542240224320110757549300";
-	//char const *v = "+8563.52197241e+235";
-	//char const *v = "-05.090553530e-20";
-	char const *v = "+3063.423630115361220085816843638430981264";
+	//char const *v = "436460705403041.468773281";
+	char const *v = "3212559156671259110582842188402762373970e+6";
 	char const *xv(v);
 
 	detail::from_ascii_decimal_f<double> cv(

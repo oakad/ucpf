@@ -35,7 +35,7 @@ struct from_ascii_decimal_f<double> {
 	template <typename Vector>
 	struct num_reader {
 		num_reader(Vector &digits_)
-		: digits(digits_), pos(0), z_tail(0)
+		: digits(digits_), pos(0), tail_exp(0)
 		{}
 
 		template <typename InputIterator>
@@ -49,9 +49,9 @@ struct from_ascii_decimal_f<double> {
 				digits.back() *= 10;
 				if (*first != '0') {
 					digits.back() += *first - '0';
-					z_tail = 0;
+					tail_exp = 0;
 				} else
-					++z_tail;
+					++tail_exp;
 				++pos;
 				++first;
 				++rv;
@@ -80,8 +80,6 @@ struct from_ascii_decimal_f<double> {
 			if (digits.empty())
 				return;
 
-			bool multi_limb(digits.size() > 1);
-
 			if (!digits.back()) {
 				auto diff(
 					(pos % limb_digits_10)
@@ -89,13 +87,13 @@ struct from_ascii_decimal_f<double> {
 					: limb_digits_10
 				);
 				pos -= diff;
-				z_tail -= diff;
+				tail_exp += diff;
 
 				digits.pop_back();
 
 				while (!digits.back()) {
 					pos -= limb_digits_10;
-					z_tail -= limb_digits_10;
+					tail_exp += limb_digits_10;
 					digits.pop_back();
 				}
 
@@ -107,18 +105,15 @@ struct from_ascii_decimal_f<double> {
 						limb_digits_10
 						- pos % limb_digits_10
 					];
-					z_tail += limb_digits_10
-						  - pos % limb_digits_10;
+					tail_exp -= limb_digits_10
+						    - pos % limb_digits_10;
 				}
 			}
-
-			if (multi_limb)
-				pos -= z_tail;
 		}
 
 		Vector &digits;
 		size_t pos;
-		size_t z_tail;
+		int32_t tail_exp;
 	};
 
 
@@ -304,6 +299,7 @@ struct from_ascii_decimal_f<double> {
 					valid = true;
 				}
 			} else if (m_r.append(x_first, last)) {
+				m_r.tail_exp = 0;
 				first = x_first;
 				valid = true;
 			} else
@@ -319,6 +315,7 @@ struct from_ascii_decimal_f<double> {
 		auto m_cnt(bigdec_to_scalar(m, digits));
 		int32_t error(m_cnt.second ? 0 : 4);
 
+		auto d_exp_10(exp_10);
 		exp_10 -= m_cnt.first - int_pos;
 
 		if (check_for_exp) {
@@ -342,14 +339,17 @@ struct from_ascii_decimal_f<double> {
 
 					return;
 				}
-				if (exp_sign)
+				if (exp_sign) {
+					d_exp_10 -= exp_digits.back();
 					exp_10 -= exp_digits.back();
-				else
+				} else {
+					d_exp_10 += exp_digits.back();
 					exp_10 += exp_digits.back();
+				}
 			}
 		}
 
-		printf("ccc %zd\n", m_r.pos);
+		printf("ccc %zd, %d\n", m_r.pos, d_exp_10);
 
 		if (!m_r.pos) {
 			value = sign ? -value_type(0) : value_type(0);
@@ -423,8 +423,6 @@ struct from_ascii_decimal_f<double> {
 		printf("--7- %016zX, %d, h %016zX, err %d\n", xv.m, xv.exp, half, error);
 		value = value_type(xv);
 		if (((half - error) < x_m) && ((half + error) > x_m)) {
-			auto c_exp_10(0);
-
 			printf("aa %zd ", m_r.pos);
 			for (auto d: digits)
 				printf("%zu ", d);
@@ -446,21 +444,21 @@ struct from_ascii_decimal_f<double> {
 			bigint::assign_scalar(
 				x_upper, upper.m//, yesod::clz(upper.m)
 			);
-			int32_t d_exp_10(0);
-			printf("-x7- exp_10 %d, exp_2 %d, d_exp_10 %d\n", exp_10, upper.exp, d_exp_10);
 
-			d_exp_10 += exp_10;
+			if (int_pos > m_r.pos)
+				d_exp_10 += int_pos - m_r.pos;
+			else
+				d_exp_10 -= m_r.pos - int_pos;
+
+			d_exp_10 += m_r.tail_exp;
+			printf("-x7- exp_10 %d, exp_2 %d\n", d_exp_10, upper.exp);
 
 			printf("dig1 %s\n", bigint::to_ascii_hex(digits).data());
 			printf("upp1 %s\n", bigint::to_ascii_hex(x_upper).data());
-			if ((d_exp_10 - c_exp_10) >= 0)
-				bigint::multiply_pow10(
-					digits, d_exp_10 - c_exp_10
-				);
+			if (d_exp_10 >= 0)
+				bigint::multiply_pow10(digits, d_exp_10);
 			else
-				bigint::multiply_pow10(
-					x_upper, c_exp_10 - d_exp_10
-				);
+				bigint::multiply_pow10(x_upper, -d_exp_10);
 
 			printf("dig2 %s\n", bigint::to_ascii_hex(digits).data());
 			printf("upp2 %s\n", bigint::to_ascii_hex(x_upper).data());
