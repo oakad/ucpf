@@ -15,7 +15,7 @@ namespace ucpf { namespace mina {
 namespace detail {
 
 template <typename T, bool IsFloat = false>
-struct ascii_decimal_converter {
+struct to_ascii_decimal_converter {
 	template <typename OutputIterator, typename Alloc>
 	static void apply(OutputIterator &&sink, T v, Alloc const &a)
 	{
@@ -43,7 +43,7 @@ struct ascii_decimal_converter {
 };
 
 template <typename T>
-struct ascii_decimal_converter<T, true> {
+struct to_ascii_decimal_converter<T, true> {
 	template <typename OutputIterator, typename Alloc>
 	static void apply(OutputIterator &&sink, T v, Alloc const &a)
 	{
@@ -69,7 +69,7 @@ template <
 	typename Alloc = std::allocator<void>
 > void to_ascii_decimal(OutputIterator &&sink, T v, Alloc const &a = Alloc())
 {
-	detail::ascii_decimal_converter<
+	detail::to_ascii_decimal_converter<
 		T, std::is_floating_point<T>::value
 	>::apply(std::forward<OutputIterator>(sink), v, a);
 }

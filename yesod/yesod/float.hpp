@@ -168,6 +168,23 @@ struct float_t {
 		);
 	}
 
+	static machine_type make_nan(storage_type v)
+	{
+		constexpr static storage_type nan_value_mask((
+			storage_type(1) << (traits_type::mantissa_bits - 2)
+		) - 1);
+
+		if (!v)
+			return std::numeric_limits<machine_type>::quiet_NaN();
+
+		v &= nan_value_mask;
+		v |= (
+			(storage_type(1) << traits_type::exponent_bits) - 1
+		) << (traits_type::mantissa_bits - 1);
+
+		return v;
+	}
+
 private:
 	constexpr static storage_type exponent_mask = (
 		storage_type(1) << traits_type::exponent_bits

@@ -121,13 +121,12 @@ struct float_t {
 
 		auto x_m(m);
 		auto x_exp(exp);
-		printf("aa %016zx, %d\n", x_m, x_exp);
 		auto lz(yesod::clz(x_m));
 		if (lz < exponent_bits) {
 			x_m >>= exponent_bits - lz;
 			x_exp += exponent_bits - lz;
 		}
-		printf("bb %016zx, %d, %d\n", x_m, x_exp, denormal_exponent);
+
 		if (x_exp >= max_exponent)
 			return std::numeric_limits<value_type>::infinity();
 
@@ -143,8 +142,6 @@ struct float_t {
 			x_exp -= shift;
 		}
 
-		printf("cc %016zx, %x, %d\n", x_m, x_exp, shift);
-
 		mantissa_type rv;
 		if (
 			(x_exp == denormal_exponent)
@@ -156,7 +153,6 @@ struct float_t {
 		
 		rv <<= mantissa_bits - 1;
 		rv |= x_m & ((mantissa_type(1) << (mantissa_bits - 1)) - 1);
-		printf("dd %016zx\n", rv);
 		return wrapper_type(rv).get();
 	}
 

@@ -140,22 +140,36 @@ void test_float32()
 
 #endif
 
-#define XS 0
-#define XM 1
+#define XS 1
+#define XM 0
 
 void test_float64()
 {
 #if XS
-	//char const *v = "436460705403041.468773281";
-	char const *v = "3212559156671259110582842188402762373970e+6";
-	char const *xv(v);
+	{
+		char const *v = "436460705403041.468773281";
+		char const *xv(v);
 
-	detail::from_ascii_decimal_f<double> cv(
-		xv, v + std::strlen(v), std::allocator<void>()
-	);
-	double rv(strtod(v, nullptr));
-	printf("v (%d) %.40g, eq %d\n", cv.valid, cv.value, cv.value == rv);
-	printf("rv    %.40g\n", rv);
+		detail::from_ascii_decimal_f<double> cv(
+			xv, v + std::strlen(v), std::allocator<void>()
+		);
+		double rv(strtod(v, nullptr));
+		printf("v (%d) %.40g, eq %d\n", cv.valid, cv.value, cv.value == rv);
+		printf("rv    %.40g\n", rv);
+	}
+	{
+		//char const *v = "3212559156671259110582842188402762373970e+6";
+		char const *v = "3.518437208883201171875E+013";
+		char const *xv(v);
+
+		detail::from_ascii_decimal_f<double> cv(
+			xv, v + std::strlen(v), std::allocator<void>()
+		);
+		double rv(strtod(v, nullptr));
+		printf("v (%d) %.40g, eq %d\n", cv.valid, cv.value, cv.value == rv);
+		printf("rv    %.40g\n", rv);
+	}
+
 #endif
 	test::dec_float_generator<40, 325, 310> fg_r;
 #if 0
