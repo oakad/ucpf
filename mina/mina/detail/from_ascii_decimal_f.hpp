@@ -480,7 +480,7 @@ struct from_ascii_decimal_f {
 
 			return;
 		}
-
+		printf("--7- %016zX, %d, h %016zX, err %d\n", xv.m, xv.exp, half, error);
 		if (((half - error) < x_m) && ((half + error) > x_m)) {
 			bigdec_to_bigint(digits);
 

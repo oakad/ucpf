@@ -141,18 +141,20 @@ struct float_t {
 			x_m <<= shift;
 			x_exp -= shift;
 		}
-
+		printf("cc %016zx, %x, %d\n", x_m, x_exp, shift);
 		mantissa_type rv;
 		if (
 			(x_exp == denormal_exponent)
-			&& !(x_m & (mantissa_type(1) << mantissa_bits))
+			&& !(x_m & (mantissa_type(1) << (mantissa_bits - 1)))
 		)
 			rv = 0;
 		else
 			rv = x_exp + exponent_bias + mantissa_bits - 1;
-		
+
+		auto x_rv(rv);
 		rv <<= mantissa_bits - 1;
 		rv |= x_m & ((mantissa_type(1) << (mantissa_bits - 1)) - 1);
+		printf("dd %016zx, %016zx\n", rv, x_rv);
 		return wrapper_type(rv).get();
 	}
 

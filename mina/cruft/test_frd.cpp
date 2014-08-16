@@ -147,7 +147,10 @@ void test_float64()
 {
 #if XS
 	{
-		char const *v = "436460705403041.468773281";
+		//char const *v = "-353.2872e-310";
+		//char const *v = "-023864930216316550";
+		//char const *v = "+.741201859450";
+		char const *v = "-6396378181.3887448300";
 		char const *xv(v);
 
 		detail::from_ascii_decimal_f<double> cv(
@@ -157,19 +160,6 @@ void test_float64()
 		printf("v (%d) %.40g, eq %d\n", cv.valid, cv.value, cv.value == rv);
 		printf("rv    %.40g\n", rv);
 	}
-	{
-		//char const *v = "3212559156671259110582842188402762373970e+6";
-		char const *v = "3.518437208883201171875E+013";
-		char const *xv(v);
-
-		detail::from_ascii_decimal_f<double> cv(
-			xv, v + std::strlen(v), std::allocator<void>()
-		);
-		double rv(strtod(v, nullptr));
-		printf("v (%d) %.40g, eq %d\n", cv.valid, cv.value, cv.value == rv);
-		printf("rv    %.40g\n", rv);
-	}
-
 #endif
 	test::dec_float_generator<40, 325, 310> fg_r;
 #if 0
