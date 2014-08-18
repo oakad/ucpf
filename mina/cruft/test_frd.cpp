@@ -140,8 +140,8 @@ void test_float32()
 
 #endif
 
-#define XS 1
-#define XM 0
+#define XS 0
+#define XM 1
 
 void test_float64()
 {
@@ -150,7 +150,8 @@ void test_float64()
 		//char const *v = "-353.2872e-310";
 		//char const *v = "-023864930216316550";
 		//char const *v = "+.741201859450";
-		char const *v = "-6396378181.3887448300";
+		//char const *v = "-6396378181.3887448300";
+		char const *v = "+.5733595378659562320e-247";
 		char const *xv(v);
 
 		detail::from_ascii_decimal_f<double> cv(

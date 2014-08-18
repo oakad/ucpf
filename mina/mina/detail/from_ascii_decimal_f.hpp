@@ -22,12 +22,18 @@ struct from_ascii_decimal_f {
 	typedef float_t<wrapper_type::bit_size> adapter_type;
 	typedef typename wrapper_type::storage_type storage_type;
 	typedef to_ascii_decimal_f_traits<value_type> traits_type;
+
 	constexpr static auto limb_bits = bigint::limb_bits;
 	constexpr static auto limb_digits_10 = bigint::limb_digits_10;
 	/* Loose upper limit for decimal exponent */
 	constexpr static auto exponent_bound = small_power_10_estimate(
 		1 << wrapper_type::traits_type::exponent_bits
 	);
+	constexpr static int32_t significand_size = 8 * sizeof(storage_type);
+	constexpr static int32_t mantissa_bits
+	= wrapper_type::traits_type::mantissa_bits;
+	constexpr static int32_t denormal_exponent
+	= 2 - wrapper_type::traits_type::exponent_bias - mantissa_bits;
 
 	template <typename Vector>
 	struct num_reader {
@@ -83,6 +89,7 @@ struct from_ascii_decimal_f {
 					? (pos % limb_digits_10)
 					: limb_digits_10
 				);
+				printf("aa %ld, %d, %ld\n", pos, tail_exp, diff);
 				pos -= diff;
 				tail_exp += diff;
 
@@ -214,8 +221,10 @@ struct from_ascii_decimal_f {
 			first = x_first;
 	}
 
-	template <typename Vector, typename U>
-	static std::pair<size_t, bool> bigdec_to_scalar(U &dst, Vector &src)
+	template <typename U, typename Vector>
+	static std::pair<size_t, bool> bigdec_to_scalar(
+		U &dst, Vector &src
+	)
 	{
 		constexpr static auto dst_digits_10(
 			std::numeric_limits<U>::digits10
@@ -294,25 +303,128 @@ struct from_ascii_decimal_f {
 		v.swap(dst);
 	}
 
+	bool compute_guess(
+		adapter_type &xv, int32_t &error, int32_t exp_10, int32_t m_exp
+	)
+	{
+		xv.normalize();
+		error <<= -xv.exp;
+		printf("--2- %016zX, %d\n", xv.m, xv.exp);
+
+		auto exp_bd(binary_pow_10<storage_type>::lookup_exp_2(exp_10));
+		printf("--3- ref %d, exp %d\n", exp_bd.exp_5, exp_10);
+		if (exp_bd.exp_5 != exp_10) {
+			auto adj_bd(binary_pow_10<
+				storage_type
+			>::lookup_exp_10_rem(exp_10 - exp_bd.exp_5));
+			adapter_type adj_v(adj_bd.m, adj_bd.exp_2);
+			xv *= adj_v;
+			if (m_exp < (exp_10 - exp_bd.exp_5))
+				error += 4;
+		}
+
+		{
+			adapter_type adj_v(exp_bd.m, exp_bd.exp_2);
+			printf("-y3- %016zX, %d * %016zX, %d, err %d\n", xv.m, xv.exp, adj_v.m, adj_v.exp, error);
+			xv *= adj_v;
+			auto x_exp(xv.exp);
+			xv.normalize();
+			error += 8 + (error ? 1 : 0);
+			printf("-z3- %d, %d, %d\n", error, x_exp, xv.exp);
+			error <<= x_exp - xv.exp;
+		}
+		printf("--4- %016zX, %d err %d\n", xv.m, xv.exp, error);
+		auto m_size(xv.exp + significand_size);
+		if (m_size >= (denormal_exponent + mantissa_bits))
+			m_size = mantissa_bits;
+		else if (m_size <= denormal_exponent)
+			m_size = 0;
+		else
+			m_size -= denormal_exponent;
+
+		m_size = significand_size - m_size;
+		if ((m_size + 3) >= significand_size) {
+			auto shift((m_size + 3) - significand_size + 1);
+			xv.m >>= shift;
+			xv.exp += shift;
+			error = (error >> shift) + 1 + 8;
+			m_size -= shift;
+		}
+
+		auto half(storage_type(1) << (m_size - 1));
+		auto m_mask((storage_type(1) << m_size) - 1);
+		auto x_m(xv.m & m_mask);
+
+		half <<= 3;
+		x_m <<= 3;
+		xv.m >>= m_size;
+		xv.exp += m_size;
+		if (x_m >= (half + error))
+			xv.m += 1;
+
+		value = value_type(xv);
+		wrapper_type wv(value);
+
+		if (wv.is_special()) {
+			value = std::numeric_limits<value_type>::infinity();
+			return true;
+		}
+		printf("--7- %016zX, %d, h %016zX, err %d\n", xv.m, xv.exp, half, error);
+		return !(((half - error) < x_m) && ((half + error) > x_m));
+	}
+
+	template <typename Vector>
+	void adjust_guess(
+		adapter_type &xv, Vector &digits, int32_t exp_10
+	)
+	{
+		bigdec_to_bigint(digits);
+
+		auto upper(xv);
+		upper.m <<= 1;
+		upper.m += 1;
+		upper.exp -= 1;
+
+		Vector x_upper;
+		bigint::assign_scalar(x_upper, upper.m);
+
+		if (exp_10 >= 0)
+			bigint::multiply_pow10(digits, exp_10);
+		else
+			bigint::multiply_pow10(x_upper, -exp_10);
+
+		if (upper.exp >= 0)
+			bigint::shift_left(x_upper, upper.exp);
+		else
+			bigint::shift_left(digits, -upper.exp);
+
+		auto ld(yesod::clz(digits.back()));
+		auto lu(yesod::clz(x_upper.back()));
+		if (ld >= lu)
+			bigint::shift_left(digits, ld - lu);
+		else
+			bigint::shift_left(x_upper, lu - ld);
+
+		bigint::shift_left(digits, yesod::clz(digits.back()));
+		bigint::shift_left(x_upper, yesod::clz(x_upper.back()));
+
+		int c(bigint::compare(digits, x_upper));
+		printf("--8- %016zX, %d, c %d\n", upper.m, upper.exp, c);
+
+		wrapper_type wv(value);
+		if ((c > 0) || (!c && (wv.get_mantissa() & 1))) {
+			xv.m += 1;
+			value = value_type(xv);
+		}
+	}
+
 	template <typename ForwardIterator, typename Alloc>
 	from_ascii_decimal_f(
 		ForwardIterator &first, ForwardIterator last, Alloc const &a
 	) : value(std::numeric_limits<value_type>::quiet_NaN()), valid(false)
 	{
-		constexpr static int32_t significand_size(
-			8 * sizeof(storage_type)
-		);
-		constexpr static int32_t mantissa_bits(
-			wrapper_type::traits_type::mantissa_bits
-		);
-		constexpr static int32_t denormal_exponent(
-			2 - wrapper_type::traits_type::exponent_bias
-			- mantissa_bits
-		);
-
 		typedef std::vector<
-			bigint::limb_type,
-			typename std::allocator_traits<
+			bigint::limb_type, typename std::allocator_traits<
 				Alloc
 			>::template rebind_alloc<bigint::limb_type>
 		> bigint_type;
@@ -343,6 +455,7 @@ struct from_ascii_decimal_f {
 		}
 
 		bool check_for_exp(true);
+		bool has_frac(false);
 		int32_t exp_10(0);
 		auto int_pos(m_r.pos);
 
@@ -357,10 +470,10 @@ struct from_ascii_decimal_f {
 						exp_10 -= f_sz - m_r.pos;
 
 					first = x_first;
+					m_r.tail_exp = 0;
 					valid = true;
 				}
 			} else if (m_r.append(x_first, last)) {
-				m_r.tail_exp = 0;
 				first = x_first;
 				valid = true;
 			} else
@@ -373,10 +486,15 @@ struct from_ascii_decimal_f {
 		storage_type m(0);
 		m_r.adjust_tail();
 		auto m_cnt(bigdec_to_scalar(m, digits));
+		int32_t m_exp(
+			std::numeric_limits<decltype(m)>::digits10
+			- m_cnt.first
+		);
 		int32_t error(m_cnt.second ? 0 : 4);
 
 		auto d_exp_10(exp_10);
 		exp_10 -= m_cnt.first - int_pos;
+		printf("zz %d, %d\n", d_exp_10, exp_10);
 
 		if (check_for_exp) {
 			bigint_type exp_digits(a);
@@ -415,83 +533,7 @@ struct from_ascii_decimal_f {
 		}
 
 		adapter_type xv(m, 0);
-		xv.normalize();
-		error <<= -xv.exp;
-
-		auto exp_bd(binary_pow_10<storage_type>::lookup_exp_2(exp_10));
-		if (exp_bd.exp_5 != exp_10) {
-			auto adj_bd(binary_pow_10<
-				storage_type
-			>::lookup_exp_10_rem(exp_10 - exp_bd.exp_5));
-			adapter_type adj_v(adj_bd.m, adj_bd.exp_2);
-			xv *= adj_v;
-			if ((
-				std::numeric_limits<
-					decltype(m)
-				>::digits10 - m_cnt.first
-			) < (exp_10 - exp_bd.exp_5))
-				error += 4;
-		}
-
-		{
-			adapter_type adj_v(exp_bd.m, exp_bd.exp_2);
-			xv *= adj_v;
-			auto x_exp(xv.exp);
-			xv.normalize();
-			error += 8 + (error ? 1 : 0);
-			error <<= x_exp - xv.exp;
-		}
-
-		auto m_size(xv.exp + significand_size);
-		if (m_size >= (denormal_exponent + mantissa_bits))
-			m_size = mantissa_bits;
-		else if (m_size <= denormal_exponent)
-			m_size = 0;
-		else
-			m_size -= denormal_exponent;
-
-		m_size = significand_size - m_size;
-		if ((m_size + 3) >= significand_size) {
-			auto shift((m_size + 3) - significand_size + 1);
-			xv.m >>= shift;
-			xv.exp += shift;
-			error = (error >> shift) + 1 + 8;
-			m_size -= shift;
-		}
-
-		auto half(storage_type(1) << (m_size - 1));
-		auto m_mask((storage_type(1) << m_size) - 1);
-		auto x_m(xv.m & m_mask);
-
-		half <<= 3;
-		x_m <<= 3;
-		xv.m >>= m_size;
-		xv.exp += m_size;
-		if (x_m >= (half + error))
-			xv.m += 1;
-
-		value = value_type(xv);
-		wrapper_type wv(value);
-
-		if (wv.is_special()) {
-			value = std::numeric_limits<value_type>::infinity();
-			if (sign)
-				value = -value;
-
-			return;
-		}
-		printf("--7- %016zX, %d, h %016zX, err %d\n", xv.m, xv.exp, half, error);
-		if (((half - error) < x_m) && ((half + error) > x_m)) {
-			bigdec_to_bigint(digits);
-
-			auto upper(xv);
-			upper.m <<= 1;
-			upper.m += 1;
-			upper.exp -= 1;
-
-			bigint_type x_upper;
-			bigint::assign_scalar(x_upper, upper.m);
-
+		if (!compute_guess(xv, error, exp_10, m_exp)) {
 			if (int_pos > m_r.pos)
 				d_exp_10 += int_pos - m_r.pos;
 			else
@@ -499,33 +541,7 @@ struct from_ascii_decimal_f {
 
 			d_exp_10 += m_r.tail_exp;
 
-			if (d_exp_10 >= 0)
-				bigint::multiply_pow10(digits, d_exp_10);
-			else
-				bigint::multiply_pow10(x_upper, -d_exp_10);
-
-			if (upper.exp >= 0)
-				bigint::shift_left(x_upper, upper.exp);
-			else
-				bigint::shift_left(digits, -upper.exp);
-
-			auto ld(yesod::clz(digits.back()));
-			auto lu(yesod::clz(x_upper.back()));
-			if (ld >= lu)
-				bigint::shift_left(digits, ld - lu);
-			else
-				bigint::shift_left(x_upper, lu - ld);
-
-			bigint::shift_left(digits, yesod::clz(digits.back()));
-			bigint::shift_left(x_upper, yesod::clz(x_upper.back()));
-			
-			int c(bigint::compare(digits, x_upper));
-			printf("--8- %016zX, %d, c %d\n", upper.m, upper.exp, c);
-
-			if ((c > 0) || (!c && (wv.get_mantissa() & 1))) {
-				xv.m += 1;
-				value = value_type(xv);
-			}
+			adjust_guess(xv, digits, d_exp_10);
 		}
 
 		if (sign)
