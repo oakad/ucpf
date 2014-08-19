@@ -12,7 +12,7 @@
 #include <mina/detail/from_ascii_decimal_f.hpp>
 #include "../test/float_generator.hpp"
 
-#define CASE_COUNT 5000
+#define CASE_COUNT 500000
 
 namespace std {
 
@@ -151,7 +151,10 @@ void test_float64()
 		//char const *v = "-023864930216316550";
 		//char const *v = "+.741201859450";
 		//char const *v = "-6396378181.3887448300";
-		char const *v = "+.5733595378659562320e-247";
+		//char const *v = "+.5733595378659562320e-247";
+		//char const *v = "312373471207634463.95741684";
+		//char const *v = "467518.538854446";
+		char const *v = "605909362271.834874876913684853478140900e-150";
 		char const *xv(v);
 
 		detail::from_ascii_decimal_f<double> cv(

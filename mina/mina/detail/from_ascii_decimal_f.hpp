@@ -38,7 +38,7 @@ struct from_ascii_decimal_f {
 	template <typename Vector>
 	struct num_reader {
 		num_reader(Vector &digits_)
-		: digits(digits_), pos(0), tail_exp(0)
+		: digits(digits_), pos(0)
 		{}
 
 		template <typename ForwardIterator>
@@ -50,11 +50,8 @@ struct from_ascii_decimal_f {
 					digits.push_back(0);
 
 				digits.back() *= 10;
-				if (*first != '0') {
-					digits.back() += *first - '0';
-					tail_exp = 0;
-				} else
-					++tail_exp;
+				digits.back() += *first - '0';
+
 				++pos;
 				++first;
 				++rv;
@@ -78,46 +75,25 @@ struct from_ascii_decimal_f {
 			return rv;
 		}
 
-		void adjust_tail()
+		int32_t adjust_tail()
 		{
+			int32_t tail_exp(0);
+
 			if (digits.empty())
-				return;
+				return tail_exp;
 
-			if (!digits.back()) {
-				auto diff(
-					(pos % limb_digits_10)
-					? (pos % limb_digits_10)
-					: limb_digits_10
-				);
-				printf("aa %ld, %d, %ld\n", pos, tail_exp, diff);
-				pos -= diff;
-				tail_exp += diff;
-
-				digits.pop_back();
-
-				while (!digits.back()) {
-					pos -= limb_digits_10;
-					tail_exp += limb_digits_10;
-					digits.pop_back();
-				}
-
-				if (digits.empty())
-					return;
-			} else {
-				if (pos % limb_digits_10) {
-					digits.back() *= small_power_10[
-						limb_digits_10
-						- pos % limb_digits_10
-					];
-					tail_exp -= limb_digits_10
-						    - pos % limb_digits_10;
-				}
+			if (pos % limb_digits_10) {
+				tail_exp = (
+					pos % limb_digits_10
+				) - limb_digits_10;
+				digits.back() *= small_power_10[-tail_exp];
 			}
+
+			return tail_exp;
 		}
 
 		Vector &digits;
 		size_t pos;
-		int32_t tail_exp;
 	};
 
 
@@ -289,7 +265,7 @@ struct from_ascii_decimal_f {
 	}
 
 	template <typename Vector>
-	static void bigdec_to_bigint(Vector &v)
+	static int32_t bigdec_to_bigint(Vector &v)
 	{
 		Vector dst(v.get_allocator());
 		dst.reserve(v.size() + v.size() / limb_bits + 1);
@@ -300,7 +276,12 @@ struct from_ascii_decimal_f {
 			bigint::add(dst, *iter);
 		}
 
+		auto ld(small_power_10_estimate(yesod::clz(dst.back())));
+		if (ld)
+			bigint::multiply(dst, small_power_10[ld]);
+		
 		v.swap(dst);
+		return ld;
 	}
 
 	bool compute_guess(
@@ -378,7 +359,8 @@ struct from_ascii_decimal_f {
 		adapter_type &xv, Vector &digits, int32_t exp_10
 	)
 	{
-		bigdec_to_bigint(digits);
+		printf("zz1 exp_10 %d (%X) exp_2 %d (%X)\n", exp_10, std::abs(exp_10), xv.exp, std::abs(xv.exp));
+		exp_10 -= bigdec_to_bigint(digits);
 
 		auto upper(xv);
 		upper.m <<= 1;
@@ -387,7 +369,14 @@ struct from_ascii_decimal_f {
 
 		Vector x_upper;
 		bigint::assign_scalar(x_upper, upper.m);
+		auto lu(yesod::clz(x_upper.back()));
+		bigint::shift_left(x_upper, lu);
+		upper.exp -= lu;
 
+		printf("dig1 %s\n", bigint::to_ascii_hex(digits).data());
+		printf("upp1 %s\n", bigint::to_ascii_hex(x_upper).data());
+
+		printf("zz2 exp_10 %d (%X) exp_2 %d (%X)\n", exp_10, std::abs(exp_10), upper.exp, std::abs(upper.exp));
 		if (exp_10 >= 0)
 			bigint::multiply_pow10(digits, exp_10);
 		else
@@ -398,15 +387,18 @@ struct from_ascii_decimal_f {
 		else
 			bigint::shift_left(digits, -upper.exp);
 
-		auto ld(yesod::clz(digits.back()));
-		auto lu(yesod::clz(x_upper.back()));
-		if (ld >= lu)
-			bigint::shift_left(digits, ld - lu);
-		else
-			bigint::shift_left(x_upper, lu - ld);
+		//auto ld(yesod::clz(digits.back()));
+		//auto lu(yesod::clz(x_upper.back()));
+		//printf("aa ld %d lu %d\n", ld, lu);
+		//if (ld >= lu)
+		//	bigint::shift_left(digits, ld - lu);
+		//else
+		//	bigint::shift_left(x_upper, lu - ld);
 
-		bigint::shift_left(digits, yesod::clz(digits.back()));
-		bigint::shift_left(x_upper, yesod::clz(x_upper.back()));
+		//bigint::shift_left(digits, yesod::clz(digits.back()));
+		//bigint::shift_left(x_upper, yesod::clz(x_upper.back()));
+		printf("dig3 %s\n", bigint::to_ascii_hex(digits).data());
+		printf("upp3 %s\n", bigint::to_ascii_hex(x_upper).data());
 
 		int c(bigint::compare(digits, x_upper));
 		printf("--8- %016zX, %d, c %d\n", upper.m, upper.exp, c);
@@ -455,7 +447,6 @@ struct from_ascii_decimal_f {
 		}
 
 		bool check_for_exp(true);
-		bool has_frac(false);
 		int32_t exp_10(0);
 		auto int_pos(m_r.pos);
 
@@ -470,7 +461,6 @@ struct from_ascii_decimal_f {
 						exp_10 -= f_sz - m_r.pos;
 
 					first = x_first;
-					m_r.tail_exp = 0;
 					valid = true;
 				}
 			} else if (m_r.append(x_first, last)) {
@@ -484,7 +474,8 @@ struct from_ascii_decimal_f {
 			return;
 
 		storage_type m(0);
-		m_r.adjust_tail();
+		auto tail_exp(m_r.adjust_tail());
+
 		auto m_cnt(bigdec_to_scalar(m, digits));
 		int32_t m_exp(
 			std::numeric_limits<decltype(m)>::digits10
@@ -534,18 +525,36 @@ struct from_ascii_decimal_f {
 
 		adapter_type xv(m, 0);
 		if (!compute_guess(xv, error, exp_10, m_exp)) {
+			printf("xx int %ld, pos %ld, tail %d\n", int_pos, m_r.pos, tail_exp);
 			if (int_pos > m_r.pos)
 				d_exp_10 += int_pos - m_r.pos;
 			else
 				d_exp_10 -= m_r.pos - int_pos;
 
-			d_exp_10 += m_r.tail_exp;
+			d_exp_10 += tail_exp;
 
 			adjust_guess(xv, digits, d_exp_10);
 		}
 
 		if (sign)
 			value = -value;
+	}
+
+	template <typename RandomIterator, typename Alloc>
+	from_ascii_decimal_f(
+		RandomIterator first, size_t count, Alloc const &a
+	) : value(std::numeric_limits<value_type>::quiet_NaN()), valid(false)
+	{
+		typedef std::vector<
+			bigint::limb_type, typename std::allocator_traits<
+				Alloc
+			>::template rebind_alloc<bigint::limb_type>
+		> bigint_type;
+
+		size_t c(0);
+		if (c < count) {
+			
+		}
 	}
 
 	value_type value;
