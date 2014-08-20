@@ -96,7 +96,6 @@ struct from_ascii_decimal_f {
 		size_t pos;
 	};
 
-
 	template <typename ForwardIterator>
 	bool parse_special(ForwardIterator &first, ForwardIterator last)
 	{
@@ -290,10 +289,8 @@ struct from_ascii_decimal_f {
 	{
 		xv.normalize();
 		error <<= -xv.exp;
-		printf("--2- %016zX, %d\n", xv.m, xv.exp);
 
 		auto exp_bd(binary_pow_10<storage_type>::lookup_exp_2(exp_10));
-		printf("--3- ref %d, exp %d\n", exp_bd.exp_5, exp_10);
 		if (exp_bd.exp_5 != exp_10) {
 			auto adj_bd(binary_pow_10<
 				storage_type
@@ -306,15 +303,13 @@ struct from_ascii_decimal_f {
 
 		{
 			adapter_type adj_v(exp_bd.m, exp_bd.exp_2);
-			printf("-y3- %016zX, %d * %016zX, %d, err %d\n", xv.m, xv.exp, adj_v.m, adj_v.exp, error);
 			xv *= adj_v;
 			auto x_exp(xv.exp);
 			xv.normalize();
 			error += 8 + (error ? 1 : 0);
-			printf("-z3- %d, %d, %d\n", error, x_exp, xv.exp);
 			error <<= x_exp - xv.exp;
 		}
-		printf("--4- %016zX, %d err %d\n", xv.m, xv.exp, error);
+
 		auto m_size(xv.exp + significand_size);
 		if (m_size >= (denormal_exponent + mantissa_bits))
 			m_size = mantissa_bits;
@@ -350,7 +345,7 @@ struct from_ascii_decimal_f {
 			value = std::numeric_limits<value_type>::infinity();
 			return true;
 		}
-		printf("--7- %016zX, %d, h %016zX, err %d\n", xv.m, xv.exp, half, error);
+
 		return !(((half - error) < x_m) && ((half + error) > x_m));
 	}
 
@@ -359,7 +354,6 @@ struct from_ascii_decimal_f {
 		adapter_type &xv, Vector &digits, int32_t exp_10
 	)
 	{
-		printf("zz1 exp_10 %d (%X) exp_2 %d (%X)\n", exp_10, std::abs(exp_10), xv.exp, std::abs(xv.exp));
 		exp_10 -= bigdec_to_bigint(digits);
 
 		auto upper(xv);
@@ -373,10 +367,6 @@ struct from_ascii_decimal_f {
 		bigint::shift_left(x_upper, lu);
 		upper.exp -= lu;
 
-		printf("dig1 %s\n", bigint::to_ascii_hex(digits).data());
-		printf("upp1 %s\n", bigint::to_ascii_hex(x_upper).data());
-
-		printf("zz2 exp_10 %d (%X) exp_2 %d (%X)\n", exp_10, std::abs(exp_10), upper.exp, std::abs(upper.exp));
 		if (exp_10 >= 0)
 			bigint::multiply_pow10(digits, exp_10);
 		else
@@ -387,21 +377,7 @@ struct from_ascii_decimal_f {
 		else
 			bigint::shift_left(digits, -upper.exp);
 
-		//auto ld(yesod::clz(digits.back()));
-		//auto lu(yesod::clz(x_upper.back()));
-		//printf("aa ld %d lu %d\n", ld, lu);
-		//if (ld >= lu)
-		//	bigint::shift_left(digits, ld - lu);
-		//else
-		//	bigint::shift_left(x_upper, lu - ld);
-
-		//bigint::shift_left(digits, yesod::clz(digits.back()));
-		//bigint::shift_left(x_upper, yesod::clz(x_upper.back()));
-		printf("dig3 %s\n", bigint::to_ascii_hex(digits).data());
-		printf("upp3 %s\n", bigint::to_ascii_hex(x_upper).data());
-
 		int c(bigint::compare(digits, x_upper));
-		printf("--8- %016zX, %d, c %d\n", upper.m, upper.exp, c);
 
 		wrapper_type wv(value);
 		if ((c > 0) || (!c && (wv.get_mantissa() & 1))) {
@@ -420,6 +396,9 @@ struct from_ascii_decimal_f {
 				Alloc
 			>::template rebind_alloc<bigint::limb_type>
 		> bigint_type;
+
+		if (first == last)
+			return;
 
 		auto x_first(first);
 		bool sign(*x_first == '-');
@@ -485,7 +464,6 @@ struct from_ascii_decimal_f {
 
 		auto d_exp_10(exp_10);
 		exp_10 -= m_cnt.first - int_pos;
-		printf("zz %d, %d\n", d_exp_10, exp_10);
 
 		if (check_for_exp) {
 			bigint_type exp_digits(a);
@@ -525,7 +503,6 @@ struct from_ascii_decimal_f {
 
 		adapter_type xv(m, 0);
 		if (!compute_guess(xv, error, exp_10, m_exp)) {
-			printf("xx int %ld, pos %ld, tail %d\n", int_pos, m_r.pos, tail_exp);
 			if (int_pos > m_r.pos)
 				d_exp_10 += int_pos - m_r.pos;
 			else
@@ -538,23 +515,6 @@ struct from_ascii_decimal_f {
 
 		if (sign)
 			value = -value;
-	}
-
-	template <typename RandomIterator, typename Alloc>
-	from_ascii_decimal_f(
-		RandomIterator first, size_t count, Alloc const &a
-	) : value(std::numeric_limits<value_type>::quiet_NaN()), valid(false)
-	{
-		typedef std::vector<
-			bigint::limb_type, typename std::allocator_traits<
-				Alloc
-			>::template rebind_alloc<bigint::limb_type>
-		> bigint_type;
-
-		size_t c(0);
-		if (c < count) {
-			
-		}
 	}
 
 	value_type value;

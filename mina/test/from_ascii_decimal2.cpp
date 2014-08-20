@@ -17,6 +17,65 @@
 
 namespace ucpf { namespace mina {
 
+BOOST_AUTO_TEST_CASE(from_ascii_decimal2_2)
+{
+	{
+		char const *first = "+0.0";
+		char const *last = first + strlen(first);
+		float v;
+		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK_EQUAL(v, 0.0);
+	}
+	{
+		char const *first = "-0e34";
+		char const *last = first + strlen(first);
+		float v;
+		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK_EQUAL(v, 0.0);
+	}
+	{
+		char const *first = "234e-60";
+		char const *last = first + strlen(first);
+		float v;
+		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK_EQUAL(v, 0.0);
+	}
+	{
+		char const *first = "123e60";
+		char const *last = first + strlen(first);
+		float v;
+		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK_EQUAL(v, std::numeric_limits<float>::infinity());
+	}
+
+	test::dec_float_generator<20, 45, 38> fg_r;
+
+	for (int c(0); c < CASE_COUNT; ++c) {
+		fg_r([](char *first, char *last) -> bool {
+			auto xv(strtof(
+				const_cast<char const *>(first), nullptr
+			));
+			float v;
+			BOOST_CHECK(from_ascii_decimal(first, last, v));
+			BOOST_WARN_EQUAL(v, xv);
+			if (v != xv) {
+				if (v >= 0)
+					v -= std::numeric_limits<
+						float
+					>::denorm_min();
+				else
+					v += std::numeric_limits<
+						float
+					>::denorm_min();
+
+				BOOST_CHECK_EQUAL(v, xv);
+			}
+
+			return true;
+		});
+	};
+}
+
 BOOST_AUTO_TEST_CASE(from_ascii_decimal2_3)
 {
 	{
@@ -52,29 +111,26 @@ BOOST_AUTO_TEST_CASE(from_ascii_decimal2_3)
 
 	for (int c(0); c < CASE_COUNT; ++c) {
 		fg_r([](char *first, char *last) -> bool {
-			printf("---- %s\n", first);
 			auto xv(strtod(
 				const_cast<char const *>(first), nullptr
 			));
-			detail::from_ascii_decimal_f<double> cv(
-				first, last, std::allocator<void>()
-			);
-			BOOST_CHECK(cv.valid);
-			BOOST_WARN_EQUAL(cv.value, xv);
-			if (cv.value != xv) {
-				if (xv >= 0)
-					cv.value -= std::numeric_limits<
+			double v;
+			BOOST_CHECK(from_ascii_decimal(first, last, v));
+			BOOST_WARN_EQUAL(v, xv);
+			if (v != xv) {
+				if (v >= 0)
+					v -= std::numeric_limits<
 						double
-					>::epsilon();
+					>::denorm_min();
 				else
-					cv.value += std::numeric_limits<
+					v += std::numeric_limits<
 						double
-					>::epsilon();
+					>::denorm_min();
 
-				BOOST_CHECK_EQUAL(cv.value, xv);
+				BOOST_CHECK_EQUAL(v, xv);
 			}
 
-			return cv.valid;
+			return true;
 		});
 	};
 }

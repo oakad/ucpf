@@ -9,7 +9,7 @@
 #include <cstring>
 #include <iostream>
 #include <algorithm>
-#include <mina/detail/from_ascii_decimal_f.hpp>
+#include <mina/from_ascii_decimal.hpp>
 #include "../test/float_generator.hpp"
 
 #define CASE_COUNT 500000
@@ -140,29 +140,46 @@ void test_float32()
 
 #endif
 
-#define XS 0
-#define XM 1
+#define XS 1
+#define XM 0
 
 void test_float64()
 {
 #if XS
 	{
-		//char const *v = "-353.2872e-310";
-		//char const *v = "-023864930216316550";
-		//char const *v = "+.741201859450";
-		//char const *v = "-6396378181.3887448300";
-		//char const *v = "+.5733595378659562320e-247";
-		//char const *v = "312373471207634463.95741684";
-		//char const *v = "467518.538854446";
-		char const *v = "605909362271.834874876913684853478140900e-150";
+		char const *v = "-.082738e-44";
 		char const *xv(v);
+		yesod::float128 zv;
 
-		detail::from_ascii_decimal_f<double> cv(
-			xv, v + std::strlen(v), std::allocator<void>()
-		);
-		double rv(strtod(v, nullptr));
-		printf("v (%d) %.40g, eq %d\n", cv.valid, cv.value, cv.value == rv);
-		printf("rv    %.40g\n", rv);
+		auto valid(from_ascii_decimal(xv, v + std::strlen(v), zv));
+
+		yesod::float128 rv(strtoflt128(v, nullptr));
+		std::cout << "v (" << valid << ") " << zv << ", eq "
+			  << (zv == rv) << '\n';
+		
+		std::cout << "rv    " << rv << '\n';
+	}
+	{
+// 		char const *v = "-.082738e-44";
+// 		char const *xv(v);
+// 		double zv;
+// 
+// 		auto valid(from_ascii_decimal(xv, v + std::strlen(v), zv));
+// 
+// 		double rv(strtod(v, nullptr));
+// 		printf("v (%d) %.40g, eq %d\n", valid, zv, zv == rv);
+// 		printf("rv    %.40g\n", rv);
+	}
+	{
+// 		char const *v = "-.082738e-44";
+// 		char const *xv(v);
+// 		float zv;
+// 
+// 		auto valid(from_ascii_decimal(xv, v + std::strlen(v), zv));
+// 
+// 		float rv(strtof(v, nullptr));
+// 		printf("v (%d) %.40g, eq %d\n", valid, zv, zv == rv);
+// 		printf("rv    %.40g\n", rv);
 	}
 #endif
 	test::dec_float_generator<40, 325, 310> fg_r;
