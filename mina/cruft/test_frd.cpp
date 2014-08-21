@@ -12,7 +12,8 @@
 #include <mina/from_ascii_decimal.hpp>
 #include "../test/float_generator.hpp"
 
-#define CASE_COUNT 500000
+#define CASE_COUNT 50000
+
 
 namespace std {
 
@@ -82,147 +83,65 @@ struct null_sink {
 			  << " not equal " << y << '\n';           \
 } while(0)
 
-#if 0
+#define XS 0
+#define XM 1
+
 void test_float32()
 {
-	test::float_generator_r<32> fg_r;
-	test::float_generator_e<32> fg_e;
-	{
-		char buf[40] = {0};
-		char *ptr(buf);
-		to_ascii_decimal(ptr, 0.0);
-		CHECK_EQUAL_STR(buf, "+0.0");
-	}
-	{
-		char buf[40] = {0};
-		char *ptr(buf);
-		to_ascii_decimal(ptr, std::numeric_limits<float>::infinity());
-		CHECK_EQUAL_STR(buf, "+1.#inf");
-	}
-	{
-		char buf[40] = {0};
-		char *ptr(buf);
-		to_ascii_decimal(ptr, std::numeric_limits<float>::quiet_NaN());
-		CHECK_EQUAL_STR(buf, "+1.#q(0)");
-	}
-	{
-		char buf[40] = {0};
-		char *ptr(buf);
-		to_ascii_decimal(
-			ptr, std::numeric_limits<float>::signaling_NaN()
-		);
-		CHECK_EQUAL_STR(buf, "+1.#s(2097152)");
-	}
+#if XM
+	test::dec_float_generator<20, 45, 38> fg_r;
 
 	printf("-- random\n");
 	std::generate_n(test::null_sink(), CASE_COUNT, [&fg_r]() -> bool {
-		return fg_r([](float v) -> bool {
-			char buf[40] = {0};
-			char *ptr(buf);
-			to_ascii_decimal(ptr, v);
-			auto xv(strtof(buf, nullptr));
-			CHECK_EQUAL(v, xv);
-			return v == xv;
+		return fg_r([](char *first, char *last) -> bool {
+			auto x_first(first);
+			auto xv(strtof(
+				const_cast<char const *>(first), nullptr
+			));
+			detail::from_ascii_decimal_f<float> cv(
+				x_first, last, std::allocator<void>()
+			);
+			printf("-fi- %s\n", first);
+			printf("-fo- %.40g\n", cv.value);
+			CHECK_EQUAL(cv.value, xv);
+			return cv.valid && (cv.value == xv);
 		});
 	});
-	printf("-- exponent\n");
-	std::generate_n(test::null_sink(), CASE_COUNT, [&fg_e]() -> bool {
-		return fg_e([](float v) -> bool {
-			char buf[40] = {0};
-			char *ptr(buf);
-			to_ascii_decimal(ptr, v);
-			auto xv(strtof(buf, nullptr));
-			CHECK_EQUAL(v, xv);
-			return v == xv;
-		});
-	});
-}
-
 #endif
-
-#define XS 1
-#define XM 0
+}
 
 void test_float64()
 {
 #if XS
+
 	{
-		char const *v = "-.082738e-44";
+		char const *v = "-.082738e-14";
 		char const *xv(v);
-		yesod::float128 zv;
+		double zv;
 
 		auto valid(from_ascii_decimal(xv, v + std::strlen(v), zv));
 
-		yesod::float128 rv(strtoflt128(v, nullptr));
-		std::cout << "v (" << valid << ") " << zv << ", eq "
-			  << (zv == rv) << '\n';
-		
-		std::cout << "rv    " << rv << '\n';
-	}
-	{
-// 		char const *v = "-.082738e-44";
-// 		char const *xv(v);
-// 		double zv;
-// 
-// 		auto valid(from_ascii_decimal(xv, v + std::strlen(v), zv));
-// 
-// 		double rv(strtod(v, nullptr));
-// 		printf("v (%d) %.40g, eq %d\n", valid, zv, zv == rv);
-// 		printf("rv    %.40g\n", rv);
-	}
-	{
-// 		char const *v = "-.082738e-44";
-// 		char const *xv(v);
-// 		float zv;
-// 
-// 		auto valid(from_ascii_decimal(xv, v + std::strlen(v), zv));
-// 
-// 		float rv(strtof(v, nullptr));
-// 		printf("v (%d) %.40g, eq %d\n", valid, zv, zv == rv);
-// 		printf("rv    %.40g\n", rv);
+		double rv(strtod(v, nullptr));
+		printf("v (%d) %.40g, eq %d\n", valid, zv, zv == rv);
+		printf("rv    %.40g\n", rv);
 	}
 #endif
-	test::dec_float_generator<40, 325, 310> fg_r;
-#if 0
-	test::float_generator_e<64> fg_e;
-	{
-		char buf[40] = {0};
-		char *ptr(buf);
-		to_ascii_decimal(ptr, 0.0);
-		CHECK_EQUAL_STR(buf, "+0.0");
-	}
-	{
-		char buf[40] = {0};
-		char *ptr(buf);
-		to_ascii_decimal(ptr, std::numeric_limits<double>::infinity());
-		CHECK_EQUAL_STR(buf, "+1.#inf");
-	}
-	{
-		char buf[40] = {0};
-		char *ptr(buf);
-		to_ascii_decimal(ptr, std::numeric_limits<double>::quiet_NaN());
-		CHECK_EQUAL_STR(buf, "+1.#q(0)");
-	}
-	{
-		char buf[40] = {0};
-		char *ptr(buf);
-		to_ascii_decimal(
-			ptr, std::numeric_limits<double>::signaling_NaN()
-		);
-		CHECK_EQUAL_STR(buf, "+1.#s(1125899906842624)");
-	}
-#endif
+
 #if XM
+	test::dec_float_generator<40, 325, 310> fg_r;
+
 	printf("-- random\n");
 	std::generate_n(test::null_sink(), CASE_COUNT, [&fg_r]() -> bool {
 		return fg_r([](char *first, char *last) -> bool {
-			printf("---- %s\n", first);
+			auto x_first(first);
 			auto xv(strtod(
 				const_cast<char const *>(first), nullptr
 			));
 			detail::from_ascii_decimal_f<double> cv(
-				first, last, std::allocator<void>()
+				x_first, last, std::allocator<void>()
 			);
+			printf("-di- %s\n", first);
+			printf("-do- %.40g\n", cv.value);
 			CHECK_EQUAL(cv.value, xv);
 			return cv.valid && (cv.value == xv);
 		});
@@ -243,78 +162,53 @@ void test_float64()
 #endif
 }
 
-#if 0
 void test_float128()
 {
-	test::float_generator_r<128> fg_r;
-	test::float_generator_e<128> fg_e;
+#if XS
 	{
-		char buf[40] = {0};
-		char *ptr(buf);
-		to_ascii_decimal(ptr, 0.0Q);
-		CHECK_EQUAL_STR(buf, "+0.0");
+		char const *v = "7157015999103799151002151499469595.5";
+		char const *xv(v);
+		yesod::float128 zv;
+
+		auto valid(from_ascii_decimal(xv, v + std::strlen(v), zv));
+
+		yesod::float128 rv(strtoflt128(v, nullptr));
+		printf("v (%d) %.40Qg, eq %d\n", valid, zv, zv == rv);
+ 		printf("rv    %.40Qg\n", rv);
 	}
-	{
-		char buf[40] = {0};
-		char *ptr(buf);
-		to_ascii_decimal(
-			ptr, std::numeric_limits<yesod::float128>::infinity()
-		);
-		CHECK_EQUAL_STR(buf, "+1.#inf");
-	}
-	{
-		char buf[40] = {0};
-		char *ptr(buf);
-		to_ascii_decimal(ptr, std::numeric_limits<
-			yesod::float128
-		>::quiet_NaN());
-		CHECK_EQUAL_STR(buf, "+1.#q(0)");
-	}
-	{
-		char buf[50] = {0};
-		char *ptr(buf);
-		to_ascii_decimal(ptr, std::numeric_limits<
-			yesod::float128
-		>::signaling_NaN());
-		CHECK_EQUAL_STR(
-			buf, "+1.#s(1298074214633706907132624082305024)"
-		);
-	}
+#endif
+#if XM
+	test::dec_float_generator<80, 4966, 4933> fg_r;
 
 	printf("-- random\n");
 	std::generate_n(test::null_sink(), CASE_COUNT, [&fg_r]() -> bool {
-		return fg_r([](yesod::float128 v) -> bool {
-			char buf[80] = {0};
-			char *ptr(buf);
-			to_ascii_decimal(ptr, v);
-			auto xv(strtoflt128(buf, nullptr));
-			CHECK_EQUAL(v, xv);
-			return v == xv;
+		return fg_r([](char *first, char *last) -> bool {
+			auto x_first(first);
+			auto xv(strtoflt128(
+				const_cast<char const *>(first), nullptr
+			));
+			detail::from_ascii_decimal_f<yesod::float128> cv(
+				x_first, last, std::allocator<void>()
+			);
+			printf("-qi- %s\n", first);
+			printf("-qo- %.40Qg\n", cv.value);
+			CHECK_EQUAL(cv.value, xv);
+			return cv.valid && (cv.value == xv);
 		});
 	});
-	printf("-- exponent\n");
-	std::generate_n(test::null_sink(), CASE_COUNT, [&fg_e]() -> bool {
-		return fg_e([](yesod::float128 v) -> bool {
-			char buf[80] = {0};
-			char *ptr(buf);
-			to_ascii_decimal(ptr, v);
-			auto xv(strtoflt128(buf, nullptr));
-			CHECK_EQUAL(v, xv);
-			return v == xv;
-		});
-	});
-}
+
 #endif
+}
 
 }}
 
 int main()
 {
-	//printf("test float32\n");
-	//ucpf::mina::test_float32();
+	printf("test float32\n");
+	ucpf::mina::test_float32();
 	printf("test float64\n");
 	ucpf::mina::test_float64();
-	//printf("test float128\n");
-	//ucpf::mina::test_float128();
+	printf("test float128\n");
+	ucpf::mina::test_float128();
 	return 0;
 }

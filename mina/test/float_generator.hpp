@@ -78,8 +78,6 @@ struct dec_float_generator {
 	= 5 + MaxDigits + exponent_digits;
 	constexpr static size_t digits_per_word = 19;
 
-	static_assert(buffer_size <= 64, "buffer_size < 64");
-
 	dec_float_generator()
 	: max_exponent_div(10)
 	{

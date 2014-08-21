@@ -197,16 +197,14 @@ struct from_ascii_decimal_f {
 	}
 
 	template <typename U, typename Vector>
-	static std::pair<size_t, bool> bigdec_to_scalar(
-		U &dst, Vector &src
-	)
+	static size_t bigdec_to_scalar(U &dst, Vector &src)
 	{
 		constexpr static auto dst_digits_10(
 			std::numeric_limits<U>::digits10
 		);
 
 		if (src.empty())
-			return std::make_pair(0, false);
+			return 0;
 
 		auto dd(dst_digits_10);
 		auto iter(src.begin());
@@ -227,13 +225,13 @@ struct from_ascii_decimal_f {
 			dst *= small_power_10[dd];
 
 			if (iter == src.end())
-				return std::make_pair(rv, true);
+				return rv;
 
 			if (!dd) {
 				if (*iter >= r_val)
 					++dst;
 
-				return std::make_pair(rv, false);
+				return rv;
 			}
 		}
 
@@ -246,10 +244,10 @@ struct from_ascii_decimal_f {
 			if (rem) {
 				if (rem >= r_val)
 					++dst;
-				return std::make_pair(rv, false);
+				return rv;
 			} else {
 				++iter;
-				return std::make_pair(rv, iter == src.end());
+				return rv;
 			}
 		} else {
 			dst += *iter++;
@@ -257,9 +255,9 @@ struct from_ascii_decimal_f {
 			if (iter != src.end()) {
 				if (*iter >= r_val)
 					++dst;
-				return std::make_pair(rv, false);
+				return rv;
 			} else
-				return std::make_pair(rv, true);
+				return rv;
 		}
 	}
 
@@ -283,32 +281,62 @@ struct from_ascii_decimal_f {
 		return ld;
 	}
 
-	bool compute_guess(
-		adapter_type &xv, int32_t &error, int32_t exp_10, int32_t m_exp
+	static void scale_guess(
+		adapter_type &xv, int32_t &error, int32_t exp_10
 	)
+	{
+		if (exp_10 >= 0) {
+			while (exp_10 > binary_pow_10::exp_5_range.second) {
+				auto exp_bd(binary_pow_10::lookup_exp_2<
+					storage_type
+				>(binary_pow_10::exp_5_range.second));
+				adapter_type adj_v(exp_bd.m, exp_bd.exp_2);
+				xv *= adj_v;
+				auto x_exp(xv.exp);
+				xv.normalize();
+				error += 9;
+				error <<= x_exp - xv.exp;
+				exp_10 -= binary_pow_10::exp_5_range.second;
+			}
+		} else {
+			while (exp_10 < binary_pow_10::exp_5_range.first) {
+				auto exp_bd(binary_pow_10::lookup_exp_2<
+					storage_type
+				>(binary_pow_10::exp_5_range.first));
+				adapter_type adj_v(exp_bd.m, exp_bd.exp_2);
+				xv *= adj_v;
+				auto x_exp(xv.exp);
+				xv.normalize();
+				error += 9;
+				error <<= x_exp - xv.exp;
+				exp_10 -= binary_pow_10::exp_5_range.first;
+			}
+		}
+
+		auto exp_bd(binary_pow_10::lookup_exp_2<storage_type>(exp_10));
+		if (exp_bd.exp_5 != exp_10) {
+			auto adj_bd(binary_pow_10::lookup_exp_10_rem<
+				storage_type
+			>(exp_10 - exp_bd.exp_5));
+			adapter_type adj_v(adj_bd.m, adj_bd.exp_2);
+			xv *= adj_v;
+			error += 9;
+		}
+
+		adapter_type adj_v(exp_bd.m, exp_bd.exp_2);
+		xv *= adj_v;
+		auto x_exp(xv.exp);
+		xv.normalize();
+		error += 9;
+		error <<= x_exp - xv.exp;
+	}
+
+	bool compute_guess(adapter_type &xv, int32_t &error, int32_t exp_10)
 	{
 		xv.normalize();
 		error <<= -xv.exp;
 
-		auto exp_bd(binary_pow_10<storage_type>::lookup_exp_2(exp_10));
-		if (exp_bd.exp_5 != exp_10) {
-			auto adj_bd(binary_pow_10<
-				storage_type
-			>::lookup_exp_10_rem(exp_10 - exp_bd.exp_5));
-			adapter_type adj_v(adj_bd.m, adj_bd.exp_2);
-			xv *= adj_v;
-			if (m_exp < (exp_10 - exp_bd.exp_5))
-				error += 4;
-		}
-
-		{
-			adapter_type adj_v(exp_bd.m, exp_bd.exp_2);
-			xv *= adj_v;
-			auto x_exp(xv.exp);
-			xv.normalize();
-			error += 8 + (error ? 1 : 0);
-			error <<= x_exp - xv.exp;
-		}
+		scale_guess(xv, error, exp_10);
 
 		auto m_size(xv.exp + significand_size);
 		if (m_size >= (denormal_exponent + mantissa_bits))
@@ -323,7 +351,7 @@ struct from_ascii_decimal_f {
 			auto shift((m_size + 3) - significand_size + 1);
 			xv.m >>= shift;
 			xv.exp += shift;
-			error = (error >> shift) + 1 + 8;
+			error = (error >> shift) + 9;
 			m_size -= shift;
 		}
 
@@ -457,13 +485,12 @@ struct from_ascii_decimal_f {
 
 		auto m_cnt(bigdec_to_scalar(m, digits));
 		int32_t m_exp(
-			std::numeric_limits<decltype(m)>::digits10
-			- m_cnt.first
+			std::numeric_limits<decltype(m)>::digits10 - m_cnt
 		);
-		int32_t error(m_cnt.second ? 0 : 4);
+		int32_t error(4);
 
 		auto d_exp_10(exp_10);
-		exp_10 -= m_cnt.first - int_pos;
+		exp_10 -= m_cnt - int_pos;
 
 		if (check_for_exp) {
 			bigint_type exp_digits(a);
@@ -502,7 +529,7 @@ struct from_ascii_decimal_f {
 		}
 
 		adapter_type xv(m, 0);
-		if (!compute_guess(xv, error, exp_10, m_exp)) {
+		if (!compute_guess(xv, error, exp_10 - m_exp)) {
 			if (int_pos > m_r.pos)
 				d_exp_10 += int_pos - m_r.pos;
 			else

@@ -256,11 +256,11 @@ void test_float128()
 
 int main()
 {
-	printf("test float32\n");
-	ucpf::mina::test_float32();
+	//printf("test float32\n");
+	//ucpf::mina::test_float32();
 	printf("test float64\n");
 	ucpf::mina::test_float64();
-	printf("test float128\n");
-	ucpf::mina::test_float128();
+	//printf("test float128\n");
+	//ucpf::mina::test_float128();
 	return 0;
 }

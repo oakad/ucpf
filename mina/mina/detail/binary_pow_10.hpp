@@ -14,19 +14,19 @@
 
 namespace ucpf { namespace mina { namespace detail {
 
-template <typename T>
 struct binary_pow_10 {
 	struct u_entry {
 		uint64_t m_high;
 		uint64_t m_low;
-		int exp_2;
-		int exp_5;
+		int32_t exp_2;
+		int32_t exp_5;
 	};
 
+	template <typename T>
 	struct entry {
 		T m;
-		int exp_2;
-		int exp_5;
+		int32_t exp_2;
+		int32_t exp_5;
 
 		entry()
 		: m(0), exp_2(0), exp_5(0)
@@ -36,6 +36,12 @@ struct binary_pow_10 {
 	};
 
 	constexpr static size_t pow_5_step = 8;
+	constexpr static std::pair<
+		int32_t, int32_t
+	> exp_2_range = {-3388, 3362};
+	constexpr static std::pair<
+		int32_t, int32_t
+	> exp_5_range = {-1020, 1012};
 	constexpr static std::array<u_entry, 8> rem_pow_5_list = {{
 		{0xa000000000000000ull, 0x0000000000000000ull, 4, 1},
 		{0xc800000000000000ull, 0x0000000000000000ull, 7, 2},
@@ -304,7 +310,8 @@ struct binary_pow_10 {
 		{0xdd82b7ab5ffc462dull, 0xfdc12e13381e6d80ull, 3362, 1012}
 	}};
 
-	static entry lookup_exp_10(int exp_2)
+	template <typename T>
+	static entry<T> lookup_exp_10(int32_t exp_2)
 	{
 		constexpr static double inv_log2_10 = 0.30102999566398114;
 		constexpr static int bits = sizeof(T) * 8;
@@ -315,27 +322,29 @@ struct binary_pow_10 {
 		idx /= pow_5_step;
 
 		if ((idx < 0) || (idx > (pow_5_list.size() - 2)))
-			return entry();
+			return entry<T>();
 		else
-			return entry(pow_5_list[idx + 1]);
+			return entry<T>(pow_5_list[idx + 1]);
 	}
 
-	static entry lookup_exp_2(int exp_10)
+	template <typename T>
+	static entry<T> lookup_exp_2(int32_t exp_10)
 	{
 		auto idx(exp_10 - pow_5_list.front().exp_5);
 		idx /= pow_5_step;
-		return entry(pow_5_list[idx]);
+		return entry<T>(pow_5_list[idx]);
 	}
 
-	static entry lookup_exp_10_rem(int exp_10)
+	template <typename T>
+	static entry<T> lookup_exp_10_rem(int32_t exp_10)
 	{
-		return entry(rem_pow_5_list[(exp_10 % pow_5_step) - 1]);
+		return entry<T>(rem_pow_5_list[(exp_10 % pow_5_step) - 1]);
 	}
 };
 
 template <>
-binary_pow_10<uint32_t>::entry::entry(
-	binary_pow_10<uint32_t>::u_entry const &e
+binary_pow_10::entry<uint32_t>::entry(
+	binary_pow_10::u_entry const &e
 ) : m(e.m_high >> 32), exp_2(e.exp_2 - 32), exp_5(e.exp_5)
 {
 	constexpr static uint64_t round_mask = uint64_t(1) << 31;
@@ -345,8 +354,8 @@ binary_pow_10<uint32_t>::entry::entry(
 }
 
 template <>
-binary_pow_10<uint64_t>::entry::entry(
-	binary_pow_10<uint64_t>::u_entry const &e
+binary_pow_10::entry<uint64_t>::entry(
+	binary_pow_10::u_entry const &e
 ) : m(e.m_high), exp_2(e.exp_2 - 64), exp_5(e.exp_5)
 {
 	constexpr static uint64_t round_mask = uint64_t(1) << 63;
@@ -356,23 +365,21 @@ binary_pow_10<uint64_t>::entry::entry(
 }
 
 template <>
-binary_pow_10<uint128_t>::entry::entry(
-	binary_pow_10<uint128_t>::u_entry const &e
+binary_pow_10::entry<uint128_t>::entry(
+	binary_pow_10::u_entry const &e
 ) : m(e.m_high), exp_2(e.exp_2 - 128), exp_5(e.exp_5)
 {
 	m <<= 64u;
 	m |= e.m_low;
 }
 
-template <typename T>
 constexpr std::array<
-	typename binary_pow_10<T>::u_entry, 8
-> binary_pow_10<T>::rem_pow_5_list;
+	typename binary_pow_10::u_entry, 8
+> binary_pow_10::rem_pow_5_list;
 
-template <typename T>
 constexpr std::array<
-	typename binary_pow_10<T>::u_entry, 255
-> binary_pow_10<T>::pow_5_list;
+	typename binary_pow_10::u_entry, 255
+> binary_pow_10::pow_5_list;
 
 }}}
 #endif

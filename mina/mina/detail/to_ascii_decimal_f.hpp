@@ -117,7 +117,7 @@ struct to_ascii_decimal_f {
 	{
 		constexpr static double inv_log2_10 = 0.30102999566398114;
 		return std::lround(std::ceil((
-			exp_2 + traits_type::mantissa_bits - 1
+			exp_2 + wrapper_type::traits_type::mantissa_bits - 1
 		) * inv_log2_10 - 1e-10));
 	}
 
@@ -348,7 +348,7 @@ struct to_ascii_decimal_f {
 		auto bd(xv.boundaries());
 		xv.normalize();
 
-		auto exp_bd(binary_pow_10<storage_type>::lookup_exp_10(
+		auto exp_bd(binary_pow_10::lookup_exp_10<storage_type>(
 			traits_type::minimal_target_exp
 			- (xv.exp + wrapper_type::bit_size)
 		));
