@@ -352,7 +352,7 @@ struct to_ascii_decimal_f {
 
 		auto exp_2(
 			int32_t(traits_type::minimal_target_exp)
-			- (xv.exp + wrapper_type::bit_size)
+			- (xv.exp + int32_t(wrapper_type::bit_size))
 		);
 
 		if (

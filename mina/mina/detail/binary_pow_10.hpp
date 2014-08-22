@@ -319,7 +319,6 @@ struct binary_pow_10 {
 
 		double k(std::ceil(inv_log2_10 * (exp_2 + bits - 1)));
 		auto idx(std::lround(k));
-		printf("aa %d, %ld\n", exp_2, idx);
 		idx -= pow_5_list.front().exp_5 + 1;
 		idx /= pow_5_step;
 		return entry<T>(pow_5_list[idx + 1]);
