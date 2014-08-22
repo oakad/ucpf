@@ -40,6 +40,10 @@ struct float_t {
 	typedef typename wrapper_type::storage_type mantissa_type;
 	typedef typename wrapper_type::machine_type value_type;
 
+	float_t()
+	: m(0), exp(0)
+	{}
+
 	float_t(mantissa_type m_, int32_t exp_)
 	: m(m_), exp(exp_)
 	{}

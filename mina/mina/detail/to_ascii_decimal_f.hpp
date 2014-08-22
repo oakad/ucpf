@@ -117,7 +117,9 @@ struct to_ascii_decimal_f {
 	{
 		constexpr static double inv_log2_10 = 0.30102999566398114;
 		return std::lround(std::ceil((
-			exp_2 + wrapper_type::traits_type::mantissa_bits - 1
+			exp_2
+			+ int32_t(wrapper_type::traits_type::mantissa_bits)
+			- 1
 		) * inv_log2_10 - 1e-10));
 	}
 
@@ -348,18 +350,22 @@ struct to_ascii_decimal_f {
 		auto bd(xv.boundaries());
 		xv.normalize();
 
-		auto exp_bd(binary_pow_10::lookup_exp_10<storage_type>(
-			traits_type::minimal_target_exp
+		auto exp_2(
+			int32_t(traits_type::minimal_target_exp)
 			- (xv.exp + wrapper_type::bit_size)
-		));
+		);
 
-		if (!exp_bd.m) {
+		if (
+			(exp_2 < binary_pow_10::pow_2_range.first)
+			|| (exp_2 > binary_pow_10::pow_2_range.second)
+		) {
 			bigint_convert(
 				std::forward<OutputIterator>(sink), v, a
 			);
 			return;
 		}
 
+		auto exp_bd(binary_pow_10::lookup_exp_10<storage_type>(exp_2));
 		adapter_type x_scale(exp_bd.m, exp_bd.exp_2);
 		auto s_xv(xv * x_scale);
 		auto s_bd(std::make_pair(
@@ -377,7 +383,7 @@ struct to_ascii_decimal_f {
 		auto fractional(s_bd.second.m & (unity.m - 1));
 
 		auto x_exp(small_power_10_estimate(
-			wrapper_type::bit_size + unity.exp + 1
+			int32_t(wrapper_type::bit_size) + unity.exp + 1
 		));
 
 		if (integral < small_power_10[x_exp])

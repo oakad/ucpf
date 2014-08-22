@@ -36,12 +36,13 @@ struct binary_pow_10 {
 	};
 
 	constexpr static size_t pow_5_step = 8;
+	/* safe exp_2 range should accomodate the maximal mantissa size, 128 */
 	constexpr static std::pair<
 		int32_t, int32_t
-	> exp_2_range = {-3388, 3362};
+	> pow_2_range = {-3388, 3229};
 	constexpr static std::pair<
 		int32_t, int32_t
-	> exp_5_range = {-1020, 1012};
+	> pow_5_range = {-1020, 1012};
 	constexpr static std::array<u_entry, 8> rem_pow_5_list = {{
 		{0xa000000000000000ull, 0x0000000000000000ull, 4, 1},
 		{0xc800000000000000ull, 0x0000000000000000ull, 7, 2},
@@ -318,13 +319,10 @@ struct binary_pow_10 {
 
 		double k(std::ceil(inv_log2_10 * (exp_2 + bits - 1)));
 		auto idx(std::lround(k));
+		printf("aa %d, %ld\n", exp_2, idx);
 		idx -= pow_5_list.front().exp_5 + 1;
 		idx /= pow_5_step;
-
-		if ((idx < 0) || (idx > (pow_5_list.size() - 2)))
-			return entry<T>();
-		else
-			return entry<T>(pow_5_list[idx + 1]);
+		return entry<T>(pow_5_list[idx + 1]);
 	}
 
 	template <typename T>
@@ -372,6 +370,8 @@ binary_pow_10::entry<uint128_t>::entry(
 	m <<= 64u;
 	m |= e.m_low;
 }
+
+constexpr std::pair<int32_t, int32_t> binary_pow_10::pow_2_range;
 
 constexpr std::array<
 	typename binary_pow_10::u_entry, 8

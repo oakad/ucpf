@@ -285,31 +285,31 @@ struct from_ascii_decimal_f {
 		adapter_type &xv, int32_t &error, int32_t exp_10
 	)
 	{
-		if (exp_10 >= 0) {
-			while (exp_10 > binary_pow_10::exp_5_range.second) {
+		if (exp_10 > binary_pow_10::pow_5_range.second) {
+			while (exp_10 > binary_pow_10::pow_5_range.second) {
 				auto exp_bd(binary_pow_10::lookup_exp_2<
 					storage_type
-				>(binary_pow_10::exp_5_range.second));
+				>(binary_pow_10::pow_5_range.second));
 				adapter_type adj_v(exp_bd.m, exp_bd.exp_2);
 				xv *= adj_v;
 				auto x_exp(xv.exp);
 				xv.normalize();
 				error += 9;
 				error <<= x_exp - xv.exp;
-				exp_10 -= binary_pow_10::exp_5_range.second;
+				exp_10 -= binary_pow_10::pow_5_range.second;
 			}
-		} else {
-			while (exp_10 < binary_pow_10::exp_5_range.first) {
+		} else if (exp_10 < binary_pow_10::pow_5_range.first) {
+			while (exp_10 < binary_pow_10::pow_5_range.first) {
 				auto exp_bd(binary_pow_10::lookup_exp_2<
 					storage_type
-				>(binary_pow_10::exp_5_range.first));
+				>(binary_pow_10::pow_5_range.first));
 				adapter_type adj_v(exp_bd.m, exp_bd.exp_2);
 				xv *= adj_v;
 				auto x_exp(xv.exp);
 				xv.normalize();
 				error += 9;
 				error <<= x_exp - xv.exp;
-				exp_10 -= binary_pow_10::exp_5_range.first;
+				exp_10 -= binary_pow_10::pow_5_range.first;
 			}
 		}
 
