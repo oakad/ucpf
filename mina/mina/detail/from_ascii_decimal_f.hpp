@@ -285,45 +285,45 @@ struct from_ascii_decimal_f {
 		adapter_type &xv, int32_t &error, int32_t exp_10
 	)
 	{
-		if (exp_10 > binary_pow_10::pow_5_range.second) {
-			while (exp_10 > binary_pow_10::pow_5_range.second) {
-				auto exp_bd(binary_pow_10::lookup_exp_2<
+		if (exp_10 > binary_pow_10::pow_10_range.second) {
+			while (exp_10 > binary_pow_10::pow_10_range.second) {
+				auto exp_bd(binary_pow_10::lookup_pow_2<
 					storage_type
-				>(binary_pow_10::pow_5_range.second));
-				adapter_type adj_v(exp_bd.m, exp_bd.exp_2);
+				>(binary_pow_10::pow_10_range.second));
+				adapter_type adj_v(exp_bd.m, exp_bd.pow_2);
 				xv *= adj_v;
 				auto x_exp(xv.exp);
 				xv.normalize();
 				error += 9;
 				error <<= x_exp - xv.exp;
-				exp_10 -= binary_pow_10::pow_5_range.second;
+				exp_10 -= binary_pow_10::pow_10_range.second;
 			}
-		} else if (exp_10 < binary_pow_10::pow_5_range.first) {
-			while (exp_10 < binary_pow_10::pow_5_range.first) {
-				auto exp_bd(binary_pow_10::lookup_exp_2<
+		} else if (exp_10 < binary_pow_10::pow_10_range.first) {
+			while (exp_10 < binary_pow_10::pow_10_range.first) {
+				auto exp_bd(binary_pow_10::lookup_pow_2<
 					storage_type
-				>(binary_pow_10::pow_5_range.first));
-				adapter_type adj_v(exp_bd.m, exp_bd.exp_2);
+				>(binary_pow_10::pow_10_range.first));
+				adapter_type adj_v(exp_bd.m, exp_bd.pow_2);
 				xv *= adj_v;
 				auto x_exp(xv.exp);
 				xv.normalize();
 				error += 9;
 				error <<= x_exp - xv.exp;
-				exp_10 -= binary_pow_10::pow_5_range.first;
+				exp_10 -= binary_pow_10::pow_10_range.first;
 			}
 		}
 
-		auto exp_bd(binary_pow_10::lookup_exp_2<storage_type>(exp_10));
-		if (exp_bd.exp_5 != exp_10) {
-			auto adj_bd(binary_pow_10::lookup_exp_10_rem<
+		auto exp_bd(binary_pow_10::lookup_pow_2<storage_type>(exp_10));
+		if (exp_bd.pow_10 != exp_10) {
+			auto adj_bd(binary_pow_10::lookup_pow_10_rem<
 				storage_type
-			>(exp_10 - exp_bd.exp_5));
-			adapter_type adj_v(adj_bd.m, adj_bd.exp_2);
+			>(exp_10 - exp_bd.pow_10));
+			adapter_type adj_v(adj_bd.m, adj_bd.pow_2);
 			xv *= adj_v;
 			error += 9;
 		}
 
-		adapter_type adj_v(exp_bd.m, exp_bd.exp_2);
+		adapter_type adj_v(exp_bd.m, exp_bd.pow_2);
 		xv *= adj_v;
 		auto x_exp(xv.exp);
 		xv.normalize();

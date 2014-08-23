@@ -83,8 +83,8 @@ struct null_sink {
 			  << " not equal " << y << '\n';           \
 } while(0)
 
-#define XS 0
-#define XM 1
+#define XS 1
+#define XM 0
 
 void test_float32()
 {

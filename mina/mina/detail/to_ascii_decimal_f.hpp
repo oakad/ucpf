@@ -365,8 +365,8 @@ struct to_ascii_decimal_f {
 			return;
 		}
 
-		auto exp_bd(binary_pow_10::lookup_exp_10<storage_type>(exp_2));
-		adapter_type x_scale(exp_bd.m, exp_bd.exp_2);
+		auto exp_bd(binary_pow_10::lookup_pow_10<storage_type>(exp_2));
+		adapter_type x_scale(exp_bd.m, exp_bd.pow_2);
 		auto s_xv(xv * x_scale);
 		auto s_bd(std::make_pair(
 			bd.first * x_scale, bd.second * x_scale
@@ -422,7 +422,7 @@ struct to_ascii_decimal_f {
 						std::forward<
 							OutputIterator
 						>(sink), bv, dp,
-						exponent.second - exp_bd.exp_5
+						exponent.second - exp_bd.pow_10
 					);
 				}
 				return;
@@ -461,7 +461,7 @@ struct to_ascii_decimal_f {
 							OutputIterator
 						>(sink),
 						bv, dp,
-						exponent.second - exp_bd.exp_5
+						exponent.second - exp_bd.pow_10
 					);
 				}
 				return;
