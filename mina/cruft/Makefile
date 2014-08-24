@@ -2,10 +2,10 @@ CC=g++
 CXXFLAGS+=-std=gnu++1y -I.. -I../../yesod
 
 test_fwr : test_fwr.cpp
-	$(CC) $(CXXFLAGS) -g  -lquadmath -o $@ $^
+	$(CC) $(CXXFLAGS) -g -O3 -lquadmath -o $@ $^
 
 test_frd : test_frd.cpp
-	$(CC) $(CXXFLAGS) -Wformat=0 -g -lquadmath -o $@ $^
+	$(CC) $(CXXFLAGS) -Wformat=0 -g -O3 -lquadmath -o $@ $^
 
 t5 : t5.cpp
 	$(CC) $(CXXFLAGS) -m32 -O3 -o $@ $^

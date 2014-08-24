@@ -83,15 +83,14 @@ struct null_sink {
 			  << " not equal " << y << '\n';           \
 } while(0)
 
-#define XS 1
-#define XM 0
+#define XS 0
+#define XM 1
 
 void test_float32()
 {
 #if XM
 	test::dec_float_generator<20, 45, 38> fg_r;
 
-	printf("-- random\n");
 	std::generate_n(test::null_sink(), CASE_COUNT, [&fg_r]() -> bool {
 		return fg_r([](char *first, char *last) -> bool {
 			auto x_first(first);
@@ -101,8 +100,6 @@ void test_float32()
 			detail::from_ascii_decimal_f<float> cv(
 				x_first, last, std::allocator<void>()
 			);
-			printf("-fi- %s\n", first);
-			printf("-fo- %.40g\n", cv.value);
 			CHECK_EQUAL(cv.value, xv);
 			return cv.valid && (cv.value == xv);
 		});
@@ -130,7 +127,6 @@ void test_float64()
 #if XM
 	test::dec_float_generator<40, 325, 310> fg_r;
 
-	printf("-- random\n");
 	std::generate_n(test::null_sink(), CASE_COUNT, [&fg_r]() -> bool {
 		return fg_r([](char *first, char *last) -> bool {
 			auto x_first(first);
@@ -140,8 +136,6 @@ void test_float64()
 			detail::from_ascii_decimal_f<double> cv(
 				x_first, last, std::allocator<void>()
 			);
-			printf("-di- %s\n", first);
-			printf("-do- %.40g\n", cv.value);
 			CHECK_EQUAL(cv.value, xv);
 			return cv.valid && (cv.value == xv);
 		});
@@ -180,7 +174,6 @@ void test_float128()
 #if XM
 	test::dec_float_generator<80, 4966, 4933> fg_r;
 
-	printf("-- random\n");
 	std::generate_n(test::null_sink(), CASE_COUNT, [&fg_r]() -> bool {
 		return fg_r([](char *first, char *last) -> bool {
 			auto x_first(first);
@@ -190,8 +183,6 @@ void test_float128()
 			detail::from_ascii_decimal_f<yesod::float128> cv(
 				x_first, last, std::allocator<void>()
 			);
-			printf("-qi- %s\n", first);
-			printf("-qo- %.40Qg\n", cv.value);
 			CHECK_EQUAL(cv.value, xv);
 			return cv.valid && (cv.value == xv);
 		});

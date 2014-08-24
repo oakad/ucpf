@@ -11,7 +11,7 @@
 #include <mina/to_ascii_decimal.hpp>
 #include "../test/float_generator.hpp"
 
-#define CASE_COUNT 10
+#define CASE_COUNT 50000
 
 namespace std {
 
@@ -85,6 +85,7 @@ void test_float32()
 {
 	test::float_generator_r<32> fg_r;
 	test::float_generator_e<32> fg_e;
+#if 0
 	{
 		char buf[40] = {0};
 		char *ptr(buf);
@@ -111,7 +112,7 @@ void test_float32()
 		);
 		CHECK_EQUAL_STR(buf, "+1.#s(2097152)");
 	}
-
+#endif
 	printf("-- random\n");
 	std::generate_n(test::null_sink(), CASE_COUNT, [&fg_r]() -> bool {
 		return fg_r([](float v) -> bool {
@@ -140,6 +141,7 @@ void test_float64()
 {
 	test::float_generator_r<64> fg_r;
 	test::float_generator_e<64> fg_e;
+#if 0
 	{
 		char buf[40] = {0};
 		char *ptr(buf);
@@ -166,7 +168,7 @@ void test_float64()
 		);
 		CHECK_EQUAL_STR(buf, "+1.#s(1125899906842624)");
 	}
-
+#endif
 	printf("-- random\n");
 	std::generate_n(test::null_sink(), CASE_COUNT, [&fg_r]() -> bool {
 		return fg_r([](double v) -> bool {
@@ -174,8 +176,6 @@ void test_float64()
 			char *ptr(buf);
 			to_ascii_decimal(ptr, v);
 			auto xv(strtod(buf, nullptr));
-			printf("-di- %.40g (%a)\n", v, v);
-			printf("-do- %s\n", buf);
 			CHECK_EQUAL(v, xv);
 			return v == xv;
 		});
@@ -238,13 +238,11 @@ void test_float128()
 			char *ptr(buf);
 			to_ascii_decimal(ptr, v);
 			auto xv(strtoflt128(buf, nullptr));
-			printf("-qi- %.40Qg (%Qa)\n", v, v);
-			printf("-qo- %s\n", buf);
 			CHECK_EQUAL(v, xv);
 			return v == xv;
 		});
 	});
-#if 0
+
 	printf("-- exponent\n");
 	std::generate_n(test::null_sink(), CASE_COUNT, [&fg_e]() -> bool {
 		return fg_e([](yesod::float128 v) -> bool {
@@ -256,17 +254,17 @@ void test_float128()
 			return v == xv;
 		});
 	});
-#endif
+
 }
 
 }}
 
 int main()
 {
-	//printf("test float32\n");
-	//ucpf::mina::test_float32();
-	//printf("test float64\n");
-	//ucpf::mina::test_float64();
+	printf("test float32\n");
+	ucpf::mina::test_float32();
+	printf("test float64\n");
+	ucpf::mina::test_float64();
 	printf("test float128\n");
 	ucpf::mina::test_float128();
 	return 0;

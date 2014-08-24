@@ -13,7 +13,7 @@
 #include <mina/to_ascii_decimal.hpp>
 #include "float_generator.hpp"
 
-#define CASE_COUNT 100000
+#define CASE_COUNT 1000000
 
 namespace std {
 

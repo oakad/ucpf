@@ -355,16 +355,6 @@ struct to_ascii_decimal_f {
 			- (xv.exp + int32_t(wrapper_type::bit_size))
 		);
 
-		if (
-			(exp_2 < binary_pow_10::pow_2_range.first)
-			|| (exp_2 > binary_pow_10::pow_2_range.second)
-		) {
-			bigint_convert(
-				std::forward<OutputIterator>(sink), v, a
-			);
-			return;
-		}
-
 		auto exp_bd(binary_pow_10::lookup_pow_10<storage_type>(exp_2));
 		adapter_type x_scale(exp_bd.m, exp_bd.pow_2);
 		auto s_xv(xv * x_scale);
