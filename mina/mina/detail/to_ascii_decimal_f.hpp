@@ -355,7 +355,9 @@ struct to_ascii_decimal_f {
 			- (xv.exp + int32_t(wrapper_type::bit_size))
 		);
 
-		auto exp_bd(binary_pow_10::lookup_pow_10<storage_type>(exp_2));
+		auto exp_bd(
+			binary_pow_10<>::lookup_pow_10<storage_type>(exp_2)
+		);
 		adapter_type x_scale(exp_bd.m, exp_bd.pow_2);
 		auto s_xv(xv * x_scale);
 		auto s_bd(std::make_pair(

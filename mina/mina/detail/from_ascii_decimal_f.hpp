@@ -286,17 +286,19 @@ struct from_ascii_decimal_f {
 		xv.normalize();
 		error <<= -xv.exp;
 
-		if (exp_10 < binary_pow_10::pow_10_range.first) {
+		if (exp_10 < binary_pow_10<>::pow_10_range.first) {
 			value = value_type(0);
 			return true;
-		} else if (exp_10 > binary_pow_10::pow_10_range.second) {
+		} else if (exp_10 > binary_pow_10<>::pow_10_range.second) {
 			value = std::numeric_limits<value_type>::infinity();
 			return true;
 		}
 
-		auto exp_bd(binary_pow_10::lookup_pow_2<storage_type>(exp_10));
+		auto exp_bd(
+			binary_pow_10<>::lookup_pow_2<storage_type>(exp_10)
+		);
 		if (exp_bd.pow_10 != exp_10) {
-			auto adj_bd(binary_pow_10::lookup_pow_10_rem<
+			auto adj_bd(binary_pow_10<>::lookup_pow_10_rem<
 				storage_type
 			>(exp_10 - exp_bd.pow_10));
 			adapter_type adj_v(adj_bd.m, adj_bd.pow_2);

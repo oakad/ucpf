@@ -166,7 +166,7 @@ struct float_t {
 };
 
 template <>
-auto float_t<32>::operator*(float_t other) const -> float_t
+inline auto float_t<32>::operator*(float_t other) const -> float_t
 {
 	uint64_t acc(m);
 	acc *= other.m;
@@ -177,7 +177,7 @@ auto float_t<32>::operator*(float_t other) const -> float_t
 }
 
 template <>
-auto float_t<64>::operator*(float_t other) const -> float_t
+inline auto float_t<64>::operator*(float_t other) const -> float_t
 {
 	auto rv(yesod::detail::multiply(m, other.m));
 	rv.second += rv.first >> 63u; /* rounding */
@@ -187,7 +187,7 @@ auto float_t<64>::operator*(float_t other) const -> float_t
 }
 
 template <>
-auto float_t<128>::operator*(float_t other) const -> float_t
+inline auto float_t<128>::operator*(float_t other) const -> float_t
 {
 	auto rv(yesod::detail::multiply(m, other.m));
 	rv.second += rv.first >> 127u; /* rounding */

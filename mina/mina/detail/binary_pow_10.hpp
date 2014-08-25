@@ -14,6 +14,7 @@
 
 namespace ucpf { namespace mina { namespace detail {
 
+template <typename Dummy = void>
 struct binary_pow_10 {
 	struct u_entry {
 		uint64_t m_high;
@@ -37,10 +38,6 @@ struct binary_pow_10 {
 	constexpr static double inv_log2_10 = 0.30102999566398114;
 	constexpr static int32_t pow_10_step = 8;
 
-	/* safe exp_2 range should accomodate the maximal mantissa size, 128 */
-	constexpr static std::pair<
-		int32_t, int32_t
-	> pow_2_range = {-16596, 16650};
 	constexpr static std::pair<
 		int32_t, int32_t
 	> pow_10_range = {-5004, 5012};
@@ -1351,7 +1348,8 @@ struct binary_pow_10 {
 };
 
 template <>
-binary_pow_10::entry<uint32_t>::entry(
+template <>
+inline binary_pow_10<void>::entry<uint32_t>::entry(
 	binary_pow_10::u_entry const &e, int32_t pow_10_, int32_t pow_2_
 ) : m(e.m_high >> 32), pow_10(pow_10_), pow_2(pow_2_ - 32)
 {
@@ -1362,7 +1360,8 @@ binary_pow_10::entry<uint32_t>::entry(
 }
 
 template <>
-binary_pow_10::entry<uint64_t>::entry(
+template <>
+inline binary_pow_10<void>::entry<uint64_t>::entry(
 	binary_pow_10::u_entry const &e, int32_t pow_10_, int32_t pow_2_
 ) : m(e.m_high), pow_10(pow_10_), pow_2(pow_2_ - 64)
 {
@@ -1373,7 +1372,8 @@ binary_pow_10::entry<uint64_t>::entry(
 }
 
 template <>
-binary_pow_10::entry<uint128_t>::entry(
+template <>
+inline binary_pow_10<void>::entry<uint128_t>::entry(
 	binary_pow_10::u_entry const &e, int32_t pow_10_, int32_t pow_2_
 ) : m(e.m_high), pow_10(pow_10_), pow_2(pow_2_ - 128)
 {
@@ -1381,15 +1381,15 @@ binary_pow_10::entry<uint128_t>::entry(
 	m |= e.m_low;
 }
 
-constexpr std::pair<int32_t, int32_t> binary_pow_10::pow_2_range;
-
+template <typename Dummy>
 constexpr std::array<
-	typename binary_pow_10::u_entry, 8
-> binary_pow_10::rem_pow_10_list;
+	typename binary_pow_10<Dummy>::u_entry, 8
+> binary_pow_10<Dummy>::rem_pow_10_list;
 
+template <typename Dummy>
 constexpr std::array<
-	typename binary_pow_10::u_entry, 1253
-> binary_pow_10::pow_10_list;
+	typename binary_pow_10<Dummy>::u_entry, 1253
+> binary_pow_10<Dummy>::pow_10_list;
 
 }}}
 #endif
