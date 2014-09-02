@@ -23,13 +23,6 @@ struct condition_variable {
 		__atomic_store_n(&cv.waiters, 0, __ATOMIC_SEQ_CST);
 	}
 
-	condition_variable(
-		typename std::enable_if<!Interprocess>::type * = nullptr
-	)
-	{
-		init(*this);
-	}
-
 	void notify_one()
 	{
 		__atomic_add_fetch(&seq_count, 1, __ATOMIC_SEQ_CST);
@@ -41,17 +34,17 @@ struct condition_variable {
 
 	void notify_all()
 	{
-		if (!__atomic_load_n(&waiters))
+		if (!__atomic_load_n(&waiters, __ATOMIC_SEQ_CST))
 			return;
 
 		__atomic_add_fetch(&seq_count, 1, __ATOMIC_SEQ_CST);
 		futex(
 			&seq_count, FUTEX_REQUEUE | futex_op_flags, 1, nullptr,
-			__atomic_load_n(&mutex_ptr), 0
+			__atomic_load_n(&mutex_ptr, __ATOMIC_SEQ_CST), 0
 		);
 	}
 
-	void wait(Mutex &m)
+	void wait(base_mutex_type &m)
 	{
 		return wait_impl(m, nullptr);
 	}
@@ -64,9 +57,9 @@ struct condition_variable {
 	{
 		std::chrono::seconds s(rel_time);
 		std::chrono::nanoseconds ns(rel_time - s);
-		struct timespec ts = { s, ns };
+		struct timespec ts = {s.count(), ns.count()};
 
-		return wait_impl(&ts);
+		return wait_impl(m, &ts);
 	}
 
 	template <typename Clock, typename Duration>
@@ -76,7 +69,7 @@ struct condition_variable {
 	)
 	{
 		return wait_for(
-			timeout_time - std::chrono::system_clock::now()
+			m, timeout_time - std::chrono::system_clock::now()
 		);
 	}
 

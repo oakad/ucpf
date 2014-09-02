@@ -30,13 +30,6 @@ struct timed_mutex {
 		__atomic_store_n(&m.state, 0, __ATOMIC_SEQ_CST);
 	}
 
-	timed_mutex(
-		typename std::enable_if<!Interprocess>::type * = nullptr
-	)
-	{
-		init(*this);
-	}
-
 	void lock()
 	{
 		for (auto cnt(0); cnt < SpinCount; ++cnt) {
