@@ -15,8 +15,11 @@
 #if !defined(UCPF_YESOD_DETAIL_STRING_MAP_BASE_JAN_06_2014_1145)
 #define UCPF_YESOD_DETAIL_STRING_MAP_BASE_JAN_06_2014_1145
 
-#include <yesod/sparse_vector.hpp>
+#include <vector>
+#include <algorithm>
 #include <forward_list>
+
+#include <yesod/sparse_vector.hpp>
 
 namespace ucpf { namespace yesod {
 
@@ -126,9 +129,23 @@ private:
 		}
 	};
 
+	typedef std::forward_list<
+		pair_type *,
+		typename std::allocator_traits<
+			typename Policy::allocator_type
+		>::template rebind_alloc<pair_type *>
+	> pair_ptr_list;
+
 	typedef std::tuple<
-		pair_type *, uintptr_t, std::forward_list<pair_type *>
+		pair_type *, uintptr_t, pair_ptr_list
 	> index_entry_type;
+
+	typedef std::vector<
+		index_entry_type,
+		typename std::allocator_traits<
+			typename Policy::allocator_type
+		>::template rebind_alloc<index_entry_type>
+	> index_entry_set;
 
 	constexpr static index_char_type terminator_char = 1;
 	constexpr static index_char_type null_char = 2;
@@ -192,8 +209,7 @@ private:
 	);
 
 	uintptr_t advance_edges(
-		uintptr_t pos, std::vector<index_entry_type> &b_set,
-		index_char_type k_char
+		uintptr_t pos, index_entry_set &b_set, index_char_type k_char
 	);
 
 	struct alignas(uintptr_t) value_pair {

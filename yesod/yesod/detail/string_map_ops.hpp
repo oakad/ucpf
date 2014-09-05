@@ -254,25 +254,26 @@ auto string_map<CharType, ValueType, Policy>::split_subtree(
 	uintptr_t r_pos, uintptr_t l_pos, index_char_type k_char
 )-> std::pair<pair_type *, uintptr_t>
 {
-	std::vector<index_entry_type> r_set, l_set;
+	index_entry_set r_set(trie.get_allocator());
+	index_entry_set l_set(trie.get_allocator());
 	uintptr_t adj_pos(l_pos > 1 ? trie[vec_offset(l_pos)].base : trie_root);
 
 	trie.for_each_above(
 		std::min(
 			r_pos > 1 ? trie[vec_offset(r_pos)].base : trie_root,
 			adj_pos
-		), [&r_set, &l_set, r_pos, l_pos](
+		), [&r_set, &l_set, r_pos, l_pos, this](
 			size_type pos, pair_type const &p
 		) -> bool {
 			if (p.check == r_pos)
 				r_set.push_back(std::make_tuple(
 					const_cast<pair_type *>(&p), pos,
-					std::forward_list<pair_type *>()
+					pair_ptr_list(trie.get_allocator())
 				));
 			else if (p.check == l_pos)
 				l_set.push_back(std::make_tuple(
 					const_cast<pair_type *>(&p), pos,
-					std::forward_list<pair_type *>()
+					pair_ptr_list(trie.get_allocator())
 				));
 
 			return true;
@@ -291,9 +292,7 @@ auto string_map<CharType, ValueType, Policy>::split_subtree(
 
 template <typename CharType, typename ValueType, typename Policy>
 auto string_map<CharType, ValueType, Policy>::advance_edges(
-	uintptr_t pos,
-	std::vector<index_entry_type> &b_set,
-	index_char_type k_char
+	uintptr_t pos, index_entry_set &b_set, index_char_type k_char
 ) -> uintptr_t
 {
 	auto adj_orig(pos > 1 ? trie[vec_offset(pos)].base : trie_root);

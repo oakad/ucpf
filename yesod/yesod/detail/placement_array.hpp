@@ -11,6 +11,7 @@
 #include <array>
 #include <tuple>
 #include <bitset>
+#include <memory>
 
 namespace ucpf { namespace yesod { namespace detail {
 
