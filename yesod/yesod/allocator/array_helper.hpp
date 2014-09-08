@@ -105,10 +105,9 @@ struct array_helper {
 	static T *make(Alloc1 const &a, U *up, Iterator first, Iterator last)
 	{
 		allocator_type x_alloc(a);
-		size_type n(last - first);
 		size_type init_length(0);
 
-		auto deleter([&x_alloc, &init_length, n](T *p) -> void {
+		auto deleter([&x_alloc, &init_length](T *p) -> void {
 			for (; init_length > 0; --init_length)
 				allocator_traits::destroy(
 					x_alloc, &p[init_length - 1]
@@ -121,7 +120,7 @@ struct array_helper {
 
 		for (; first != last; ++first)
 			allocator_traits::construct(
-				x_alloc, &s_ptr[init_length], *first
+				x_alloc, &s_ptr[init_length++], *first
 			);
 
 		return s_ptr.release();
@@ -131,7 +130,7 @@ struct array_helper {
 	static T *alloc(Alloc1 const &a, Iterator first, Iterator last)
 	{
 		allocator_type x_alloc(a);
-		size_type n(last - first);
+		auto n(std::distance(first, last));
 
 		auto deleter([&x_alloc, n](T *p) -> void {
 			allocator_traits::deallocate(x_alloc, p, n);
@@ -154,6 +153,13 @@ struct array_helper {
 
 		if (d)
 			allocator_traits::deallocate(x_alloc, p, n);
+	}
+
+	template <typename Alloc1>
+	static void free(Alloc1 const &a, T *p, size_type n)
+	{
+		allocator_type x_alloc(a);
+		allocator_traits::deallocate(x_alloc, p, n);
 	}
 };
 

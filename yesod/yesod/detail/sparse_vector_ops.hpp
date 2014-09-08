@@ -17,7 +17,7 @@ bool sparse_vector<ValueType, Policy>::for_each_above(
 )
 {
 	loc_pair tree_loc[height];
-	if (tree_loc_from_pos(tree_loc, pos))
+	if (!height || tree_loc_from_pos(tree_loc, pos))
 		return true;
 
 	while (true) {
@@ -46,7 +46,7 @@ bool sparse_vector<ValueType, Policy>::for_each_above(
 ) const
 {
 	loc_pair tree_loc[height];
-	if (tree_loc_from_pos(tree_loc, pos))
+	if (!height || tree_loc_from_pos(tree_loc, pos))
 		return true;
 
 	while (true) {

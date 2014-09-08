@@ -20,6 +20,7 @@
 #include <forward_list>
 
 #include <yesod/sparse_vector.hpp>
+#include <yesod/allocator/array_helper.hpp>
 
 namespace ucpf { namespace yesod {
 
@@ -213,23 +214,9 @@ private:
 	);
 
 	struct alignas(uintptr_t) value_pair {
-		typedef typename std::allocator_traits<
-			typename Policy::allocator_type
-		>::template rebind_alloc<value_pair> pair_allocator_type;
-		typedef typename std::allocator_traits<
-			typename Policy::allocator_type
-		>::template rebind_alloc<char_type> char_allocator_type;
-
-		typedef typename std::allocator_traits<
-			typename Policy::allocator_type
-		>::template rebind_traits<value_pair> pair_allocator_traits;
-		typedef typename std::allocator_traits<
-			typename Policy::allocator_type
-		>::template rebind_traits<char_type> char_allocator_traits;
-
 		template <typename Alloc, typename Iterator, typename... Args>
 		static value_pair *construct(
-			Alloc const &a_, Iterator first, Iterator last,
+			Alloc const &a, Iterator first, Iterator last,
 			Args&&... args
 		);
 
@@ -258,9 +245,8 @@ private:
 		template <typename Iterator>
 		bool match(Iterator first, Iterator last) const
 		{
-			return (suffix_length == (last - first)) && (
-				suffix_length == common_length(first, last)
-			);
+			return (suffix_length == std::distance(first, last))
+			       && (suffix_length == common_length(first, last));
 		}
 
 		template <typename Iterator>

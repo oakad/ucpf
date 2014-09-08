@@ -411,21 +411,18 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 template <typename CharType, typename ValueType, typename Policy>
 template <typename Alloc, typename Iterator, typename... Args>
 auto string_map<CharType, ValueType, Policy>::value_pair::construct(
-	Alloc const &a_, Iterator first, Iterator last, Args&&... args
+	Alloc const &a, Iterator first, Iterator last, Args&&... args
 ) -> value_pair *
 {
-	char_allocator_type ca(a_);
-	auto suffix_length(last - first);
+	typedef allocator::array_helper<char_type, Alloc> ah_c;
+	typedef allocator::array_helper<value_pair, Alloc> ah_p;
+
+	auto suffix_length(std::distance(first, last));
 	decltype(suffix_length) init_length(0);
 
 	auto s_deleter(
-		[&ca, &init_length, suffix_length](char_type *p) -> void {
-			for (; init_length > 0; --init_length)
-				char_allocator_traits::destroy(
-					ca, &p[init_length - 1]
-				);
-
-			char_allocator_traits::deallocate(ca, p, suffix_length);
+		[&a, suffix_length](char_type *p) -> void {
+			ah_c::destroy(a, p, suffix_length, true);
 		}
 	);
 
@@ -433,91 +430,75 @@ auto string_map<CharType, ValueType, Policy>::value_pair::construct(
 		nullptr, s_deleter
 	);
 
-	if (suffix_length > Policy::short_suffix_length) {
-		s_ptr.reset(char_allocator_traits::allocate(
-			ca, suffix_length
-		));
+	if (suffix_length > Policy::short_suffix_length)
+		s_ptr.reset(ah_c::alloc(a, first, last));
 
-		for (; init_length < suffix_length; ++init_length) {
-			char_allocator_traits::construct(
-				ca, &s_ptr[init_length], *first
-			);
-			++first;
-		}
-	}
-
-	pair_allocator_type pa(a_);
-	auto p_deleter([&pa](value_pair *p) -> void {
-		pair_allocator_traits::deallocate(pa, p, 1);
+	auto p_deleter([&a](value_pair *p) -> void {
+		ah_p::destroy(a, p, 1, true);
 	});
 
 	std::unique_ptr<value_pair, decltype(p_deleter)> p_ptr(
-		pair_allocator_traits::allocate(pa, 1), p_deleter
+		ah_p::alloc_n(a, 1, std::forward<Args>(args)...), p_deleter
 	);
 
-	pair_allocator_traits::construct(
-		pa, p_ptr.get(), std::forward<Args>(args)...
-	);
 	if (s_ptr)
-		p_ptr->long_suffix.data = s_ptr.release();
-	else {
-		auto ss_deleter([&ca, &init_length](char_type *p) -> void {
-			for (; init_length > 0; --init_length)
-				char_allocator_traits::destroy(
-					ca, &p[init_length - 1]
-				);
-		});
-
-		std::unique_ptr<char_type[], decltype(ss_deleter)> ss_ptr(
-			p_ptr->suffix(), ss_deleter
-		);
-
-		for (; init_length < suffix_length; ++init_length) {
-			char_allocator_traits::construct(
-				ca, &ss_ptr[init_length], *first
-			);
-			++first;
-		}
-		ss_ptr.release();
-	}
+		p_ptr->long_suffix.data = s_ptr.get();
+	else
+		ah_c::make(a, p_ptr->short_suffix, first, last);
 
 	p_ptr->suffix_length = suffix_length;
+	s_ptr.release();
 	return p_ptr.release();
 }
 
 template <typename CharType, typename ValueType, typename Policy>
 template <typename Alloc>
 void string_map<CharType, ValueType, Policy>::value_pair::destroy(
-	Alloc const &a_, value_pair *p
+	Alloc const &a, value_pair *p
 )
 {
-	char_allocator_type ca(a_);
+	typedef allocator::array_helper<char_type, Alloc> ah_c;
+	typedef allocator::array_helper<value_pair, Alloc> ah_p;
+
 	auto s(p->suffix());
 
-	for (auto cnt(p->suffix_length); cnt > 0; --cnt)
-		char_allocator_traits::destroy(ca, &s[cnt - 1]);
+	ah_c::destroy(a, s, p->suffix_length, false);
 
 	if (p->suffix_length > Policy::short_suffix_length)
-		char_allocator_traits::deallocate(
-			ca, p->long_suffix.data,
+		ah_c::deallocate(
+			a, p->long_suffix.data,
 			p->suffix_length + p->long_suffix.offset
 		);
 
-	pair_allocator_type pa(a_);
-	pair_allocator_traits::destroy(pa, p);
-	pair_allocator_traits::deallocate(pa, p, 1);
+	ah_p::destroy(a, p, 1, true);
 }
 
 template <typename CharType, typename ValueType, typename Policy>
 template <typename Alloc>
 void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
-	Alloc const &a_, size_type count
+	Alloc const &a, size_type count
 )
 {
+	typedef allocator::array_helper<char_type, Alloc> ah;
+
 	int mode(suffix_length > Policy::short_suffix_length ? 2 : 0);
-	mode |= (suffix_length - count) > Policy::short_suffix_length
-		? 1 : 0;
-	char_allocator_type ca(a_);
+
+	if (count >= suffix_length) {
+		if (mode) {
+			ah::destroy(
+				a, long_suffix.data + long_suffix.offset,
+				suffix_length, false
+			);
+			ah::free(
+				a, long_suffix.data,
+				long_suffix.offset + suffix_length
+			);
+		}
+		suffix_length = 0;
+		return;
+	}
+	auto next_length(suffix_length - count);
+	mode |= next_length > Policy::short_suffix_length ? 1 : 0;
 
 	switch (mode) {
 	case 0: { // short to short
@@ -525,48 +506,53 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 			&short_suffix[count], &short_suffix[suffix_length],
 			&short_suffix[0]
 		);
-		for (auto c(suffix_length - count); c < suffix_length; ++c)
-			char_allocator_traits::destroy(
-				ca, &short_suffix[c]
-			);
+		ah::destroy(
+			a, short_suffix + suffix_length - count,
+			suffix_length - count, false
+		);
+		suffix_length = next_length;
 		break;
 	}
 	case 2: { // long to short
 		auto data(long_suffix.data);
 		auto offset(long_suffix.offset);
 
-		for (size_type c(0); c < (suffix_length - count); ++c)
-			char_allocator_traits::construct(
-				ca, &short_suffix[c],
-				std::move(data[offset + count + c])
-			);
-
-		while (true) {
-			auto c(suffix_length - 1);
-			char_allocator_traits::destroy(
-				ca, &data[offset + c]
-			);
-			if (!c)
-				break;
-			--c;
-		}
-
-		char_allocator_traits::deallocate(
-			ca, data, offset + suffix_length
+		ah::make(
+			a, short_suffix, data + offset + count,
+			data + offset + count + next_length
 		);
+		ah::destroy(a, data + offset, suffix_length, false);
+		ah::free(a, data, offset + suffix_length);
+		suffix_length = next_length;
 		break;
 	}
 	case 3: { // long to long
-		auto next_offset(long_suffix.offset + count);
-		for (; long_suffix.offset < next_offset; ++long_suffix.offset)
-			char_allocator_traits::destroy(
-				ca, long_suffix.data + long_suffix.offset
+		ah::destroy(
+			a, long_suffix.data + long_suffix.offset, count, false
+		);
+		long_suffix.offset += count;
+		suffix_length = next_length;
+
+		if (long_suffix.offset > suffix_length) {
+			auto s_ptr(ah::alloc(
+				a, long_suffix.data + long_suffix.offset,
+				long_suffix.data + long_suffix.offset
+				+ suffix_length
+			));
+			ah::destroy(
+				a, long_suffix.data + long_suffix.offset,
+				suffix_length, false
 			);
+			std::swap(s_ptr, long_suffix.data);
+			ah::free(
+				a, s_ptr, long_suffix.offset + suffix_length
+			);
+			long_suffix.offset = 0;
+		}
+
 		break;
 	}
 	}
-
-	suffix_length -= count;
 }
 
 }}
