@@ -185,7 +185,7 @@ auto string_map<CharType, ValueType, Policy>::find_impl(
 
 template <typename CharType, typename ValueType, typename Policy>
 auto string_map<CharType, ValueType, Policy>::unroll_key(
-	pair_type *p, uintptr_t pos, size_type count, index_char_type other
+	pair_type *p, uintptr_t pos, size_type count, uintptr_t other
 ) -> std::pair<pair_type *, uintptr_t>
 {
 	size_type shrink(0);
@@ -251,7 +251,7 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 
 template <typename CharType, typename ValueType, typename Policy>
 auto string_map<CharType, ValueType, Policy>::split_subtree(
-	uintptr_t r_pos, uintptr_t l_pos, index_char_type k_char
+	uintptr_t r_pos, uintptr_t l_pos, uintptr_t k_char
 )-> std::pair<pair_type *, uintptr_t>
 {
 	index_entry_set r_set(trie.get_allocator());
@@ -292,7 +292,7 @@ auto string_map<CharType, ValueType, Policy>::split_subtree(
 
 template <typename CharType, typename ValueType, typename Policy>
 auto string_map<CharType, ValueType, Policy>::advance_edges(
-	uintptr_t pos, index_entry_set &b_set, index_char_type k_char
+	uintptr_t pos, index_entry_set &b_set, uintptr_t k_char
 ) -> uintptr_t
 {
 	auto adj_orig(pos > 1 ? trie[vec_offset(pos)].base : trie_root);
@@ -553,6 +553,27 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 		break;
 	}
 	}
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+auto string_map<
+	CharType, ValueType, Policy
+>::make_index() const -> reverse_index
+{
+	auto rv(reverse_index(trie.get_allocator()));
+	trie.for_each_above(
+		0, [&rv, this](size_type pos, pair_type const &p) -> bool {
+			auto base(
+				p.check > 1
+				? trie[vec_offset(p.check)].base
+				: trie_root
+			);
+			auto x_char(offset_to_char(pos, base));
+			rv.r_trie[p.check].emplace(x_char, &p);
+			return true;
+		}
+	);
+	return rv;
 }
 
 }}

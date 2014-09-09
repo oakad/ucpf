@@ -16,11 +16,12 @@
 #define UCPF_YESOD_DETAIL_STRING_MAP_BASE_JAN_06_2014_1145
 
 #include <vector>
-#include <algorithm>
 #include <forward_list>
+#include <unordered_map>
+#include <scoped_allocator>
 
+#include <yesod/flat_map.hpp>
 #include <yesod/sparse_vector.hpp>
-#include <yesod/allocator/array_helper.hpp>
 
 namespace ucpf { namespace yesod {
 
@@ -148,8 +149,8 @@ private:
 		>::template rebind_alloc<index_entry_type>
 	> index_entry_set;
 
-	constexpr static index_char_type terminator_char = 1;
-	constexpr static index_char_type null_char = 2;
+	constexpr static uintptr_t terminator_char = 1;
+	constexpr static uintptr_t null_char = 2;
 
 	template <typename Iterator>
 	static index_char_type deref_char(Iterator const &iter)
@@ -188,11 +189,9 @@ private:
 	}
 
 	/* physical - encoded -> char */
-	static index_char_type offset_to_char(uintptr_t v, uintptr_t adj)
+	static uintptr_t offset_to_char(uintptr_t v, uintptr_t adj)
 	{
-		return index_char_type(
-			((log_offset(v) - adj) >> 1) - null_char
-		);
+		return ((log_offset(v) - adj) >> 1) - null_char;
 	}
 
 	template <typename Iterator>
@@ -201,16 +200,15 @@ private:
 	) const;
 
 	std::pair<pair_type *, uintptr_t> unroll_key(
-		pair_type *p, uintptr_t pos, size_type count,
-		index_char_type other
+		pair_type *p, uintptr_t pos, size_type count, uintptr_t other
 	);
 
 	std::pair<pair_type *, uintptr_t> split_subtree(
-		uintptr_t r_pos, uintptr_t l_pos, index_char_type k_char
+		uintptr_t r_pos, uintptr_t l_pos, uintptr_t k_char
 	);
 
 	uintptr_t advance_edges(
-		uintptr_t pos, index_entry_set &b_set, index_char_type k_char
+		uintptr_t pos, index_entry_set &b_set, uintptr_t k_char
 	);
 
 	struct alignas(uintptr_t) value_pair {
@@ -309,6 +307,60 @@ private:
 
 	uintptr_t trie_root;
 	sparse_vector<pair_type, trie_vector_policy> trie;
+
+public:
+	struct reverse_index {
+		template <typename Pred>
+		void for_each(Pred &&pred) const;
+
+		template <typename Iterator, typename Pred>
+		void for_each_prefix(
+			Iterator first, Iterator last, Pred &&pred
+		);
+
+		template <typename StringType, typename Pred>
+		void for_each_prefix(StringType &&s, Pred &&pred)
+		{
+			for_each_prefix(
+				std::begin(s), std::end(s),
+				std::forward<Pred>(pred)
+			);
+		}
+
+	private:
+		friend string_map;
+
+		typedef flat_map<
+			uintptr_t, pair_type const *,
+			std::less<uintptr_t>,
+			typename Policy::allocator_type
+		> child_type;
+
+		typedef std::scoped_allocator_adaptor<
+			typename std::allocator_traits<
+				typename Policy::allocator_type
+			>::template rebind_alloc<std::pair<
+				uintptr_t, child_type
+			>>,
+			typename child_type::allocator_type
+		> allocator_adaptor;
+
+		typedef std::unordered_map<
+			uintptr_t, child_type, std::hash<uintptr_t>,
+			std::equal_to<uintptr_t>, allocator_adaptor
+		> r_trie_type;
+
+		reverse_index(typename decltype(trie)::allocator_type const &a)
+		: r_trie(
+			10, typename r_trie_type::hasher(),
+			typename r_trie_type::key_equal(),
+			allocator_adaptor(a, a)
+		) {}
+
+		 r_trie_type r_trie;
+	};
+
+	reverse_index make_index() const;
 };
 
 }}
