@@ -46,5 +46,9 @@ int main(int argc, char **argv)
 
 	auto r_idx(x_map.make_index());
 
+	r_idx.for_each([](std::string const &key, int val) -> void {
+		printf("key |%s| val %d\n", key.c_str(), val);
+	});
+
 	return 0;
 }

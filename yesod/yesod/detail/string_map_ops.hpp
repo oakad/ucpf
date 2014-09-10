@@ -556,11 +556,78 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 }
 
 template <typename CharType, typename ValueType, typename Policy>
+template <typename Pred>
+void string_map<
+	CharType, ValueType, Policy
+>::reverse_index::for_each(Pred &&pred) const
+{
+	if (r_trie.empty())
+		return;
+
+	auto r_iter(r_trie.find(1));
+	if (r_iter == r_trie.end())
+		return;
+
+	auto a(parent.trie.get_allocator());
+	state_stack_type ss(state_allocator_adaptor(a, a));
+
+	ss.emplace_back(r_iter, r_iter->second.begin());
+
+	printf("--1-\n");
+	while (true) {
+		auto &p(ss.back());
+		if (p.b_pos == p.r_pos->second.end()) {
+			if (ss.size() == 1)
+				return;
+
+			ss.pop_back();
+			continue;
+		}
+
+		if (std::get<1>(*p.b_pos).first->is_leaf()) {
+			printf("--2-\n");
+			auto l_ptr(std::get<1>(*p.b_pos).first->leaf_ptr());
+			auto s_len(l_ptr->suffix_length);
+
+			if (s_len) {
+				prefix_string_type prefix(p.prefix);
+				prefix.push_back(char_type(
+					std::get<0>(*p.b_pos) - null_char
+				));
+				prefix.append(
+					l_ptr->suffix(),
+					l_ptr->suffix() + s_len
+				);
+				pred(prefix, l_ptr->value);
+			} else
+				pred(p.prefix, l_ptr->value);
+
+			std::advance(p.b_pos, 1);
+		} else {
+			printf("--3- %zd\n", std::get<1>(*p.b_pos).second);
+			r_iter = r_trie.find(std::get<1>(*p.b_pos).second);
+
+			printf("-x3-\n");
+			ss.emplace_back(r_iter, r_iter->second.begin());
+			auto &q(*(++ss.rbegin()));
+			ss.back().prefix = q.prefix;
+			printf("-z3-\n");
+			if (std::get<0>(*q.b_pos) >= null_char)
+				ss.back().prefix.push_back(char_type(
+					std::get<0>(*q.b_pos) - null_char
+				));
+
+			std::advance(q.b_pos, 1);
+		}
+	}
+}
+
+template <typename CharType, typename ValueType, typename Policy>
 auto string_map<
 	CharType, ValueType, Policy
 >::make_index() const -> reverse_index
 {
-	auto rv(reverse_index(trie.get_allocator()));
+	auto rv(reverse_index(*this, trie.get_allocator()));
 	trie.for_each_above(
 		0, [&rv, this](size_type pos, pair_type const &p) -> bool {
 			auto base(
@@ -569,7 +636,9 @@ auto string_map<
 				: trie_root
 			);
 			auto x_char(offset_to_char(pos, base));
-			rv.r_trie[p.check].emplace(x_char, &p);
+			rv.r_trie[p.check].emplace(
+				x_char, std::make_pair(&p, log_offset(pos))
+			);
 			return true;
 		}
 	);
