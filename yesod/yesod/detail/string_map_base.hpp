@@ -76,21 +76,44 @@ struct string_map {
 	}
 
 	template <typename Iterator>
-	pointer find(Iterator first, Iterator last)
+	const_pointer find(Iterator first, Iterator last) const
 	{
-		auto rv(reinterpret_cast<value_pair *>(std::get<0>(
-			find_impl(first, last)
-		)));
-		return rv ? &rv->value : nullptr;
+		auto rv(find_impl(first, last));
+		if (!rv.first)
+			return nullptr;
+
+		if (!rv.first->is_leaf()) {
+			/* Check for virtual key terminator (will appear if
+			 * one key is a substring of another).
+			 */
+			auto n_pos(char_offset(
+				rv.first->base, terminator_char
+			));
+			auto p(trie.ptr_at(vec_offset(n_pos)));
+			if (
+				p && p->base && (p->check == rv.second)
+				&& p->is_leaf()
+			) {
+				auto vp(p->leaf_ptr());
+				if (vp->match(first, last))
+					return &vp->value;
+			}
+		} else {
+			auto vp(rv.first->leaf_ptr());
+			if (vp->match(first, last))
+				return &vp->value;
+		}
+
+		return nullptr;
 	}
 
 	template <typename Iterator>
-	const_pointer find(Iterator first, Iterator last) const
+	pointer find(Iterator first, Iterator last)
 	{
-		auto rv(reinterpret_cast<value_pair const *>(std::get<0>(
-			find_impl(first, last)
-		)));
-		return rv ? &rv->value : nullptr;
+		auto rv(
+			const_cast<string_map const *>(this)->find(first, last)
+		);
+		return const_cast<pointer>(rv);
 	}
 
 	std::basic_ostream<
@@ -195,7 +218,7 @@ private:
 	}
 
 	template <typename Iterator>
-	std::tuple<uintptr_t, uintptr_t, uintptr_t> find_impl(
+	std::pair<pair_type const *, uintptr_t> find_impl(
 		Iterator &first, Iterator const &last
 	) const;
 
@@ -337,22 +360,36 @@ public:
 	private:
 		friend string_map;
 
-		typedef flat_map<
-			uintptr_t, std::pair<pair_type const *, uintptr_t>,
-			std::less<uintptr_t>, typename Policy::allocator_type
-		> child_type;
+		struct r_node {
+			r_node()
+			: pair(nullptr), pos(0), char_id(0)
+			{}
+
+			r_node(
+				pair_type const *pair_, uintptr_t pos_,
+				uintptr_t char_id_
+			) : pair(pair_), pos(pos_), char_id(char_id_)
+			{}
+
+			pair_type const *pair;
+			uintptr_t pos;
+			uintptr_t char_id;
+		};
+
+		typedef std::vector<r_node, typename std::allocator_traits<
+			typename Policy::allocator_type
+		>::template rebind_alloc<r_node>> r_node_vec;
 
 		typedef std::scoped_allocator_adaptor<
 			typename std::allocator_traits<
 				typename Policy::allocator_type
 			>::template rebind_alloc<std::pair<
-				uintptr_t, child_type
-			>>,
-			typename child_type::allocator_type
+				uintptr_t, r_node_vec
+			>>, typename r_node_vec::allocator_type
 		> trie_allocator_adaptor;
 
 		typedef std::unordered_map<
-			uintptr_t, child_type, std::hash<uintptr_t>,
+			uintptr_t, r_node_vec, std::hash<uintptr_t>,
 			std::equal_to<uintptr_t>, trie_allocator_adaptor
 		> r_trie_type;
 
@@ -362,7 +399,7 @@ public:
 
 			state(
 				typename r_trie_type::const_iterator r_pos_,
-				typename child_type::const_iterator b_pos_,
+				typename r_node_vec::const_iterator b_pos_,
 				allocator_type const &a
 			) : r_pos(r_pos_), b_pos(b_pos_), prefix(a)
 			{}
@@ -384,7 +421,7 @@ public:
 
 			prefix_string_type prefix;
 			typename r_trie_type::const_iterator r_pos;
-			typename child_type::const_iterator b_pos;
+			typename r_node_vec::const_iterator b_pos;
 		};
 
 		typedef std::scoped_allocator_adaptor<
@@ -406,6 +443,9 @@ public:
 			typename r_trie_type::key_equal(),
 			trie_allocator_adaptor(a, a)
 		) {}
+
+		template <typename Pred>
+		void for_each_impl(state_stack_type &ss, Pred &&pred) const;
 
 		string_map const &parent;
 		r_trie_type r_trie;

@@ -153,34 +153,28 @@ template <typename CharType, typename ValueType, typename Policy>
 template <typename Iterator>
 auto string_map<CharType, ValueType, Policy>::find_impl(
 	Iterator &first, Iterator const &last
-) const -> std::tuple<uintptr_t, uintptr_t, uintptr_t>
+) const -> std::pair<pair_type const *, uintptr_t>
 {
-	uintptr_t l_pos(1);
+	uintptr_t l_pos(1), n_pos(0);
 	uintptr_t adj_pos(trie_root);
+	pair_type const *p(nullptr);
+
 	do {
-		auto n_pos(char_offset(adj_pos, deref_char(first)));
-		auto p(trie.ptr_at(vec_offset(n_pos)));
+		n_pos = char_offset(adj_pos, deref_char(first));
+		p = trie.ptr_at(vec_offset(n_pos));
 		++first;
 
 		if (!p || !p->base || (p->check != l_pos))
-			return std::make_tuple(0, 0, 0);
+			return std::make_pair(nullptr, 0);
 
 		if (p->is_leaf())
-			return std::tie(p->base, p->check, n_pos);
+			return std::make_pair(p, n_pos);
 
 		adj_pos = p->base;
 		l_pos = n_pos;
 	} while (first != last);
 
-	/* Check for virtual key terminator (will appear if one key is a
-	 * substring of another).
-	 */
-	auto n_pos(char_offset(adj_pos, terminator_char));
-	auto p(trie.ptr_at(vec_offset(n_pos)));
-	if (p && p->base && (p->check == l_pos) && p->is_leaf())
-		return std::tie(p->base, p->check, n_pos);
-
-	return std::make_tuple(0, 0, 0);
+	return std::make_pair(p, n_pos);
 }
 
 template <typename CharType, typename ValueType, typename Policy>
@@ -573,7 +567,6 @@ void string_map<
 
 	ss.emplace_back(r_iter, r_iter->second.begin());
 
-	printf("--1-\n");
 	while (true) {
 		auto &p(ss.back());
 		if (p.b_pos == p.r_pos->second.end()) {
@@ -584,15 +577,14 @@ void string_map<
 			continue;
 		}
 
-		if (std::get<1>(*p.b_pos).first->is_leaf()) {
-			printf("--2-\n");
-			auto l_ptr(std::get<1>(*p.b_pos).first->leaf_ptr());
+		if (p.b_pos->pair->is_leaf()) {
+			auto l_ptr(p.b_pos->pair->leaf_ptr());
 			auto s_len(l_ptr->suffix_length);
 
 			if (s_len) {
 				prefix_string_type prefix(p.prefix);
 				prefix.push_back(char_type(
-					std::get<0>(*p.b_pos) - null_char
+					p.b_pos->char_id - null_char
 				));
 				prefix.append(
 					l_ptr->suffix(),
@@ -604,22 +596,36 @@ void string_map<
 
 			std::advance(p.b_pos, 1);
 		} else {
-			printf("--3- %zd\n", std::get<1>(*p.b_pos).second);
-			r_iter = r_trie.find(std::get<1>(*p.b_pos).second);
+			r_iter = r_trie.find(p.b_pos->pos);
 
-			printf("-x3-\n");
 			ss.emplace_back(r_iter, r_iter->second.begin());
 			auto &q(*(++ss.rbegin()));
 			ss.back().prefix = q.prefix;
-			printf("-z3-\n");
-			if (std::get<0>(*q.b_pos) >= null_char)
+
+			if (q.b_pos->char_id >= null_char)
 				ss.back().prefix.push_back(char_type(
-					std::get<0>(*q.b_pos) - null_char
+					q.b_pos->char_id - null_char
 				));
 
 			std::advance(q.b_pos, 1);
 		}
 	}
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+template <typename Iterator, typename Pred>
+void string_map<
+	CharType, ValueType, Policy
+>::reverse_index::for_each_prefix(
+	Iterator first, Iterator last, Pred &&pred
+) const
+{
+	auto x_first(first);
+	auto rv(find_impl(x_first, last));
+	if (!rv.first)
+		return;
+
+	
 }
 
 template <typename CharType, typename ValueType, typename Policy>
@@ -635,9 +641,8 @@ auto string_map<
 				? trie[vec_offset(p.check)].base
 				: trie_root
 			);
-			auto x_char(offset_to_char(pos, base));
-			rv.r_trie[p.check].emplace(
-				x_char, std::make_pair(&p, log_offset(pos))
+			rv.r_trie[p.check].emplace_back(
+				&p, log_offset(pos), offset_to_char(pos, base)
 			);
 			return true;
 		}
