@@ -60,4 +60,56 @@ BOOST_AUTO_TEST_CASE(string_map_0)
 	BOOST_CHECK_EQUAL(r3->a, 444);
 }
 
+BOOST_AUTO_TEST_CASE(string_map_1)
+{
+	string_map<char, int> m0;
+	m0.emplace_at(std::string("abcd"), 1);
+	m0.emplace_at(std::string("abcdefghijkl"), 2);
+	m0.emplace_at(std::string("abcdefghijklmnopqrst"), 3);
+	m0.emplace_at(std::string("abcdefghijklmnopqrstuvwxyz"), 4);
+
+	auto p(m0.find(std::string("abcd")));
+	BOOST_CHECK_EQUAL(*p, 1);
+	p = m0.find(std::string("abcdefghijkl"));
+	BOOST_CHECK_EQUAL(*p, 2);
+	p = m0.find(std::string("abcdefghijklmnopqrst"));
+	BOOST_CHECK_EQUAL(*p, 3);
+	p = m0.find(std::string("abcdefghijklmnopqrstuvwxyz"));
+	BOOST_CHECK_EQUAL(*p, 4);
+
+	using boost::test_tools::output_test_stream;
+        output_test_stream out("ref/string_map/for_each.00.out", true);
+
+	auto r_idx(m0.make_index());
+
+	r_idx.for_each([&out](std::string const &key, int val) -> void {
+		out << "x1 |" << key << "| " << val << '\n';
+	});
+	BOOST_CHECK(out.match_pattern());
+
+	r_idx.for_each_prefix(
+		std::string("abcdefghijklmnopqrstu"),
+		[&out](std::string const &key, int val) -> void {
+			out << "x2 |" << key << "| " << val << '\n';
+		}
+	);
+	BOOST_CHECK(out.match_pattern());
+
+	r_idx.for_each_prefix(
+		std::string("abcdefghijkl"),
+		[&out](std::string const &key, int val) -> void {
+			out << "x3 |" << key << "| " << val << '\n';
+		}
+	);
+	BOOST_CHECK(out.match_pattern());
+
+	r_idx.for_each_prefix(
+		std::string("abc"),
+		[&out](std::string const &key, int val) -> void {
+			out << "x4 |" << key << "| " << val << '\n';
+		}
+	);
+	BOOST_CHECK(out.match_pattern());
+}
+
 }}

@@ -1,0 +1,12 @@
+x1 |abcd| 1
+x1 |abcdefghijkl| 2
+x1 |abcdefghijklmnopqrst| 3
+x1 |abcdefghijklmnopqrstuvwxyz| 4
+x2 |abcdefghijklmnopqrstuvwxyz| 4
+x3 |abcdefghijkl| 2
+x3 |abcdefghijklmnopqrst| 3
+x3 |abcdefghijklmnopqrstuvwxyz| 4
+x4 |abcd| 1
+x4 |abcdefghijkl| 2
+x4 |abcdefghijklmnopqrst| 3
+x4 |abcdefghijklmnopqrstuvwxyz| 4

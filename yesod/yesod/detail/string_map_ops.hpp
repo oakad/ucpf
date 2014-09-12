@@ -113,9 +113,8 @@ std::basic_ostream<
 
 				os << ")\n";
 			} else {
-				auto vp(reinterpret_cast<value_pair const *>(
-					p.base
-				));
+				auto vp(p.leaf_ptr());
+
 				os << vp << ", " << p.check << " (";
 
 				if (p.check > 1)
@@ -194,12 +193,12 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 
 	auto suffix(v_ptr->suffix());
 	auto k_char(terminator_char);
-	if ((count + 1) < v_ptr->suffix_length)
-		k_char = suffix[count];
+	if (count < v_ptr->suffix_length)
+		k_char = suffix[count] + null_char;
 
 	uintptr_t next_pos(0);
 	while (count > shrink) {
-		next_pos = char_offset(1, suffix[shrink]);
+		next_pos = char_offset(1, suffix[shrink] + null_char);
 		auto xp(trie.find_empty_above(vec_offset(next_pos)));
 		auto &q(trie.emplace_at(
 			xp, pair_type::make(v_ptr.get(), pos)
@@ -412,7 +411,6 @@ auto string_map<CharType, ValueType, Policy>::value_pair::construct(
 	typedef allocator::array_helper<value_pair, Alloc> ah_p;
 
 	auto suffix_length(std::distance(first, last));
-	decltype(suffix_length) init_length(0);
 
 	auto s_deleter(
 		[&a, suffix_length](char_type *p) -> void {
@@ -553,7 +551,7 @@ template <typename CharType, typename ValueType, typename Policy>
 template <typename Pred>
 void string_map<
 	CharType, ValueType, Policy
->::reverse_index::for_each(Pred &&pred) const
+>::const_reverse_index::for_each(Pred &&pred) const
 {
 	if (r_trie.empty())
 		return;
@@ -567,6 +565,57 @@ void string_map<
 
 	ss.emplace_back(r_iter, r_iter->second.begin());
 
+	for_each_impl(ss, std::forward<Pred>(pred));
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+template <typename Iterator, typename Pred>
+void string_map<
+	CharType, ValueType, Policy
+>::const_reverse_index::for_each_prefix(
+	Iterator first, Iterator last, Pred &&pred
+) const
+{
+	auto x_first(first);
+	auto rv(parent.find_impl(x_first, last));
+	if (!rv.first)
+		return;
+
+	auto a(parent.trie.get_allocator());
+
+	if (rv.first->is_leaf()) {
+		auto l_ptr(rv.first->leaf_ptr());
+		auto s_len(l_ptr->suffix_length);
+
+		if (l_ptr->prefix_match(x_first, last)) {
+			prefix_string_type prefix(first, x_first, a);
+			prefix.append(
+				l_ptr->suffix(),
+				l_ptr->suffix() + s_len
+			);
+			pred(prefix, l_ptr->value);
+		}
+		return;
+	}
+
+	auto r_iter(r_trie.find(rv.second));
+	if (r_iter == r_trie.end())
+		return;
+
+	state_stack_type ss(state_allocator_adaptor(a, a));
+
+	ss.emplace_back(r_iter, r_iter->second.begin());
+	ss.back().prefix.assign(first, x_first);
+
+	for_each_impl(ss, std::forward<Pred>(pred));
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+template <typename Pred>
+void string_map<
+	CharType, ValueType, Policy
+>::const_reverse_index::for_each_impl(state_stack_type &ss, Pred &&pred) const
+{
 	while (true) {
 		auto &p(ss.back());
 		if (p.b_pos == p.r_pos->second.end()) {
@@ -596,42 +645,53 @@ void string_map<
 
 			std::advance(p.b_pos, 1);
 		} else {
-			r_iter = r_trie.find(p.b_pos->pos);
+			auto r_iter(r_trie.find(p.b_pos->pos));
 
-			ss.emplace_back(r_iter, r_iter->second.begin());
-			auto &q(*(++ss.rbegin()));
-			ss.back().prefix = q.prefix;
+			if (r_iter != r_trie.end()) {
+				ss.emplace_back(
+					r_iter, r_iter->second.begin()
+				);
+				auto &q(*(++ss.rbegin()));
+				ss.back().prefix = q.prefix;
 
-			if (q.b_pos->char_id >= null_char)
-				ss.back().prefix.push_back(char_type(
-					q.b_pos->char_id - null_char
-				));
+				if (q.b_pos->char_id >= null_char)
+					ss.back().prefix.push_back(char_type(
+						q.b_pos->char_id - null_char
+					));
 
-			std::advance(q.b_pos, 1);
+				std::advance(q.b_pos, 1);
+			} else
+				std::advance(p.b_pos, 1);
 		}
 	}
 }
 
 template <typename CharType, typename ValueType, typename Policy>
-template <typename Iterator, typename Pred>
-void string_map<
+auto string_map<
 	CharType, ValueType, Policy
->::reverse_index::for_each_prefix(
-	Iterator first, Iterator last, Pred &&pred
-) const
+>::make_index() const -> const_reverse_index
 {
-	auto x_first(first);
-	auto rv(find_impl(x_first, last));
-	if (!rv.first)
-		return;
-
-	
+	auto rv(const_reverse_index(*this, trie.get_allocator()));
+	trie.for_each_above(
+		0, [&rv, this](size_type pos, pair_type const &p) -> bool {
+			auto base(
+				p.check > 1
+				? trie[vec_offset(p.check)].base
+				: trie_root
+			);
+			rv.r_trie[p.check].emplace_back(
+				&p, log_offset(pos), offset_to_char(pos, base)
+			);
+			return true;
+		}
+	);
+	return rv;
 }
 
 template <typename CharType, typename ValueType, typename Policy>
 auto string_map<
 	CharType, ValueType, Policy
->::make_index() const -> reverse_index
+>::make_index() -> reverse_index
 {
 	auto rv(reverse_index(*this, trie.get_allocator()));
 	trie.for_each_above(

@@ -136,7 +136,12 @@ private:
 			return !(base & 1);
 		}
 
-		value_pair* leaf_ptr() const
+		value_pair const *leaf_ptr() const
+		{
+			return reinterpret_cast<value_pair const *>(base);
+		}
+
+		value_pair *leaf_ptr()
 		{
 			return reinterpret_cast<value_pair *>(base);
 		}
@@ -176,9 +181,9 @@ private:
 	constexpr static uintptr_t null_char = 2;
 
 	template <typename Iterator>
-	static index_char_type deref_char(Iterator const &iter)
+	static uintptr_t deref_char(Iterator const &iter)
 	{
-		return static_cast<index_char_type>(*iter);
+		return static_cast<uintptr_t>(*iter) + null_char;
 	}
 
 	/* logical:  0 1 2 3 4 5...
@@ -188,9 +193,9 @@ private:
 	 * encoded v -> encoded (v + c)
 	 * offset 1 is a virtual string terminator
 	 */
-	static uintptr_t char_offset(uintptr_t v, index_char_type c)
+	static uintptr_t char_offset(uintptr_t v, uintptr_t c)
 	{
-		return v + ((uintptr_t(c) + null_char) << 1);
+		return v + (c << 1);
 	}
 
 	/* encoded -> physical */
@@ -271,6 +276,13 @@ private:
 		}
 
 		template <typename Iterator>
+		bool prefix_match(Iterator first, Iterator last) const
+		{
+			return std::distance(first, last)
+			       == common_length(first, last);
+		}
+
+		template <typename Iterator>
 		size_type common_length(Iterator first, Iterator last) const
 		{
 			size_type pos(0);
@@ -332,7 +344,7 @@ private:
 	sparse_vector<pair_type, trie_vector_policy> trie;
 
 public:
-	struct reverse_index {
+	struct const_reverse_index {
 		typedef std::basic_string<
 			char_type, typename Policy::char_traits_type,
 			typename std::allocator_traits<
@@ -401,7 +413,7 @@ public:
 				typename r_trie_type::const_iterator r_pos_,
 				typename r_node_vec::const_iterator b_pos_,
 				allocator_type const &a
-			) : r_pos(r_pos_), b_pos(b_pos_), prefix(a)
+			) : prefix(a), r_pos(r_pos_), b_pos(b_pos_)
 			{}
 
 			state(allocator_type const &a)
@@ -435,7 +447,7 @@ public:
 			state, state_allocator_adaptor
 		> state_stack_type;
 
-		reverse_index(
+		const_reverse_index(
 			string_map const &parent_,
 			typename decltype(trie)::allocator_type const &a
 		) : parent(parent_), r_trie(
@@ -451,7 +463,19 @@ public:
 		r_trie_type r_trie;
 	};
 
-	reverse_index make_index() const;
+	struct reverse_index : const_reverse_index {
+	private:
+		friend string_map;
+
+		reverse_index(
+			string_map &parent_,
+			typename decltype(trie)::allocator_type const &a
+		) : const_reverse_index(parent_, a)
+		{}
+	};
+
+	const_reverse_index make_index() const;
+	reverse_index make_index();
 };
 
 }}
