@@ -222,7 +222,7 @@ template <
 	}
 
 	template <typename Alloc1, typename... Args>
-	reference emplace_at(size_type pos, Alloc1 const &a_, Args&&... args)
+	reference emplace_at(Alloc1 const &a_, size_type pos, Args&&... args)
 	{
 		auto p(&(*this)[pos]);
 		allocator_type a(a_);

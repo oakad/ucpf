@@ -320,7 +320,7 @@ private:
 		{}
 	};
 
-	struct pair_valid_pred 
+	struct pair_valid_pred
 	{
 		static bool test(pair_type const &p)
 		{

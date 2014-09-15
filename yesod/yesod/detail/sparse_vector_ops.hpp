@@ -11,6 +11,65 @@
 namespace ucpf { namespace yesod {
 
 template <typename ValueType, typename Policy>
+void sparse_vector<ValueType, Policy>::clear()
+{
+	if (!height)
+		return;
+
+	if (height == 1) {
+		data_node::destroy(
+			std::get<1>(root_node),
+			reinterpret_cast<data_node *>(std::get<0>(root_node))
+		);
+		std::get<0>(root_node) = nullptr;
+		height = 0;
+		return;
+	}
+
+	loc_pair tree_loc[height];
+	size_type h(0);
+	ptr_node *p(nullptr);
+
+	tree_loc[0] = loc_pair{std::get<0>(root_node), 0};
+	printf("root %p h %zd\n", tree_loc[0].ptr, height);
+
+	while (true) {
+restart:
+		if (h == (height - 1)) {
+			printf("cc data %p h %zd\n", tree_loc[h].ptr, h);
+			data_node::destroy(
+				std::get<1>(root_node),
+				reinterpret_cast<data_node *>(tree_loc[h].ptr)
+			);
+			--h;
+			continue;
+		}
+
+		p = reinterpret_cast<ptr_node *>(tree_loc[h].ptr);
+		while (tree_loc[h].off < ptr_node_size) {
+			tree_loc[h + 1] = loc_pair{
+				(*p)[tree_loc[h].off], 0
+			};
+			++tree_loc[h].off;
+
+			printf("xc %zd, %zd, %p\n", h, tree_loc[h].off, tree_loc[h + 1].ptr);
+			if (tree_loc[h + 1].ptr) {
+				++h;
+				goto restart;
+			}
+		}
+		printf("cc ptr %p h %zd\n", p, h);
+		ptr_node::destroy(std::get<1>(root_node), p);
+		if (!h) {
+			std::get<0>(root_node) = nullptr;
+			height = 0;
+			return;
+		} else
+			--h;
+	}
+}
+
+template <typename ValueType, typename Policy>
 template <typename Pred>
 bool sparse_vector<ValueType, Policy>::for_each_above(
 	size_type pos, Pred &&pred
@@ -82,7 +141,12 @@ auto sparse_vector<ValueType, Policy>::find_empty_above(
 
 	loc_pair tree_loc[height];
 
+	printf("--1- pos %zd h %zd\n", pos, height);
+
 	if (!tree_loc_from_pos(tree_loc, pos)) {
+		for (size_type h(0); h < height; ++h)
+			printf("--1-- h %zd ptr %p off %zd\n", h, tree_loc[h].ptr, tree_loc[h].off);
+
 		do {
 			if (!tree_loc[height - 1].ptr)
 				return tree_loc_to_pos(tree_loc);
@@ -90,6 +154,7 @@ auto sparse_vector<ValueType, Policy>::find_empty_above(
 			auto node(reinterpret_cast<data_node *>(
 				tree_loc[height - 1].ptr
 			));
+			printf("-x1- pos %zd node %p n_off %zd\n", pos, node, pos & data_node_mask);
 			tree_loc[height - 1].off = node->find_empty_above(
 				pos & data_node_mask
 			);
@@ -105,16 +170,87 @@ auto sparse_vector<ValueType, Policy>::find_empty_above(
 }
 
 template <typename ValueType, typename Policy>
+template <typename CharType, typename Traits>
+auto sparse_vector<ValueType, Policy>::dump(
+	std::basic_ostream<CharType, Traits> &os
+) const -> std::basic_ostream<CharType, Traits> &
+{
+	auto r(std::get<0>(root_node));
+	os << os.widen('<') << r << os.widen('>') << std::endl;
+
+	auto fill([&os](int ident) -> void {
+		for (auto c(0); c < ident; ++c)
+			os << os.widen(' ');
+	});
+
+	auto print_data([&os](node_pointer p_, int ident) -> void {
+		auto p(reinterpret_cast<data_node *>(p_));
+		for (size_type c(0); c < data_node_size; ++c) {
+			auto q(p->ptr_at(c));
+			if (q) {
+				for (auto d(0); d < ident; ++d)
+					os << os.widen(' ');
+
+				os << c << os.widen(':') << os.widen(' ')
+				   << *q << std::endl;
+			}
+		}
+	});
+
+	if (!height)
+		return os;
+
+	if (height == 1) {
+		print_data(r, 2);
+		return os;
+	}
+
+	std::pair<loc_pair, int> tree_loc[height];
+	tree_loc[0] = std::make_pair(loc_pair{std::get<0>(root_node), 0}, 2);
+	size_type h(0);
+	while (true) {
+restart:
+		if (h == (height - 1)) {
+			print_data(tree_loc[h].first.ptr, tree_loc[h].second);
+			--h;
+			continue;
+		}
+
+		auto p(reinterpret_cast<ptr_node *>(tree_loc[h].first.ptr));
+		while (tree_loc[h].first.off < ptr_node_size) {
+			tree_loc[h + 1] = std::make_pair(loc_pair{
+				(*p)[tree_loc[h].first.off], 0
+			}, tree_loc[h].second + 2);
+			
+			if (tree_loc[h + 1].first.ptr) {
+				fill(tree_loc[h].second);
+				os << tree_loc[h].first.off;
+				os << os.widen(' ') << os.widen('<');
+				os << tree_loc[h + 1].first.ptr;
+				os << os.widen('>') << std::endl;
+				++tree_loc[h].first.off;
+				++h;
+				goto restart;
+			} else
+				++tree_loc[h].first.off;
+		}
+
+		if (!h)
+			break;
+		else
+			--h;
+	}
+
+	return os;
+}
+
+template <typename ValueType, typename Policy>
 bool sparse_vector<ValueType, Policy>::tree_loc_from_pos(
 	loc_pair *tree_loc, size_type pos
 ) const
 {
-	constexpr size_type data_node_mask(
-		(size_type(1) << Policy::data_node_order) - 1
-	);
-	constexpr size_type ptr_node_mask(
-		(size_type(1) << Policy::ptr_node_order) - 1
-	);
+	constexpr size_type data_node_mask(data_node_size - 1);
+	constexpr size_type ptr_node_mask(ptr_node_size - 1);
 
 	if (height < 2) {
 		if (pos > data_node_mask) {
@@ -158,14 +294,9 @@ bool sparse_vector<ValueType, Policy>::tree_loc_from_pos(
 template <typename ValueType, typename Policy>
 bool sparse_vector<ValueType, Policy>::tree_loc_next(loc_pair *tree_loc) const
 {
-	constexpr size_type data_node_sz(
-		size_type(1) << Policy::data_node_order
-	);
-	constexpr size_type ptr_node_sz(size_type(1) << Policy::ptr_node_order);
-
 	auto pos(height - 1);
 	++tree_loc[pos].off;
-	if (tree_loc[pos].off < data_node_sz)
+	if (tree_loc[pos].off < data_node_size)
 		return false;
 
 	tree_loc[pos].off = 0;
@@ -175,7 +306,7 @@ bool sparse_vector<ValueType, Policy>::tree_loc_next(loc_pair *tree_loc) const
 
 	for (auto pos(height - 2); pos >= 0; --pos) {
 		++tree_loc[pos].off;
-		if (tree_loc[pos].off < ptr_node_sz) {
+		if (tree_loc[pos].off < ptr_node_size) {
 			for (auto rpos(pos + 1); rpos < (height - 1); ++rpos) {
 				auto q(reinterpret_cast<ptr_node *>(
 					tree_loc[rpos - 1].ptr
@@ -197,8 +328,6 @@ bool sparse_vector<ValueType, Policy>::tree_loc_next_leaf(
 	loc_pair *tree_loc
 ) const
 {
-	constexpr size_type ptr_node_sz(size_type(1) << Policy::ptr_node_order);
-
 	tree_loc[height - 1] = loc_pair{nullptr, 0};
 
 	if (height < 2)
@@ -263,29 +392,6 @@ auto sparse_vector<ValueType, Policy>::tree_loc_to_pos(
 }
 
 template <typename ValueType, typename Policy>
-void sparse_vector<ValueType, Policy>::destroy_node_r(
-	node_pointer p_, size_type h
-)
-{
-	if (!p_)
-		return;
-
-	if (h == 1) {
-		data_node::destroy(
-			std::get<1>(root_node),
-			reinterpret_cast<data_node *>(p_)
-		);
-		return;
-	}
-
-	auto p(reinterpret_cast<ptr_node *>(p_));
-	for (auto &q: *p)
-		destroy_node_r(reinterpret_cast<node_pointer>(q), h - 1);
-
-	ptr_node::destroy(std::get<1>(root_node), p);
-}
-
-template <typename ValueType, typename Policy>
 auto sparse_vector<
 	ValueType, Policy
 >::data_node_at(size_type pos) -> data_node *
@@ -326,49 +432,75 @@ auto sparse_vector<
 	ValueType, Policy
 >::data_node_alloc_at(size_type pos) -> data_node *
 {
-	size_type p_height(1);
-	for (
-		auto p_pos(pos >> Policy::data_node_order);
-		p_pos; p_pos >>= Policy::ptr_node_order
-	)
-		++p_height;
+	auto p_height(std::max(height, pos_height(pos)));
 
-	node_pointer *rr(&std::get<0>(root_node));
+	if (p_height == 1) {
+		if (!height) {
+			std::get<0>(root_node) = data_node::construct(
+				std::get<1>(root_node)
+			);
+			height = 1;
+		}
+		return reinterpret_cast<data_node *>(std::get<0>(root_node));
+	}
+
+	loc_pair tree_loc[p_height];
+	tree_off_from_pos(tree_loc, pos, p_height);
+	ptr_node *p(nullptr);
+	size_type h(0);
+
 	if (!height) {
-		while (p_height > 1) {
-			auto p(ptr_node::construct(std::get<1>(root_node)));
-			*rr = p;
-			rr = &(*p)[node_offset(pos, p_height)];
-			--p_height;
+		std::get<0>(root_node) = ptr_node::construct(
+			std::get<1>(root_node)
+		);
+		tree_loc[0].ptr = std::get<0>(root_node);
+		++height;
+
+		for (h = 1; h < (p_height - 1); ++h) {
+			p = reinterpret_cast<ptr_node *>(tree_loc[h - 1].ptr);
+			(*p)[tree_loc[h - 1].off] = ptr_node::construct(
+				std::get<1>(root_node)
+			);
 			++height;
 		}
 
-		auto p(data_node::construct(std::get<1>(root_node)));
-		*rr = p;
-		height = 1;
-		return p;
+		p = reinterpret_cast<ptr_node *>(tree_loc[h - 1].ptr);
+		auto q(data_node::construct(std::get<1>(root_node)));
+		(*p)[tree_loc[h - 1].off] = q;
+		++height;
+		return q;
 	}
 
 	while (p_height > height) {
-		auto p(ptr_node::construct(std::get<1>(root_node)));
+		p = ptr_node::construct(std::get<1>(root_node));
 		(*p)[0] = std::get<0>(root_node);
 		std::get<0>(root_node) = p;
 		++height;
 	}
 
-	while (p_height > 1) {
-		auto p(reinterpret_cast<ptr_node *>(*rr));
-		*rr = &(*p)[node_offset(pos, p_height)];
-		if (!*rr)
-			*rr = ptr_node::construct(std::get<1>(root_node));
+	tree_loc[0].ptr = std::get<0>(root_node);
 
-		--p_height;
+	for (h = 1; h < (height - 1); ++h) {
+		p = reinterpret_cast<ptr_node *>(tree_loc[h - 1].ptr);
+		tree_loc[h].ptr = p->ptr_at(tree_loc[h - 1].off);
+		if (!tree_loc[h].ptr) {
+			(*p)[tree_loc[h - 1].off] = ptr_node::construct(
+				std::get<1>(root_node)
+			);
+			tree_loc[h].ptr = (*p)[tree_loc[h - 1].off];
+		}
 	}
 
-	if (!*rr)
-		*rr = data_node::construct(std::get<1>(root_node));
+	p = reinterpret_cast<ptr_node *>(tree_loc[h - 1].ptr);
+	tree_loc[h].ptr = p->ptr_at(tree_loc[h - 1].off);
+	if (!tree_loc[h].ptr) {
+		(*p)[tree_loc[h - 1].off] = data_node::construct(
+			std::get<1>(root_node)
+		);
+		tree_loc[h].ptr = (*p)[tree_loc[h - 1].off];
+	}
 
-	return reinterpret_cast<data_node *>(*rr);
+	return reinterpret_cast<data_node *>(tree_loc[h].ptr);
 }
 
 }}

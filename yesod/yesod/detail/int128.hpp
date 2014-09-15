@@ -10,7 +10,8 @@
 #define UCPF_YESOD_DETAIL_INT128_20140709T2300
 
 #include <cstdint>
-#include <cstdio>
+#include <utility>
+
 #if defined(_GLIBCXX_USE_INT128)
 
 typedef __int128 int128_t;

@@ -8,6 +8,8 @@
 #if !defined(UCPF_YESOD_DETAIL_SPARSE_VECTOR_BASE_JAN_06_2014_1320)
 #define UCPF_YESOD_DETAIL_SPARSE_VECTOR_BASE_JAN_06_2014_1320
 
+#include <ostream>
+#include <yesod/bitops.hpp>
 #include <yesod/detail/placement_array.hpp>
 #include <yesod/mpl/detail/type_wrapper.hpp>
 
@@ -58,7 +60,6 @@ template <
 		typename Policy::allocator_type
 	>::template rebind_traits<value_type> allocator_traits;
 
-
 	typedef typename allocator_type::reference reference;
 	typedef typename allocator_type::const_reference const_reference;
 	typedef typename allocator_traits::pointer pointer;
@@ -87,12 +88,7 @@ template <
 			);
 	}
 
-	void clear()
-	{
-		destroy_node_r(std::get<0>(root_node), height);
-		std::get<0>(root_node) = nullptr;
-		height = 0;
-	}
+	void clear();
 
 	bool empty() const
 	{
@@ -145,7 +141,7 @@ template <
 	{
 		auto node(data_node_alloc_at(pos));
 		return node->emplace_at(
-			node_offset(pos, 1), std::get<1>(root_node),
+			std::get<1>(root_node), node_offset(pos, 1),
 			std::forward<Args>(args)...
 		);
 	}
@@ -157,17 +153,26 @@ template <
 		return std::get<1>(root_node);
 	}
 
+	template <typename CharType, typename Traits>
+	auto dump(
+		std::basic_ostream<CharType, Traits> &os
+	) const -> std::basic_ostream<CharType, Traits> &;
+
 private:
 	typedef typename allocator_traits::void_pointer node_pointer;
 
+	constexpr static size_type data_node_size
+	= size_type(1) << Policy::data_node_order;
+	constexpr static size_type ptr_node_size
+	= size_type(1) << Policy::ptr_node_order;
+
 	typedef detail::placement_array<
-		node_pointer, (size_t(1) << Policy::ptr_node_order),
-		typename Policy::allocator_type, void
+		node_pointer, ptr_node_size, typename Policy::allocator_type,
+		void
 	> ptr_node;
 
 	typedef detail::placement_array<
-		ValueType, (size_t(1) << Policy::data_node_order),
-		typename Policy::allocator_type,
+		ValueType, data_node_size, typename Policy::allocator_type,
 		typename detail::sparse_vector_value_predicate<
 			Policy, detail::has_value_valid_pred<Policy>::value
 		>::type
@@ -186,26 +191,59 @@ private:
 
 	size_type tree_loc_to_pos(loc_pair *tree_loc) const;
 
-	size_type height;
-	std::tuple<node_pointer, allocator_type> root_node;
-
 	static size_type node_offset(size_type pos, size_type h)
 	{
-		auto l_pos(pos & (
-			(size_type(1) << Policy::data_node_order) - 1)
-		);
+		auto l_pos(pos & (data_node_size - 1));
+
 		if (h == 1)
 			return l_pos;
 
 		pos >>= Policy::data_node_order;
-		return (pos >> (Policy::ptr_node_order * (h - 2)))
-		       & ((size_type(1) << Policy::ptr_node_order) - 2);
+		pos >>= Policy::ptr_node_order * (h - 2);
+		return pos & (ptr_node_size - 1);
+	}
+
+	static size_type pos_height(size_type pos)
+	{
+		auto h(fls(pos));
+		auto rv(1);
+
+		if (h < Policy::data_node_order)
+			return rv;
+
+		h -= Policy::data_node_order;
+		rv += 1 + h / Policy::ptr_node_order;
+		return rv;
+	}
+
+	static void tree_off_from_pos(
+		loc_pair *tree_loc, size_type pos, size_type height
+	)
+	{
+		auto h(height - 1);
+		tree_loc[h] = loc_pair{
+			nullptr, pos & (data_node_size - 1)
+		};
+		if (!h)
+			return;
+
+		pos >>= Policy::data_node_order;
+		for (--h; h >= 0; --h) {
+			tree_loc[h] = loc_pair{
+				nullptr, pos & (ptr_node_size - 1)
+			};
+			pos >>= Policy::ptr_node_order;
+		}
 	}
 
 	void destroy_node_r(node_pointer p_, size_type h);
 	data_node *data_node_at(size_type pos);
 	data_node const *data_node_at(size_type pos) const;
 	data_node *data_node_alloc_at(size_type pos);
+
+	size_type height;
+	std::tuple<node_pointer, allocator_type> root_node;
+
 };
 
 }}
