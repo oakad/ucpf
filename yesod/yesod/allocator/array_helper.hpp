@@ -152,7 +152,7 @@ struct array_helper {
 			allocator_traits::destroy(x_alloc, &p[c]);
 
 		if (d)
-			allocator_traits::deallocate(x_alloc, p, n);
+			allocator_traits::deallocate(x_alloc, up, n);
 	}
 
 	template <typename Alloc1>
