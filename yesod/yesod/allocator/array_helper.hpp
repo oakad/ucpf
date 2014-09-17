@@ -144,15 +144,17 @@ struct array_helper {
 		return s_ptr.release();
 	}
 
-	template <typename Alloc1>
-	static void destroy(Alloc1 const &a, T *p, size_type n, bool d)
+	template <typename Alloc1, typename U>
+	static void destroy(Alloc1 const &a, U *up, size_type n, bool d)
 	{
 		allocator_type x_alloc(a);
+		auto p(reinterpret_cast<T *>(up));
+
 		for (size_type c(0); c < n; ++c)
 			allocator_traits::destroy(x_alloc, &p[c]);
 
 		if (d)
-			allocator_traits::deallocate(x_alloc, up, n);
+			allocator_traits::deallocate(x_alloc, p, n);
 	}
 
 	template <typename Alloc1>

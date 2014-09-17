@@ -8,28 +8,24 @@
 #if !defined(UCPF_YESOD_DETAIL_PLACEMENT_ARRAY_JAN_15_2014_1150)
 #define UCPF_YESOD_DETAIL_PLACEMENT_ARRAY_JAN_15_2014_1150
 
-#include <array>
-#include <tuple>
-
 #include <yesod/bitset.hpp>
 #include <yesod/allocator/array_helper.hpp>
 
 namespace ucpf { namespace yesod { namespace detail {
 
 template <
-	typename ValueType, size_t N, typename ValueValidPred = void
+	typename ValueType, std::size_t N, typename ValueValidPred = void
 > struct placement_array {
 	typedef ValueType value_type;
 	typedef typename std::aligned_storage<
 		sizeof(value_type), std::alignment_of<value_type>::value
 	>::type storage_type;
 
-	typedef typename value_type &reference;
-	typedef typename value_type const &const_reference;
-	typedef typename value_type *pointer;
-	typedef typename value_type const *const_pointer;
-	typedef typename allocator_traits::void_pointer void_pointer;
-	typedef typename size_t size_type;
+	typedef value_type &reference;
+	typedef value_type const &const_reference;
+	typedef value_type *pointer;
+	typedef value_type const *const_pointer;
+	typedef std::size_t size_type;
 
 	typedef pointer iterator;
 	typedef const_pointer const_iterator;
@@ -38,34 +34,28 @@ template <
 	= std::is_pod<value_type>::value;
 
 	template <typename Alloc>
-	placement_array(Alloc const &a)
+	void init(Alloc const &a)
 	{
-		typedef array_helper<value_type, Alloc> a_h;
-
-		std::get<1>(items).reset();
-		if (is_pod_container)
-			ah::make_n(a, std::get<0>(items).data(), size());
+		items.reset();
+		init_type::init(a, *this);
 	}
 
 	template <typename Alloc>
 	void destroy(Alloc const &a)
 	{
-		typedef array_helper<value_type, Alloc> a_h;
+		typedef allocator::array_helper<value_type, Alloc> a_h;
 
 		if (is_pod_container)
-			a_h::destroy(
-				a, &std::get<0>(items)[0], size(), false
-			);
+			a_h::destroy(a, items.data, size(), false);
 		else {
-			std::get<1>(items).for_each_set(
+			items.for_each_set(
 				[this, &a](size_t pos) -> void {
 					a_h::destroy(
-						a, &std::get<0>(items)[pos],
-						1, false
+						a, &items.data[pos], 1, false
 					);
 				}
 			);
-			std::get<1>(items).reset();
+			items.reset();
 		}
 	}
 
@@ -76,47 +66,43 @@ template <
 
 	reference operator[](size_type pos)
 	{
-		return reinterpret_cast<reference>(std::get<0>(items[pos]));
+		return reinterpret_cast<reference>(items.data[pos]);
 	}
 
 	const_reference operator[](size_type pos) const
 	{
-		return reinterpret_cast<const_reference>(
-			std::get<0>(items[pos])
-		);
+		return reinterpret_cast<const_reference>(items.data[pos]);
 	}
 
 	pointer ptr_at(size_type pos)
 	{
 		return (
-			std::get<1>(items).test(pos)
-			&& value_valid_pred::test((*this)[pos])
+			items.test(pos) && value_valid_pred::test((*this)[pos])
 		) ? &(*this)[pos] : nullptr;
 	}
 
 	const_pointer ptr_at(size_type pos) const
 	{
 		return (
-			std::get<1>(items).test(pos)
-			&& value_valid_pred::test((*this)[pos])
+			items.test(pos) && value_valid_pred::test((*this)[pos])
 		) ? &(*this)[pos] : nullptr;
 	}
 
 	template <typename Alloc, typename... Args>
 	reference emplace_at(Alloc const &a, size_type pos, Args&&... args)
 	{
-		typedef array_helper<value_type, Alloc> a_h;
+		typedef allocator::array_helper<value_type, Alloc> a_h;
 
-		if (std::get<1>(items).test(pos))
+		if (items.test(pos))
 			(*this)[pos] = std::move(
 				value_type(std::forward<Args>(args)...)
 			);
 		else {
 			a_h::make_n(
-				a, &(*this)[pos], 1,
+				a, items.data + pos, 1,
 				std::forward<Args>(args)...
 			);
-			std::get<1>(items).set(pos);
+			items.set(pos);
 		}
 
 		return (*this)[pos];
@@ -125,9 +111,9 @@ template <
 	template <typename Alloc>
 	void erase_at(Alloc const &a, size_type pos)
 	{
-		typedef array_helper<value_type, Alloc> a_h;
+		typedef allocator::array_helper<value_type, Alloc> a_h;
 
-		if (std::get<1>(items).test(pos)) {
+		if (items.test(pos)) {
 			a_h::destroy(a, &(*this)[pos], 1, false);
 			std::get<1>(items).reset(pos);
 		}
@@ -137,10 +123,10 @@ template <
 	{
 		for (size_type pos(first); pos < size(); ++pos) {
 			if (!(
-				std::get<1>(items).test(pos)
+				items.test(pos)
 				|| value_valid_pred::test((*this)[pos])
 			))
-				return const_iterator(&(*this)[pos];
+				return const_iterator(&(*this)[pos]);
 		}
 		return cend();
 	}
@@ -149,26 +135,34 @@ template <
 	bool for_each(size_type first, Pred &&pred)
 	{
 		for (
-			size_type pos(std::get<1>(items).find_first_set(first));
+			size_type pos(items.find_first_set(first));
 			pos < size();
-			pos = std::get<1>(items).find_first_set(pos + 1)
+			pos = items.find_first_set(pos + 1)
 		) {
-			if (value_valid_pred::test((*this)[pos])
-				pred(pos, (*this)[pos]);
+			if (value_valid_pred::test((*this)[pos])) {
+				if (pred(pos, (*this)[pos]))
+					return true;
+			}
 		}
+
+		return false;
 	}
 
 	template <typename Pred>
 	bool for_each(size_type first, Pred &&pred) const
 	{
 		for (
-			size_type pos(std::get<1>(items).find_first_set(first));
+			size_type pos(items.find_first_set(first));
 			pos < size();
-			pos = std::get<1>(items).find_first_set(pos + 1)
+			pos = items.find_first_set(pos + 1)
 		) {
-			if (value_valid_pred::test((*this)[pos])
-				pred(pos, (*this)[pos]);
+			if (value_valid_pred::test((*this)[pos])) {
+				if (pred(pos, (*this)[pos]))
+					return true;
+			}
 		}
+
+		return false;
 	}
 
 	iterator begin()
@@ -202,7 +196,7 @@ template <
 	}
 
 private:
-	struct null_pred {
+	struct trivial_pred {
 		constexpr static bool test(value_type const &v)
 		{
 			return true;
@@ -211,35 +205,53 @@ private:
 
 	typedef typename std::conditional<
 		std::is_same<ValueValidPred, void>::value,
-		null_pred, ValueValidPred
-	> value_valid_pred;
+		trivial_pred, ValueValidPred
+	>::type value_valid_pred;
 
-	struct null_bitset {
-		constexpr void set(size_t pos)
+	struct dummy_bitset {
+		constexpr void set(size_type pos)
 		{
 		}
 
-		constexpr void reset(size_t pos)
+		constexpr void reset(size_type pos)
 		{
 		}
 
-		constexpr bool test(size_t pos) const
+		constexpr bool test(size_type pos) const
 		{
 			return true;
 		}
 
-		constexpr size_t find_first_set(size_t first) const
+		constexpr size_t find_first_set(size_type first) const
 		{
 			return first;
 		}
 	};
 
-	std::tuple<
-		std::array<storage_type, N>,
-		typename std::conditional<
-			is_pod_container, null_bitset, bitset<N>
-		>::type
-	> items;
+	struct default_init {
+		template <typename Alloc>
+		static void init(Alloc const &a, placement_array &self)
+		{
+			typedef allocator::array_helper<value_type, Alloc> a_h;
+			a_h::make_n(a, self.items.data, self.size());
+		}
+	};
+
+	struct dummy_init {
+		template <typename Alloc>
+		static void init(Alloc const &a, placement_array &self)
+		{}
+	};
+
+	typedef typename std::conditional<
+		is_pod_container, default_init, dummy_init
+	>::type init_type;
+
+	struct item_type : std::conditional<
+		is_pod_container, dummy_bitset, bitset<N>
+	>::type {
+		storage_type data[N];
+	} items;
 };
 
 }}}

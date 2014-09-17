@@ -13,12 +13,13 @@
 
 namespace ucpf { namespace yesod {
 
-template <size_t N>
+template <std::size_t N>
 struct bitset {
 	typedef uintptr_t word_type;
-	constexpr static size_t bit_count = N;
-	constexpr static size_t word_bits = sizeof(word_type) * 8;
-	constexpr static size_t word_count = (
+	typedef std::size_t size_type;
+	constexpr static size_type bit_count = N;
+	constexpr static size_type word_bits = sizeof(word_type) * 8;
+	constexpr static size_type word_count = (
 		bit_count % word_bits
 	) ? (bit_count / word_bits + 1) : (bit_count / word_bits);
 	constexpr static word_type last_word_mask = (
@@ -33,7 +34,7 @@ struct bitset {
 			*p = ~uintptr_t(0);
 	}
 
-	void set(size_t pos)
+	void set(size_type pos)
 	{
 		auto &w(bset[pos / word_bits]);
 		w |= word_type(1) << (pos % word_bits);
@@ -45,19 +46,19 @@ struct bitset {
 			*p = 0;
 	}
 
-	void reset(size_t pos)
+	void reset(size_type pos)
 	{
 		auto &w(bset[pos / word_bits]);
 		w &= ~(word_type(1) << (pos % word_bits));
 	}
 
-	bool test(size_t pos) const
+	bool test(size_type pos) const
 	{
 		auto &w(bset[pos / word_bits]);
 		return w & (word_type(1) << (pos % word_bits));
 	}
 
-	size_t find_first_set(size_t first) const
+	size_type find_first_set(size_type first) const
 	{
 		if (first >= bit_count)
 			return bit_count;
@@ -96,7 +97,7 @@ struct bitset {
 	template <typename Pred>
 	void for_each_set(Pred &&pred) const
 	{
-		for (size_t c(0); c < (word_count - 1); ++c) {
+		for (size_type c(0); c < (word_count - 1); ++c) {
 			auto pos(c * word_bits);
 			auto w(bset[c]);
 			while (w) {
