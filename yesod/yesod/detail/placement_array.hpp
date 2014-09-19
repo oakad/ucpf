@@ -5,8 +5,8 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_YESOD_DETAIL_PLACEMENT_ARRAY_JAN_15_2014_1150)
-#define UCPF_YESOD_DETAIL_PLACEMENT_ARRAY_JAN_15_2014_1150
+#if !defined(UCPF_YESOD_DETAIL_PLACEMENT_ARRAY_20140115T1150)
+#define UCPF_YESOD_DETAIL_PLACEMENT_ARRAY_20140115T1150
 
 #include <yesod/bitset.hpp>
 #include <yesod/allocator/array_helper.hpp>
