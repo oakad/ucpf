@@ -5,21 +5,23 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_YESOD_DETAIL_SPARSE_VECTOR_BASE_JAN_06_2014_1320)
-#define UCPF_YESOD_DETAIL_SPARSE_VECTOR_BASE_JAN_06_2014_1320
+#if !defined(UCPF_YESOD_DETAIL_SPARSE_VECTOR_BASE_20140106T1320)
+#define UCPF_YESOD_DETAIL_SPARSE_VECTOR_BASE_20140106T1320
 
 #include <ostream>
 #include <yesod/bitops.hpp>
 #include <yesod/detail/placement_array.hpp>
-#include <yesod/mpl/detail/type_wrapper.hpp>
 
 namespace ucpf { namespace yesod {
 namespace detail {
 
-using ucpf::yesod::mpl::detail::type_wrapper;
-
 template <typename T>
 struct has_value_valid_pred {
+	template <typename U>
+	struct type_wrapper {
+		typedef U type;
+	};
+
 	template <typename U>
 	static std::true_type test(
 		type_wrapper<U> const volatile *,
@@ -67,7 +69,7 @@ template <
 	typedef typename allocator_traits::size_type size_type;
 
 	sparse_vector()
-	: height(0), root_node(nullptr, allocator_type())
+	: root(nullptr), aux(0, allocator_type())
 	{}
 
 	~sparse_vector()
@@ -77,22 +79,19 @@ template <
 
 	void swap(sparse_vector &other)
 	{
-		std::swap(height, other.height);
+		std::swap(root, other.root);
 
 		if (allocator_traits::propagate_on_container_swap::value)
-			std::swap(root_node, other.root_node);
+			std::swap(aux, other.aux);
 		else
-			std::swap(
-				std::get<0>(root_node),
-				std::get<0>(other.root_node)
-			);
+			std::swap(std::get<0>(aux), std::get<0>(aux));
 	}
 
 	void clear();
 
 	bool empty() const
 	{
-		return !height;
+		return !std::get<0>(aux);
 	}
 
 	template <typename Pred>
@@ -107,33 +106,25 @@ template <
 	reference operator[](size_type pos)
 	{
 		auto &node(*data_node_at(pos));
-		return node[node_offset(pos, 1)];
+		return node[pos];
 	}
 
 	const_reference operator[](size_type pos) const
 	{
 		auto &node(*data_node_at(pos));
-		return node[node_offset(pos, 1)];
+		return node[pos];
 	}
 
 	pointer ptr_at(size_type pos)
 	{
 		auto node(data_node_at(pos));
-		return node ? node->ptr_at(node_offset(pos, 1)) : nullptr;
+		return node ? node->ptr_at(pos) : nullptr;
 	}
 
 	const_pointer ptr_at(size_type pos) const
 	{
 		auto node(data_node_at(pos));
-		return node ? node->ptr_at(node_offset(pos, 1)) : nullptr;
-	}
-
-	reference at(size_type pos)
-	{
-		auto node(data_node_alloc_at(pos));
-		return node->at(
-			node_offset(pos, 1), std::get<1>(root_node)
-		);
+		return node ? node->ptr_at(pos) : nullptr;
 	}
 
 	template <typename... Args>
@@ -141,8 +132,7 @@ template <
 	{
 		auto node(data_node_alloc_at(pos));
 		return node->emplace_at(
-			std::get<1>(root_node), node_offset(pos, 1),
-			std::forward<Args>(args)...
+			std::get<1>(aux), pos, std::forward<Args>(args)...
 		);
 	}
 
@@ -150,7 +140,7 @@ template <
 
 	allocator_type get_allocator() const
 	{
-		return std::get<1>(root_node);
+		return std::get<1>(aux);
 	}
 
 	template <typename CharType, typename Traits>
@@ -159,91 +149,50 @@ template <
 	) const -> std::basic_ostream<CharType, Traits> &;
 
 private:
-	typedef typename allocator_traits::void_pointer node_pointer;
+	struct node_type {
+		virtual ~node_type()
+		{}
+	};
 
-	constexpr static size_type data_node_size
-	= size_type(1) << Policy::data_node_order;
-	constexpr static size_type ptr_node_size
-	= size_type(1) << Policy::ptr_node_order;
+	template <std::size_type...>
+	struct data_node;
 
-	typedef detail::placement_array<
-		node_pointer, ptr_node_size, typename Policy::allocator_type,
-		void
-	> ptr_node;
+	template <std::size_type OrdId>
+	struct data_node<OrdId, OrdId> : node_type {
+	};
 
-	typedef detail::placement_array<
-		ValueType, data_node_size, typename Policy::allocator_type,
-		typename detail::sparse_vector_value_predicate<
-			Policy, detail::has_value_valid_pred<Policy>::value
-		>::type
-	> data_node;
+	template <std::size_type OrdId, std::size_type MaxOrdId>
+	struct data_node<OrdId, MaxOrdId> : node_type {
+	};
+
+	template <std::size_type...>
+	struct ptr_node;
+
+	template <std::size_type OrdId>
+	struct ptr_node<OrdId, OrdId> : node_type {
+	};
+
+	template <std::size_type OrdId, std::size_type MaxOrdId>
+	struct ptr_node<Order, MaxOrdId> : node_type {
+	};
 
 	struct loc_pair {
-		node_pointer ptr;
+		node_type *ptr;
 		size_type off;
 	};
 
-	bool tree_loc_from_pos(loc_pair *tree_loc, size_type pos) const;
+	constexpr static size_type data_node_order
+	= Policy::data_node_order.back();
 
-	bool tree_loc_next(loc_pair *tree_loc) const;
+	constexpr static size_type data_node_size = 1 << data_node_order;
 
-	bool tree_loc_next_leaf(loc_pair *tree_loc) const;
+	constexpr static size_type ptr_node_order
+	= Policy::ptr_node_order.back();
 
-	size_type tree_loc_to_pos(loc_pair *tree_loc) const;
+	constexpr static size_type ptr_node_size = 1 << ptr_node_order;
 
-	static size_type node_offset(size_type pos, size_type h)
-	{
-		auto l_pos(pos & (data_node_size - 1));
-
-		if (h == 1)
-			return l_pos;
-
-		pos >>= Policy::data_node_order;
-		pos >>= Policy::ptr_node_order * (h - 2);
-		return pos & (ptr_node_size - 1);
-	}
-
-	static size_type pos_height(size_type pos)
-	{
-		auto h(fls(pos));
-		auto rv(1);
-
-		if (h < Policy::data_node_order)
-			return rv;
-
-		h -= Policy::data_node_order;
-		rv += 1 + h / Policy::ptr_node_order;
-		return rv;
-	}
-
-	static void tree_off_from_pos(
-		loc_pair *tree_loc, size_type pos, size_type height
-	)
-	{
-		auto h(height - 1);
-		tree_loc[h] = loc_pair{
-			nullptr, pos & (data_node_size - 1)
-		};
-		if (!h)
-			return;
-
-		pos >>= Policy::data_node_order;
-		for (--h; h >= 0; --h) {
-			tree_loc[h] = loc_pair{
-				nullptr, pos & (ptr_node_size - 1)
-			};
-			pos >>= Policy::ptr_node_order;
-		}
-	}
-
-	void destroy_node_r(node_pointer p_, size_type h);
-	data_node *data_node_at(size_type pos);
-	data_node const *data_node_at(size_type pos) const;
-	data_node *data_node_alloc_at(size_type pos);
-
-	size_type height;
-	std::tuple<node_pointer, allocator_type> root_node;
-
+	node_type *root;
+	std::tuple<size_type, allocator_type> aux;
 };
 
 }}

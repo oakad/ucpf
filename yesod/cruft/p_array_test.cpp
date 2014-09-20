@@ -1,84 +1,47 @@
 #include <yesod/detail/placement_array.hpp>
 
-#include <yesod/mpl/at.hpp>
-#include <yesod/mpl/pair.hpp>
 #include <yesod/mpl/package.hpp>
-#include <yesod/mpl/push_pop.hpp>
-#include <yesod/mpl/front_back.hpp>
-#include <yesod/mpl/value_cast.hpp>
+#include <yesod/mpl/package_range_c.hpp>
+
 #include <test/test_demangle.hpp>
 
+using ucpf::yesod::test::demangle;
 using ucpf::yesod::detail::placement_array;
 
-constexpr std::size_t max_height(
-	std::size_t bits, std::size_t d_ord, std::size_t p_ord
-)
-{
-	return ((bits - d_ord) / p_ord) + (
-		(bits - d_ord) % p_ord ?  2 : 1
-	);
-}
-
-using ucpf::yesod::mpl::front;
 using ucpf::yesod::mpl::package;
 using ucpf::yesod::mpl::package_c;
-using ucpf::yesod::mpl::pop_front;
-using ucpf::yesod::mpl::push_back;
-using ucpf::yesod::mpl::value_cast;
-using ucpf::yesod::test::demangle;
+using ucpf::yesod::mpl::package_range_c;
 
 
+struct policy {
+	constexpr static std::array<std::size_t, 1> value = {{
+		8
+	}};
+};
 
-template <std::size_t BitCount, std::size_t DataBits, std::size_t PtrBits>
-struct node_offset_tbl {
+template <typename P>
+struct expand_a {
 	template <std::size_t C>
 	using num = std::integral_constant<std::size_t, C>;
 
-	template <std::size_t Bc, std::size_t Sc>
-	struct entry {
-		constexpr static std::pair<
-			std::size_t, std::size_t
-		> value = {Bc, Sc};
-	};
+	typedef typename package_range_c<
+		std::size_t, 0, P::value.size()
+	>::type idx;
 
-	template <std::size_t Bc, std::size_t Sc, typename... Tn>
+	template <typename...>
 	struct apply;
 
-	template <std::size_t Bc, std::size_t Sc, typename... Tn>
-	struct apply<Bc, Sc, package<Tn...>> : apply<
-		(PtrBits <= Bc) ? Bc - PtrBits : 0,
-		(PtrBits <= Bc) ? Sc + PtrBits : BitCount,
-		typename push_back<package<Tn...>, entry<
-			(PtrBits <= Bc) ? PtrBits : Bc, Sc
-		>>::type
-	> {};
-
-	template <typename... Tn>
-	struct apply<0, BitCount, package<Tn...>> {
-		typedef package<Tn...> type;
+	template <template <typename U, U... Un> class Pack, typename U, U... Un>
+	struct apply<Pack<U, Un...>> {
+		typedef package<num<P::value[Un]>...> type;
 	};
 
-	typedef typename apply<
-		BitCount - DataBits, DataBits, package<entry<DataBits, 0>>
-	>::type type;
-
-	typedef value_cast<
-		std::pair<std::size_t, std::size_t>, type
-	> value_type;
+	typedef typename apply<idx>::type type;
 };
 
 int main()
 {
-	typedef typename static_bit_field_map<32, 10, 12, 5, 10>::head_type ht;
-	printf("xx %s\n", demangle<typename ht::type>().c_str());
-
-	/*
-	typedef typename node_offset_tbl<32, 15, 6>::value_type n32_tbl;
-
-	
-	for (auto p: n32_tbl::value)
-		printf("yy %zd, %zd\n", p.first, p.second);
-	*/
+	printf("pp %s\n", demangle<typename expand_a<policy>::type>().c_str());
 	typedef placement_array<int, 64> xa0;
 
 	struct null_pred {

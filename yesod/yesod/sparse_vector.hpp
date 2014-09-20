@@ -9,15 +9,15 @@
 #define UCPF_YESOD_SPARSE_VECTOR_JAN_06_2014_1320
 
 #include <yesod/detail/sparse_vector_base.hpp>
-#include <yesod/detail/sparse_vector_ops.hpp>
+//#include <yesod/detail/sparse_vector_ops.hpp>
 
 namespace ucpf { namespace yesod {
 
 template <typename ValueType>
 struct sparse_vector_default_policy {
 	typedef std::allocator<void> allocator_type;
-	constexpr static size_t ptr_node_order = 6;
-	constexpr static size_t data_node_order = 6;
+	constexpr static std::array<std::size_t, 1> ptr_node_order = {{4}};
+	constexpr static std::array<std::size_t, 1> data_node_order = {{8}};
 	/* optional value_valid_pred type */
 };
 
