@@ -47,6 +47,22 @@ struct sparse_vector_value_predicate<Policy, true> {
 	typedef typename Policy::value_valid_pred type;
 };
 
+template <
+	typename ValueType, typename ValueValidPred,
+	std::size_t AppOrder, std::size_t Order
+> struct compressed_array {
+	static_assert(AppOrder > Order, "AppOrder > Order");
+
+	placement_array<ValueType, 1 << Order, ValueValidPred> arr;
+};
+
+template <
+	typename ValueType, typename ValueValidPred, std::size_t AppOrder
+> struct compressed_array<ValueType, ValueValidPred, AppOrder, AppOrder> {
+
+	placement_array<ValueType, 1 << AppOrder, ValueValidPred> arr;
+};
+
 }
 
 template <
@@ -69,7 +85,7 @@ template <
 	typedef typename allocator_traits::size_type size_type;
 
 	sparse_vector()
-	: root(nullptr), aux(0, allocator_type())
+	: root(nullptr), tup_height_alloc(0, allocator_type())
 	{}
 
 	~sparse_vector()
@@ -82,65 +98,24 @@ template <
 		std::swap(root, other.root);
 
 		if (allocator_traits::propagate_on_container_swap::value)
-			std::swap(aux, other.aux);
+			std::swap(tup_height_alloc, other.tup_height_alloc);
 		else
-			std::swap(std::get<0>(aux), std::get<0>(aux));
+			std::swap(
+				std::get<0>(tup_height_alloc),
+				std::get<0>(other.tup_height_alloc)
+			);
 	}
 
 	void clear();
 
 	bool empty() const
 	{
-		return !std::get<0>(aux);
+		return !root;
 	}
-
-	template <typename Pred>
-	bool for_each_above(size_type pos, Pred &&pred);
-
-	template <typename Pred>
-	bool for_each_above(size_type pos, Pred &&pred) const;
-
-	template <typename Pred>
-	void remove_if(Pred pred);
-
-	reference operator[](size_type pos)
-	{
-		auto &node(*data_node_at(pos));
-		return node[pos];
-	}
-
-	const_reference operator[](size_type pos) const
-	{
-		auto &node(*data_node_at(pos));
-		return node[pos];
-	}
-
-	pointer ptr_at(size_type pos)
-	{
-		auto node(data_node_at(pos));
-		return node ? node->ptr_at(pos) : nullptr;
-	}
-
-	const_pointer ptr_at(size_type pos) const
-	{
-		auto node(data_node_at(pos));
-		return node ? node->ptr_at(pos) : nullptr;
-	}
-
-	template <typename... Args>
-	reference emplace_at(size_type pos, Args&&... args)
-	{
-		auto node(data_node_alloc_at(pos));
-		return node->emplace_at(
-			std::get<1>(aux), pos, std::forward<Args>(args)...
-		);
-	}
-
-	size_type find_empty_above(size_type pos) const;
 
 	allocator_type get_allocator() const
 	{
-		return std::get<1>(aux);
+		return std::get<1>(tup_height_alloc);
 	}
 
 	template <typename CharType, typename Traits>
@@ -149,50 +124,86 @@ template <
 	) const -> std::basic_ostream<CharType, Traits> &;
 
 private:
-	struct node_type {
-		virtual ~node_type()
+	struct node_base {
+		virtual ~node_base()
 		{}
 	};
 
-	template <std::size_type...>
-	struct data_node;
-
-	template <std::size_type OrdId>
-	struct data_node<OrdId, OrdId> : node_type {
-	};
-
-	template <std::size_type OrdId, std::size_type MaxOrdId>
-	struct data_node<OrdId, MaxOrdId> : node_type {
-	};
-
-	template <std::size_type...>
-	struct ptr_node;
-
-	template <std::size_type OrdId>
-	struct ptr_node<OrdId, OrdId> : node_type {
-	};
-
-	template <std::size_type OrdId, std::size_type MaxOrdId>
-	struct ptr_node<Order, MaxOrdId> : node_type {
-	};
+	typedef node_base *node_ptr;
 
 	struct loc_pair {
-		node_type *ptr;
+		node_ptr ptr;
 		size_type off;
 	};
 
-	constexpr static size_type data_node_order
-	= Policy::data_node_order.back();
+	template <
+		typename ValueType0, typename ValueValidPred,
+		std::size_t OrdId, std::size_t MaxOrdId,
+		std::array<std::size_t, MaxOrdId> const *arr
+	> struct node : node_base {
+		typedef ValueType0 value_type;
 
-	constexpr static size_type data_node_size = 1 << data_node_order;
+		typedef node<
+			value_type, ValueValidPred, OrdId, MaxOrdId, arr
+		> this_node_type;
 
-	constexpr static size_type ptr_node_order
-	= Policy::ptr_node_order.back();
+		constexpr static std::size_t prev_ord_id
+		= OrdId ? OrdId - 1 : OrdId;
 
-	constexpr static size_type ptr_node_size = 1 << ptr_node_order;
+		constexpr static std::size_t next_ord_id
+		= OrdId < (MaxOrdId - 1) ? OrdId + 1 : OrdId;
 
-	node_type *root;
-	std::tuple<size_type, allocator_type> aux;
+		typedef node<
+			value_type, ValueValidPred, prev_ord_id, MaxOrdId, arr
+		> prev_node_type;
+
+		typedef node<
+			value_type, ValueValidPred, next_ord_id, MaxOrdId, arr
+		> next_node_type;
+
+		constexpr static std::size_t apparent_order = (*arr)[0];
+		constexpr static std::size_t real_order = (*arr)[OrdId];
+
+		static_assert(
+			std::is_same<prev_node_type, this_node_type>::value
+			|| (prev_node_type::real_order > real_order),
+			"prev_node_type::real_order > real_order"
+		);
+
+		static_assert(
+			std::is_same<next_node_type, this_node_type>::value
+			|| (next_node_type::real_order < real_order),
+			"next_node_type::real_order < real_order"
+		);
+
+		detail::compressed_array<
+			value_type, ValueValidPred, apparent_order, real_order
+		> items;
+	};
+
+	struct ptr_valid_pred {
+		bool test(node_ptr v)
+		{
+			return v != nullptr;
+		}
+	};
+
+	typedef node<
+		node_ptr, ptr_valid_pred, 0, Policy::ptr_node_order.size(),
+		&Policy::ptr_node_order
+	> ptr_node_type;
+
+	
+	typedef node<
+		value_type, 
+		typename detail::sparse_vector_value_predicate<
+			Policy, detail::has_value_valid_pred<Policy>::value
+		>::type, 0, Policy::data_node_order.size(),
+		&Policy::data_node_order
+	> data_node_type;
+
+	node_ptr root;
+	std::tuple<size_type, allocator_type> tup_height_alloc;
 };
 
 }}

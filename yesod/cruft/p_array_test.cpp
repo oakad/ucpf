@@ -14,9 +14,12 @@ using ucpf::yesod::mpl::package_range_c;
 
 
 struct policy {
-	constexpr static std::array<std::size_t, 1> value = {{
-		8
-	}};
+	constexpr static std::array<
+		std::size_t, 2
+	> ptr_node_order = {{9, 3}};
+	constexpr static std::array<
+		std::size_t, 5
+	> data_node_order = {{32, 16, 8, 4, 2}};
 };
 
 template <typename P>
@@ -39,9 +42,61 @@ struct expand_a {
 	typedef typename apply<idx>::type type;
 };
 
+struct node_base {
+};
+
+template <
+	typename T,  std::size_t OrdId, std::size_t MaxOrdId,
+	std::array<std::size_t, MaxOrdId> const *arr
+> struct node : node_base {
+	typedef node<T, OrdId, MaxOrdId, arr> this_node_type;
+
+	typedef typename std::conditional<
+		OrdId == 0,
+		node<T, OrdId, MaxOrdId, arr>,
+		node<T, OrdId - 1, MaxOrdId, arr>
+	>::type prev_node_type;
+
+	typedef typename std::conditional<
+		OrdId == (MaxOrdId - 1),
+		node<T, OrdId, MaxOrdId, arr>,
+		node<T, OrdId + 1, MaxOrdId, arr>
+	>::type next_node_type;
+
+	constexpr static std::size_t apparent_order = (*arr)[0];
+	constexpr static std::size_t real_order = (*arr)[OrdId];
+
+	static_assert(
+		std::is_same<prev_node_type, this_node_type>::value
+		|| (prev_node_type::real_order > real_order),
+		"prev_node_type::real_order > real_order"
+	);
+	static_assert(
+		std::is_same<next_node_type, this_node_type>::value
+		|| (next_node_type::real_order < real_order),
+		"next_node_type::real_order < real_order"
+	);
+};
+/*
+template <typename T, typename Policy, std::size_t MaxOrdId>
+struct node<T, Policy, 0, MaxOrdId> : node_base {
+	constexpr static std::size_t val = Policy::ptr_node_order[0];
+};
+*/
+
+
 int main()
 {
-	printf("pp %s\n", demangle<typename expand_a<policy>::type>().c_str());
+	typedef node<
+		int, 0, policy::ptr_node_order.size(), &policy::ptr_node_order
+	> x_node1;
+	typedef node<
+		int, 0, policy::data_node_order.size(), &policy::data_node_order
+	> x_node2;
+	printf("xx %zd\n", x_node1::real_order);
+	printf("xy %zd\n", x_node2::real_order);
+
+
 	typedef placement_array<int, 64> xa0;
 
 	struct null_pred {
