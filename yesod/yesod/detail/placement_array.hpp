@@ -27,9 +27,6 @@ template <
 	typedef value_type const *const_pointer;
 	typedef std::size_t size_type;
 
-	typedef pointer iterator;
-	typedef const_pointer const_iterator;
-
 	constexpr static bool is_pod_container
 	= std::is_pod<value_type>::value;
 
@@ -89,7 +86,9 @@ template <
 	}
 
 	template <typename Alloc, typename... Args>
-	reference emplace_at(Alloc const &a, size_type pos, Args&&... args)
+	pointer emplace_at(
+		Alloc const &a, size_type pos, Args&&... args
+	)
 	{
 		typedef allocator::array_helper<value_type, Alloc> a_h;
 
@@ -105,30 +104,32 @@ template <
 			items.set(pos);
 		}
 
-		return (*this)[pos];
+		return &(*this)[pos];
 	}
 
 	template <typename Alloc>
-	void erase_at(Alloc const &a, size_type pos)
+	bool erase_at(Alloc const &a, size_type pos)
 	{
 		typedef allocator::array_helper<value_type, Alloc> a_h;
 
 		if (items.test(pos)) {
 			a_h::destroy(a, &(*this)[pos], 1, false);
 			std::get<1>(items).reset(pos);
-		}
+			return true;
+		} else
+			return false;
 	}
 
-	const_iterator find_vacant(size_type first) const
+	size_type find_vacant(size_type first) const
 	{
 		for (size_type pos(first); pos < size(); ++pos) {
 			if (!(
 				items.test(pos)
 				|| value_valid_pred::test((*this)[pos])
 			))
-				return const_iterator(&(*this)[pos]);
+				return pos;
 		}
-		return cend();
+		return size();
 	}
 
 	template <typename Pred>
@@ -163,36 +164,6 @@ template <
 		}
 
 		return false;
-	}
-
-	iterator begin()
-	{
-		return iterator(&(*this)[0]);
-	}
-
-	const_iterator begin() const
-	{
-		return const_iterator(&(*this)[0]);
-	}
-
-	const_iterator cbegin() const
-	{
-		return const_iterator(&(*this)[0]);
-	}
-
-	iterator end()
-	{
-		return iterator(&(*this)[N]);
-	}
-
-	const_iterator end() const
-	{
-		return const_iterator(&(*this)[N]);
-	}
-
-	const_iterator cend() const
-	{
-		return const_iterator(&(*this)[N]);
 	}
 
 private:

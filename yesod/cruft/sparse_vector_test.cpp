@@ -1,7 +1,9 @@
 #include <yesod/sparse_vector.hpp>
 #include <iostream>
 
+using ucpf::yesod::bitset;
 using ucpf::yesod::sparse_vector;
+using ucpf::yesod::detail::bit_sizeof;
 
 struct pair_type {
 	uintptr_t base;
@@ -49,6 +51,7 @@ struct trie_vector_policy {
 int main(int argc, char **argv)
 {
 	sparse_vector<pair_type, trie_vector_policy> trie;
+
 
 	/*
 	trie.emplace_at(4096, pair_type::make(4096, 4096));

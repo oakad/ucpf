@@ -10,7 +10,7 @@
 
 #include <ostream>
 #include <yesod/bitops.hpp>
-#include <yesod/detail/placement_array.hpp>
+#include <yesod/detail/compressed_array.hpp>
 
 namespace ucpf { namespace yesod {
 namespace detail {
@@ -47,22 +47,6 @@ struct sparse_vector_value_predicate<Policy, true> {
 	typedef typename Policy::value_valid_pred type;
 };
 
-template <
-	typename ValueType, typename ValueValidPred,
-	std::size_t AppOrder, std::size_t Order
-> struct compressed_array {
-	static_assert(AppOrder > Order, "AppOrder > Order");
-
-	placement_array<ValueType, 1 << Order, ValueValidPred> arr;
-};
-
-template <
-	typename ValueType, typename ValueValidPred, std::size_t AppOrder
-> struct compressed_array<ValueType, ValueValidPred, AppOrder, AppOrder> {
-
-	placement_array<ValueType, 1 << AppOrder, ValueValidPred> arr;
-};
-
 }
 
 template <
@@ -90,7 +74,7 @@ template <
 
 	~sparse_vector()
 	{
-		clear();
+		//clear();
 	}
 
 	void swap(sparse_vector &other)
@@ -177,7 +161,7 @@ private:
 		);
 
 		detail::compressed_array<
-			value_type, ValueValidPred, apparent_order, real_order
+			value_type, apparent_order, real_order, ValueValidPred
 		> items;
 	};
 

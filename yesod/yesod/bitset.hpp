@@ -36,8 +36,17 @@ struct bitset {
 
 	void set(size_type pos)
 	{
-		auto &w(bset[pos / word_bits]);
-		w |= word_type(1) << (pos % word_bits);
+		bset[pos / word_bits] |= word_type(1) << (pos % word_bits);
+	}
+
+	void set(size_type pos, word_type mask)
+	{
+		auto w_pos(pos / word_bits);
+		auto w_off(pos % word_bits);
+
+		bset[w_pos] |= mask << w_off;
+		if (w_off && (w_pos < (word_count - 1)))
+			bset[w_pos + 1] |= mask >> (word_bits - w_off);
 	}
 
 	void reset()
@@ -48,14 +57,36 @@ struct bitset {
 
 	void reset(size_type pos)
 	{
-		auto &w(bset[pos / word_bits]);
-		w &= ~(word_type(1) << (pos % word_bits));
+		bset[pos / word_bits] &= ~(word_type(1) << (pos % word_bits));
+	}
+
+	void reset(size_type pos, word_type mask)
+	{
+		auto w_pos(pos / word_bits);
+		auto w_off(pos % word_bits);
+
+		bset[w_pos] &= mask << w_off;
+		if (w_off && (w_pos < (word_count - 1)))
+			bset[w_pos + 1] &= mask >> (word_bits - w_off);
 	}
 
 	bool test(size_type pos) const
 	{
-		auto &w(bset[pos / word_bits]);
-		return w & (word_type(1) << (pos % word_bits));
+		return bset[pos / word_bits] & (
+			word_type(1) << (pos % word_bits)
+		);
+	}
+
+	word_type word_at(size_type pos) const
+	{
+		auto w_pos(pos / word_bits);
+		auto w_off(pos % word_bits);
+
+		if (w_off && (w_pos < (word_count - 1)))
+			return (bset[w_pos] >> w_off)
+			       | (bset[w_pos + 1] << (word_bits - w_off));
+		else
+			return bset[w_pos] >> w_off;
 	}
 
 	size_type find_first_set(size_type first) const
