@@ -16,20 +16,43 @@ template <
 	typename ValueType, std::size_t ApparentOrder, std::size_t Order,
 	typename ValueValidPred
 > struct compressed_array {
-	static_assert(ApparentOrder > Order, "ApparentOrder > Order");
-
+	typedef uintptr_t word_type;
 	constexpr static std::size_t index_order = Order;
+	constexpr static std::size_t bit_count = index_order << ApparentOrder;
+	constexpr static std::size_t word_bits = sizeof(word_type) * 8;
+	constexpr static std::size_t word_count
+	= bit_count / word_bits + (bit_count % word_bits ? 1 : 0);
+	constexpr static word_type index_mask
+	= (word_type(1) << index_order) - 1;
+	constexpr static word_type upper_index_mask
+	= index_mask << (word_bits - index_order);
+
+	static_assert(Order >= 1, "Order >= 1");
+	static_assert(ApparentOrder > Order, "ApparentOrder > Order");
+	static_assert(word_bits >= Order, "word_bits >= Order");
+
 	typedef placement_array<
 		ValueType, 1 << index_order, ValueValidPred
 	> array_type;
-	typedef yesod::bitset<index_order * size()> index_type;
-	typedef typename index_type::word_type word_type;
-	constexpr static index_type::word_type index_mask
-	= (word_type(1) << index_order) - 1;
 
 	typedef typename array_type::size_type size_type;
 	typedef typename array_type::pointer pointer;
 	typedef typename array_type::const_pointer const_pointer;
+
+	template <typename Alloc>
+	void init(Alloc const &a)
+	{
+		for (size_type c(0); c < word_count; ++c)
+			index[c] = ~word_type(0);
+
+		items.init(a);
+	}
+
+	template <typename Alloc>
+	void destroy(Alloc const &a)
+	{
+		items.destroy(a);
+	}
 
 	constexpr size_type size() const
 	{
@@ -38,14 +61,14 @@ template <
 
 	pointer ptr_at(size_type pos)
 	{
-		auto id(index.word_at(index_order * pos) & index_mask);
-		return (id < items.size()) ? items.ptr_at(id) : nullptr;
+		auto id(get_index(pos));
+		return (id != index_mask) ? items.ptr_at(id) : nullptr;
 	}
 
 	const_pointer ptr_at(size_type pos) const
 	{
-		auto id(index.word_at(index_order * pos) & index_mask);
-		return (id < items.size()) ? items.ptr_at(id) : nullptr;
+		auto id(get_index(pos));
+		return (id != index_mask) ? items.ptr_at(id) : nullptr;
 	}
 
 	template <typename Alloc, typename... Args>
@@ -53,9 +76,9 @@ template <
 		Alloc const &a, size_type pos, Args&&... args
 	)
 	{
-		auto id(index.word_at(index_order * pos));
+		auto id(get_index(pos));
 
-		if ((id & index_mask) == index_mask) {
+		if (id == index_mask) {
 			auto x_pos(items.find_vacant(0));
 			if (x_pos == items.size())
 				return nullptr;
@@ -63,7 +86,7 @@ template <
 			auto rv(items.emplace_at(
 				a, x_pos, std::forward<Args>(args)...
 			));
-			index.reset(index_order * pos, id & x_pos);
+			set_index(pos, x_pos);
 			return rv;
 		} else
 			return items.emplace_at(
@@ -74,28 +97,60 @@ template <
 	template <typename Alloc>
 	bool erase_at(Alloc const &a, size_type pos)
 	{
-		auto id(index.word_at(index_order * pos));
+		auto id(index_get(pos));
 
-		if ((id & index_mask) == index_mask)
+		if (id == index_mask)
 			return false;
 
-		index.set(index_order * pos, id | index_mask);
-		return items.erase_at(a, id & index_mask);
+		set_index(pos, index_mask);
+		return items.erase_at(a, id);
 	}
 
 	size_type find_vacant(size_type first) const
 	{
 		for (; first < size(); ++first) {
-			if ((
-				index.word_at(index_order * first)
-				& index_mask
-			) == index_mask)
+			if (get_index(first) == index_mask)
 				return first;
 		}
 		return size();
 	}
 
-	index_type index;
+	word_type get_index(size_type pos) const
+	{
+		auto b_pos(pos * index_order);
+		auto e_pos(b_pos + index_order - 1);
+
+		auto w1((
+			index[b_pos / word_bits] >> (b_pos % word_bits)
+		) & index_mask);
+		auto w2((
+			index[e_pos / word_bits]
+			<< (word_bits - e_pos % word_bits - 1)
+		) & upper_index_mask);
+
+		return w1 | (w2 >> (word_bits - index_order));
+	}
+
+	void set_index(size_type pos, word_type value)
+	{
+		auto b_pos(pos * index_order);
+		auto e_pos(b_pos + index_order - 1);
+
+		auto w1(value << (b_pos % word_bits));
+		auto m1(index_mask << (b_pos % word_bits));
+		index[b_pos / word_bits] &= ~m1;
+		index[b_pos / word_bits] |= w1;
+
+		auto w2(value << (word_bits - index_order));
+		w2 >>= word_bits - e_pos % word_bits - 1;
+		auto m2(upper_index_mask >> (
+			word_bits - e_pos % word_bits - 1
+		));
+		index[e_pos / word_bits] &= ~m2;
+		index[e_pos / word_bits] |= w2;
+	}
+
+	word_type index[word_count];
 	array_type items;
 };
 
@@ -112,6 +167,18 @@ template <
 	typedef typename array_type::size_type size_type;
 	typedef typename array_type::pointer pointer;
 	typedef typename array_type::const_pointer const_pointer;
+
+	template <typename Alloc>
+	void init(Alloc const &a)
+	{
+		items.init(a);
+	}
+
+	template <typename Alloc>
+	void destroy(Alloc const &a)
+	{
+		items.destroy(a);
+	}
 
 	constexpr std::size_t size() const
 	{

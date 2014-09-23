@@ -10,7 +10,6 @@ alias test_case : : : : <include>..
 run array_element_count.cpp : : test_case ;
 run bitops.cpp : : test_case ;
 run bitset.cpp : : test_case ;
-run compressed_index_map.cpp : : test_case ;
 run dynamic_bitset.cpp : : test_case ;
 run flat_map.cpp : : test_case ;
 run float.cpp : : test_case ;

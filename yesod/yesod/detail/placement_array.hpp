@@ -188,6 +188,10 @@ private:
 		{
 		}
 
+		constexpr void reset()
+		{
+		}
+
 		constexpr bool test(size_type pos) const
 		{
 			return true;

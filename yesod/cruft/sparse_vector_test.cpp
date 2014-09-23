@@ -3,7 +3,7 @@
 
 using ucpf::yesod::bitset;
 using ucpf::yesod::sparse_vector;
-using ucpf::yesod::detail::bit_sizeof;
+using ucpf::yesod::detail::compressed_array;
 
 struct pair_type {
 	uintptr_t base;
@@ -50,7 +50,15 @@ struct trie_vector_policy {
 
 int main(int argc, char **argv)
 {
-	sparse_vector<pair_type, trie_vector_policy> trie;
+	compressed_array<int, 11, 7, void> ca0;
+
+	ca0.init(std::allocator<void>());
+	ca0.index_set(112, 0x56);
+	ca0.index_set(578, 0x75);
+	ca0.index_set(1325, 0x6e);
+
+	printf("aa %zx, %zx, %zx\n", ca0.index_get(112), ca0.index_get(578), ca0.index_get(1325));
+	//sparse_vector<pair_type, trie_vector_policy> trie;
 
 
 	/*
