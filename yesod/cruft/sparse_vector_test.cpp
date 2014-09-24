@@ -1,9 +1,11 @@
 #include <yesod/sparse_vector.hpp>
 #include <iostream>
+#include <test/test_demangle.hpp>
 
 using ucpf::yesod::bitset;
 using ucpf::yesod::sparse_vector;
 using ucpf::yesod::detail::compressed_array;
+using ucpf::yesod::test::demangle;
 
 struct pair_type {
 	uintptr_t base;
@@ -41,25 +43,18 @@ struct pair_valid_pred
 struct trie_vector_policy {
 	typedef std::allocator<void> allocator_type;
 
-	constexpr static std::array<std::size_t, 1> ptr_node_order = {{4}};
+	constexpr static std::array<std::size_t, 2> ptr_node_order = {{4, 6}};
 
-	constexpr static std::array<std::size_t, 1> data_node_order = {{8}};
+	constexpr static std::array<
+		std::size_t, 3
+	> data_node_order = {{6, 8, 12}};
 
 	typedef pair_valid_pred value_valid_pred;
 };
 
 int main(int argc, char **argv)
 {
-	compressed_array<int, 11, 7, void> ca0;
-
-	ca0.init(std::allocator<void>());
-	ca0.index_set(112, 0x56);
-	ca0.index_set(578, 0x75);
-	ca0.index_set(1325, 0x6e);
-
-	printf("aa %zx, %zx, %zx\n", ca0.index_get(112), ca0.index_get(578), ca0.index_get(1325));
-	//sparse_vector<pair_type, trie_vector_policy> trie;
-
+	sparse_vector<pair_type, trie_vector_policy> trie;
 
 	/*
 	trie.emplace_at(4096, pair_type::make(4096, 4096));

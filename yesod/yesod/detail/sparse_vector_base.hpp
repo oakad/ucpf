@@ -11,6 +11,7 @@
 #include <ostream>
 #include <yesod/bitops.hpp>
 #include <yesod/detail/compressed_array.hpp>
+#include <yesod/detail/static_bit_field_map.hpp>
 
 namespace ucpf { namespace yesod {
 namespace detail {
@@ -97,6 +98,52 @@ template <
 		return !root;
 	}
 
+	pointer ptr_at(size_type pos)
+	{
+		auto h(std::get<0>(tup_height_alloc));
+		node_ptr *p(&root);
+
+		while (h > 1) {
+			p = static_cast<ptr_node_base *>(*p)->ptr_at(
+				node_offset(pos, h)
+			);
+
+			if (!p)
+				return nullptr;
+
+			--h;
+		}
+
+		if (*p) {
+			 return static_cast<data_node_base *>(*p)->ptr_at(
+				node_offset(pos, h)
+			);
+		}
+	}
+
+	const_pointer ptr_at(size_type pos) const
+	{
+		auto h(std::get<0>(tup_height_alloc));
+		node_ptr *p(&root);
+
+		while (h > 1) {
+			p = static_cast<ptr_node_base *>(*p)->ptr_at(
+				node_offset(pos, h)
+			);
+
+			if (!p)
+				return nullptr;
+
+			--h;
+		}
+
+		if (*p) {
+			 return static_cast<data_node_base *>(*p)->ptr_at(
+				node_offset(pos, h)
+			);
+		}
+	}
+
 	allocator_type get_allocator() const
 	{
 		return std::get<1>(tup_height_alloc);
@@ -120,71 +167,96 @@ private:
 		size_type off;
 	};
 
+	struct ptr_node_base : node_base {
+		typedef node_ptr node_value_type;
+		struct value_valid_pred {
+			bool test(node_ptr v)
+			{
+				return v != nullptr;
+			}
+		};
+
+		virtual node_value_type *ptr_at(size_type pos) = 0;
+	};
+
+	struct data_node_base : node_base {
+		typedef value_type node_value_type;
+		typedef typename detail::sparse_vector_value_predicate<
+			Policy, detail::has_value_valid_pred<Policy>::value
+		>::type value_valid_pred;
+
+		virtual node_value_type *ptr_at(size_type pos) = 0;
+	};
+
 	template <
-		typename ValueType0, typename ValueValidPred,
-		std::size_t OrdId, std::size_t MaxOrdId,
-		std::array<std::size_t, MaxOrdId> const *arr
-	> struct node : node_base {
-		typedef ValueType0 value_type;
+		typename NodeBase, size_type OrdId, size_type MaxOrdId,
+		std::array<std::size_t, MaxOrdId> const &arr
+	> struct node : NodeBase {
+		typedef NodeBase base_type;
+		typedef node<base_type, OrdId, MaxOrdId, arr> self_type;
 
-		typedef node<
-			value_type, ValueValidPred, OrdId, MaxOrdId, arr
-		> this_node_type;
-
-		constexpr static std::size_t prev_ord_id
+		constexpr static size_type prev_ord_id
 		= OrdId ? OrdId - 1 : OrdId;
 
-		constexpr static std::size_t next_ord_id
+		constexpr static size_type next_ord_id
 		= OrdId < (MaxOrdId - 1) ? OrdId + 1 : OrdId;
 
 		typedef node<
-			value_type, ValueValidPred, prev_ord_id, MaxOrdId, arr
+			base_type, prev_ord_id, MaxOrdId, arr
 		> prev_node_type;
 
 		typedef node<
-			value_type, ValueValidPred, next_ord_id, MaxOrdId, arr
+			base_type, next_ord_id, MaxOrdId, arr
 		> next_node_type;
 
-		constexpr static std::size_t apparent_order = (*arr)[0];
-		constexpr static std::size_t real_order = (*arr)[OrdId];
+		constexpr static size_type apparent_order = arr[MaxOrdId - 1];
+		constexpr static size_type real_order = arr[OrdId];
 
 		static_assert(
-			std::is_same<prev_node_type, this_node_type>::value
-			|| (prev_node_type::real_order > real_order),
-			"prev_node_type::real_order > real_order"
+			std::is_same<prev_node_type, self_type>::value
+			|| (prev_node_type::real_order < real_order),
+			"prev_node_type::real_order < real_order"
 		);
 
 		static_assert(
-			std::is_same<next_node_type, this_node_type>::value
-			|| (next_node_type::real_order < real_order),
-			"next_node_type::real_order < real_order"
+			std::is_same<next_node_type, self_type>::value
+			|| (next_node_type::real_order > real_order),
+			"next_node_type::real_order > real_order"
 		);
+
+		virtual typename base_type::node_value_type *ptr_at(
+			size_type pos
+		)
+		{
+		}
 
 		detail::compressed_array<
-			value_type, apparent_order, real_order, ValueValidPred
+			typename base_type::node_value_type, apparent_order,
+			real_order, typename base_type::value_valid_pred
 		> items;
 	};
 
-	struct ptr_valid_pred {
-		bool test(node_ptr v)
-		{
-			return v != nullptr;
-		}
-	};
-
 	typedef node<
-		node_ptr, ptr_valid_pred, 0, Policy::ptr_node_order.size(),
-		&Policy::ptr_node_order
+		ptr_node_base, 0, Policy::ptr_node_order.size(),
+		Policy::ptr_node_order
 	> ptr_node_type;
 
-	
 	typedef node<
-		value_type, 
-		typename detail::sparse_vector_value_predicate<
-			Policy, detail::has_value_valid_pred<Policy>::value
-		>::type, 0, Policy::data_node_order.size(),
-		&Policy::data_node_order
+		data_node_base, 0, Policy::data_node_order.size(),
+		Policy::data_node_order
 	> data_node_type;
+
+	typedef typename detail::static_bit_field_map<
+		sizeof(size_type) * 8, data_node_type::apparent_order,
+		ptr_node_type::apparent_order
+	>::repeat_last::value_type pos_field_map;
+
+	constexpr static size_type node_offset(size_type pos, size_type h)
+	{
+		return (pos >> pos_field_map::value[h - 1].second) & ((
+			size_type(1) << pos_field_map::value[h - 1].first
+		) - 1);
+	}
 
 	node_ptr root;
 	std::tuple<size_type, allocator_type> tup_height_alloc;
