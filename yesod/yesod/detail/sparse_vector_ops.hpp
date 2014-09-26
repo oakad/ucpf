@@ -9,65 +9,37 @@
 #define UCPF_YESOD_DETAIL_SPARSE_VECTOR_OPS_JAN_06_2014_1320
 
 namespace ucpf { namespace yesod {
-
+/*
 template <typename ValueType, typename Policy>
-void sparse_vector<ValueType, Policy>::clear()
+template <
+	typename NodeBase,
+	typename sparse_vector<ValueType, Policy>::size_type OrdId,
+	typename sparse_vector<ValueType, Policy>::size_type MaxOrdId,
+	std::array<std::size_t, MaxOrdId> const &arr
+> void sparse_vector<ValueType, Policy>::node<
+	NodeBase, OrdId, MaxOrdId, arr
+>::destroy(
+	typename sparse_vector<ValueType, Policy>::allocator_type const &a,
+	typename sparse_vector<ValueType, Policy>::size_type h
+)
 {
-	if (!height)
-		return;
+	allocator::array_helper<self_type, allocator_type> a_h;
 
-	if (height == 1) {
-		data_node::destroy(
-			std::get<1>(root_node),
-			reinterpret_cast<data_node *>(std::get<0>(root_node))
-		);
-		std::get<0>(root_node) = nullptr;
-		height = 0;
-		return;
+	if (h > 1) {
+		for (size_type c(0); c < apparent_order; ++c) {
+			auto p(items.ptr_at(c));
+			if (p)
+				static_cast<ptr_node_base *>(*p)->destroy(
+					a, h - 1
+				);
+		}
 	}
 
-	loc_pair tree_loc[height];
-	size_type h(0);
-	ptr_node *p(nullptr);
-
-	tree_loc[0] = loc_pair{std::get<0>(root_node), 0};
-	printf("root %p h %zd\n", tree_loc[0].ptr, height);
-
-	while (true) {
-restart:
-		if (h == (height - 1)) {
-			printf("cc data %p h %zd\n", tree_loc[h].ptr, h);
-			data_node::destroy(
-				std::get<1>(root_node),
-				reinterpret_cast<data_node *>(tree_loc[h].ptr)
-			);
-			--h;
-			continue;
-		}
-
-		p = reinterpret_cast<ptr_node *>(tree_loc[h].ptr);
-		while (tree_loc[h].off < ptr_node_size) {
-			tree_loc[h + 1] = loc_pair{
-				(*p)[tree_loc[h].off], 0
-			};
-			++tree_loc[h].off;
-
-			printf("xc %zd, %zd, %p\n", h, tree_loc[h].off, tree_loc[h + 1].ptr);
-			if (tree_loc[h + 1].ptr) {
-				++h;
-				goto restart;
-			}
-		}
-		printf("cc ptr %p h %zd\n", p, h);
-		ptr_node::destroy(std::get<1>(root_node), p);
-		if (!h) {
-			std::get<0>(root_node) = nullptr;
-			height = 0;
-			return;
-		} else
-			--h;
-	}
+	items.destroy(a);
+	a_h::destroy(a, this, 1, true);
 }
+*/
+#if 0
 
 template <typename ValueType, typename Policy>
 template <typename Pred>
@@ -502,6 +474,6 @@ auto sparse_vector<
 
 	return reinterpret_cast<data_node *>(tree_loc[h].ptr);
 }
-
+#endif
 }}
 #endif

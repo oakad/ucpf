@@ -9,7 +9,7 @@
 #define UCPF_YESOD_SPARSE_VECTOR_JAN_06_2014_1320
 
 #include <yesod/detail/sparse_vector_base.hpp>
-//#include <yesod/detail/sparse_vector_ops.hpp>
+#include <yesod/detail/sparse_vector_ops.hpp>
 
 namespace ucpf { namespace yesod {
 

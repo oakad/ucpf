@@ -75,7 +75,7 @@ template <
 
 	~sparse_vector()
 	{
-		//clear();
+		clear();
 	}
 
 	void swap(sparse_vector &other)
@@ -91,7 +91,17 @@ template <
 			);
 	}
 
-	void clear();
+	void clear()
+	{
+		if (root) {
+			root->destroy(
+				std::get<1>(tup_height_alloc),
+				std::get<0>(tup_height_alloc)
+			);
+			root = nullptr;
+			std::get<0>(tup_height_alloc) = 0;
+		}
+	}
 
 	bool empty() const
 	{
@@ -144,6 +154,43 @@ template <
 		}
 	}
 
+	template <typename... Args>
+	pointer emplace_at(
+		size_type pos, Args&&... args
+	)
+	{
+		auto d_pos(node_offset(pos, 1));
+		auto pp(alloc_data_node_at(pos));
+		auto qp(pp.first->reserve_at(d_pos));
+		if (!qp.first) {
+			pp.first = static_cast<data_node_base *>(
+				pp.first->grow_node(pp.second)
+			);
+			qp = pp.first->reserve_at(d_pos);
+		}
+
+		if (qp.second) {
+			*qp.first = std::move(
+				value_type(std::forward<Args>(args)...)
+			);
+			return qp.first;
+		}
+
+		auto release = [pp, d_pos](pointer v) -> void {
+			pp.first->release_at(d_pos);
+		};
+
+		std::unique_ptr<
+			value_type, decltype(release)
+		> q(qp.first, release);
+		allocator::array_helper<value_type, allocator_type>::make_n(
+			std::get<1>(tup_height_alloc), qp.first, 1,
+			std::forward<Args>(args)...
+		);
+		q.reset();
+		return qp.first;
+	}
+
 	allocator_type get_allocator() const
 	{
 		return std::get<1>(tup_height_alloc);
@@ -158,6 +205,10 @@ private:
 	struct node_base {
 		virtual ~node_base()
 		{}
+
+		virtual void destroy(allocator_type const &a, size_type h) = 0;
+		virtual node_base *grow_node(node_base **parent) = 0;
+		virtual void release_at(size_type pos) = 0;
 	};
 
 	typedef node_base *node_ptr;
@@ -177,6 +228,9 @@ private:
 		};
 
 		virtual node_value_type *ptr_at(size_type pos) = 0;
+		virtual std::pair<node_value_type *, bool> reserve_at(
+			size_type pos
+		) = 0;
 	};
 
 	struct data_node_base : node_base {
@@ -186,6 +240,9 @@ private:
 		>::type value_valid_pred;
 
 		virtual node_value_type *ptr_at(size_type pos) = 0;
+		virtual std::pair<node_value_type *, bool> reserve_at(
+			size_type pos
+		) = 0;
 	};
 
 	template <
@@ -224,10 +281,31 @@ private:
 			"next_node_type::real_order > real_order"
 		);
 
+		virtual void destroy(allocator_type const &a, size_type h)
+		{
+			typedef allocator::array_helper<
+				self_type, allocator_type
+			> a_h;
+
+			if (h > 1) {
+				for (size_type c(0); c < apparent_order; ++c) {
+					auto p(items.ptr_at(c));
+					if (p)
+						static_cast<
+							ptr_node_base *
+						>(*p)->destroy(a, h - 1);
+				}
+			}
+
+			items.destroy(a);
+			a_h::destroy(a, this, 1, true);
+		}
+
 		virtual typename base_type::node_value_type *ptr_at(
 			size_type pos
 		)
 		{
+			return items.ptr_at(pos);
 		}
 
 		detail::compressed_array<
@@ -257,6 +335,10 @@ private:
 			size_type(1) << pos_field_map::value[h - 1].first
 		) - 1);
 	}
+
+	std::pair<
+		data_node_base *, node_base **
+	> alloc_data_node_at(size_type pos);
 
 	node_ptr root;
 	std::tuple<size_type, allocator_type> tup_height_alloc;
