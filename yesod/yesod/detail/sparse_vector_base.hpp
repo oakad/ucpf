@@ -268,6 +268,8 @@ private:
 
 		constexpr static size_type apparent_order = arr[MaxOrdId - 1];
 		constexpr static size_type real_order = arr[OrdId];
+		constexpr static size_type apparent_size
+		= size_type(1) << apparent_order;
 
 		static_assert(
 			std::is_same<prev_node_type, self_type>::value
@@ -334,6 +336,14 @@ private:
 		return (pos >> pos_field_map::value[h - 1].second) & ((
 			size_type(1) << pos_field_map::value[h - 1].first
 		) - 1);
+	}
+
+	constexpr static size_type height_at_pos(size_type pos)
+	{
+		return (pos >= data_node_type::apparent_size) ? (
+			(yesod::fls(pos) - data_node_type::apparent_order)
+			/ ptr_node_type::apparent_order + 2
+		) : 1;
 	}
 
 	std::pair<

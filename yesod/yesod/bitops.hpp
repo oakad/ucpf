@@ -52,17 +52,18 @@ constexpr int ctz(uint128_t v)
 
 constexpr int fls(uint32_t v)
 {
-	return 31 - clz(v);
+	return 31 - __builtin_clz(v);
 }
 
 constexpr int fls(uint64_t v)
 {
-	return 63 - clz(v);
+	return 63 - __builtin_clzll(v);
 }
 
 constexpr int fls(uint128_t v)
 {
-	return 127 - clz(v);
+	return (v >> 64) ? fls(uint64_t(v >> 64u)) + 64
+			 : fls(uint64_t(v));
 }
 
 template <typename T>

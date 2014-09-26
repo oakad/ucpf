@@ -9,36 +9,34 @@
 #define UCPF_YESOD_DETAIL_SPARSE_VECTOR_OPS_JAN_06_2014_1320
 
 namespace ucpf { namespace yesod {
-/*
-template <typename ValueType, typename Policy>
-template <
-	typename NodeBase,
-	typename sparse_vector<ValueType, Policy>::size_type OrdId,
-	typename sparse_vector<ValueType, Policy>::size_type MaxOrdId,
-	std::array<std::size_t, MaxOrdId> const &arr
-> void sparse_vector<ValueType, Policy>::node<
-	NodeBase, OrdId, MaxOrdId, arr
->::destroy(
-	typename sparse_vector<ValueType, Policy>::allocator_type const &a,
-	typename sparse_vector<ValueType, Policy>::size_type h
-)
-{
-	allocator::array_helper<self_type, allocator_type> a_h;
 
-	if (h > 1) {
-		for (size_type c(0); c < apparent_order; ++c) {
-			auto p(items.ptr_at(c));
-			if (p)
-				static_cast<ptr_node_base *>(*p)->destroy(
-					a, h - 1
-				);
+template <typename ValueType, typename Policy>
+auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
+	sparse_vector<ValueType, Policy>::size_type pos
+) -> std::pair<data_node_base *, node_base **>
+{
+	auto &h(std::get<0>(tup_height_alloc));
+	auto p_h(height_at_pos(pos));
+
+	if (h) {
+		while (p_h > h) {
+			// add ptr_nodes on top of root
+			++h;
 		}
+	} else {
+		// set root to emtpy data node
+		h = 1;
+		while (p_h > h) {
+		}
+		//return the above node
 	}
 
-	items.destroy(a);
-	a_h::destroy(a, this, 1, true);
+	while (p_h > 1) {
+		// add ptr_nodes as necessary
+	}
+	// add and return data node
 }
-*/
+
 #if 0
 
 template <typename ValueType, typename Policy>
