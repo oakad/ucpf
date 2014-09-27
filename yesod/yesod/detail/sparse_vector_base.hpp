@@ -207,8 +207,10 @@ private:
 		{}
 
 		virtual void destroy(allocator_type const &a, size_type h) = 0;
-		virtual node_base *grow_node(node_base **parent) = 0;
 		virtual void release_at(size_type pos) = 0;
+		virtual node_base *grow_node(
+			allocator_type const &a, node_base **parent
+		) = 0;
 	};
 
 	typedef node_base *node_ptr;
@@ -283,6 +285,11 @@ private:
 			"next_node_type::real_order > real_order"
 		);
 
+		void init(allocator_type const &a)
+		{
+			items.init(a);
+		}
+
 		virtual void destroy(allocator_type const &a, size_type h)
 		{
 			typedef allocator::array_helper<
@@ -308,6 +315,25 @@ private:
 		)
 		{
 			return items.ptr_at(pos);
+		}
+
+		virtual std::pair<node_value_type *, bool> reserve_at(
+			size_type pos
+		)
+		{
+			return items.reserve_at(pos);
+		}
+
+				
+		virtual void release_at(size_type pos)
+		{
+			return items.release_at(pos);
+		}
+
+		virtual node_base *grow_node(
+			allocator_type const &a, node_base **parent
+		)
+		{
 		}
 
 		detail::compressed_array<

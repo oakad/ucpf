@@ -15,24 +15,71 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 	sparse_vector<ValueType, Policy>::size_type pos
 ) -> std::pair<data_node_base *, node_base **>
 {
+	typedef allocator::array_helper<ptr_node_type, allocator_type> a_hp;
+	typedef allocator::array_helper<data_node_type, allocator_type> a_hd;
+
 	auto &h(std::get<0>(tup_height_alloc));
 	auto p_h(height_at_pos(pos));
+	auto a(std::get<1>(tup_height_alloc));
+	std::pair<data_node_base *, node_base **> rv(nullptr, nullptr);
 
 	if (h) {
 		while (p_h > h) {
-			// add ptr_nodes on top of root
+			auto p(a_hp::alloc_n(a, 1));
+			p->init(a);
+			auto pp(p->reserve_at(0));
+			*(pp.first) = root;
+			root = p;
 			++h;
 		}
 	} else {
-		// set root to emtpy data node
+		rv.first = a_hd::alloc_n(a, 1);
+		rv.first->init(a);
+		root = rv.first;
+		rv.second = &root;
 		h = 1;
-		while (p_h > h) {
+
+		if (p_h > h) {
+			auto d_pos(node_offset(pos, h + 1));
+			auto p(a_hp::alloc_n(a, 1));
+			p->init(a);
+			auto pp(p->reserve_at(d_pos));
+			*(pp.first) = rv.first;
+			rv.second = pp.first;
+			root = p;
+			++h;
 		}
-		//return the above node
+
+		while (p_h > h) {
+			auto d_pos(node_offset(pos, h + 1));
+			auto p(a_hp::alloc_n(a, 1));
+			p->init(a);
+			auto pp(p->reserve_at(d_pos));
+			*(pp.first) = static_cast<ptr_node_base *>(root);
+			root = p;
+			++h;
+		}
+		return rv;
 	}
 
+	rv.second = &root;
 	while (p_h > 1) {
-		// add ptr_nodes as necessary
+		auto d_pos(node_offset(pos, p_h));
+		auto p(static_cast<ptr_node_base *>(*(rv.second)));
+		auto pp(p->reserve_at(d_pos));
+		if (!pp->first) {
+			p = static_cast<ptr_node_base *>(
+				p->grow_node(a, rv.second)
+			);
+			pp = p->reserve_at(d_pos);
+		}
+
+		if (pp.second) {
+
+		} else {
+
+		}
+		--p_h;
 	}
 	// add and return data node
 }

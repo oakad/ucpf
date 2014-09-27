@@ -71,6 +71,30 @@ template <
 		return (id != index_mask) ? items.ptr_at(id) : nullptr;
 	}
 
+	std::pair<pointer, bool> reserve_at(size_type pos)
+	{
+		auto id(get_index(pos));
+		if (id == index_mask) {
+			auto x_pos(items.find_vacant(0));
+			if (x_pos == items.size())
+				return std::make_pair(nullptr, false);
+
+			items.set_valid(x_pos);
+			set_index(pos, x_pos);
+			return std::make_pair(&items[x_pos], false);
+		} else
+			return std::make_pair(&items[id], items.set_valid(id));
+	}
+
+	void release_at(size_type pos)
+	{
+		auto id(get_index(pos));
+		if (id != index_mask) {
+			items.reset_valid(id);
+			set_index(pos, index_mask);
+		}
+	}
+
 	template <typename Alloc, typename... Args>
 	pointer emplace_at(
 		Alloc const &a, size_type pos, Args&&... args
@@ -90,7 +114,7 @@ template <
 			return rv;
 		} else
 			return items.emplace_at(
-				a, id & index_mask, std::forward<Args>(args)...
+				a, id, std::forward<Args>(args)...
 			);
 	}
 
@@ -193,6 +217,16 @@ template <
 	const_pointer ptr_at(size_type pos) const
 	{
 		return items.ptr_at(pos);
+	}
+
+	std::pair<pointer, bool> reserve_at(size_type pos)
+	{
+		return std::make_pair(&items[pos], items.set_valid(pos));
+	}
+
+	void release_at(size_type pos)
+	{
+		items.reset_valid(pos);
 	}
 
 	template <typename Alloc, typename... Args>

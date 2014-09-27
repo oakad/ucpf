@@ -114,10 +114,25 @@ template <
 
 		if (items.test(pos)) {
 			a_h::destroy(a, &(*this)[pos], 1, false);
-			std::get<1>(items).reset(pos);
+			items.reset(pos);
 			return true;
 		} else
 			return false;
+	}
+
+	bool set_valid(size_type pos)
+	{
+		auto rv(
+			items.test(pos)
+			&& value_valid_pred::test((*this)[pos])
+		);
+		items.set(pos);
+		return rv;
+	}
+
+	void reset_valid(size_type pos)
+	{
+		items.reset(pos);
 	}
 
 	size_type find_vacant(size_type first) const
