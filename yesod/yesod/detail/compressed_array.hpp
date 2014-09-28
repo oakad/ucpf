@@ -121,7 +121,7 @@ template <
 	template <typename Alloc>
 	bool erase_at(Alloc const &a, size_type pos)
 	{
-		auto id(index_get(pos));
+		auto id(get_index(pos));
 
 		if (id == index_mask)
 			return false;
@@ -134,6 +134,16 @@ template <
 	{
 		for (; first < size(); ++first) {
 			if (get_index(first) == index_mask)
+				return first;
+		}
+		return size();
+	}
+
+	size_type find_occupied(size_type first) const
+	{
+		for (; first < size(); ++first) {
+			auto id(get_index(first));
+			if ((id != index_mask) && (items.ptr_at(id)))
 				return first;
 		}
 		return size();
@@ -248,9 +258,13 @@ template <
 		return items.find_vacant(first);
 	}
 
+	size_type find_occupied(size_type first) const
+	{
+		return items.find_occupied(first);
+	}
+
 	array_type items;
 };
-
 
 }}}
 #endif

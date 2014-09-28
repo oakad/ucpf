@@ -147,6 +147,18 @@ template <
 		return size();
 	}
 
+	size_type find_occupied(size_type first) const
+	{
+		for (size_type pos(first); pos < size(); ++pos) {
+			if (
+				items.test(pos)
+				&& value_valid_pred::test((*this)[pos])
+			)
+				return pos;
+		}
+		return size();
+	}
+
 	template <typename Pred>
 	bool for_each(size_type first, Pred &&pred)
 	{
@@ -215,6 +227,13 @@ private:
 		constexpr size_t find_first_set(size_type first) const
 		{
 			return first;
+		}
+
+		template <typename Pred>
+		void for_each_set(Pred &&pred) const
+		{
+			for (size_type pos(0); pos < N; ++pos)
+				pred(pos);
 		}
 	};
 

@@ -11,9 +11,60 @@
 namespace ucpf { namespace yesod {
 
 template <typename ValueType, typename Policy>
+void sparse_vector<ValueType, Policy>::clear()
+{
+	auto const height(std::get<0>(tup_height_alloc));
+	if (!height)
+		return;
+
+	if (height == 1) {
+		static_cast<data_node_base *>(root)->destroy(
+			std::get<1>(tup_height_alloc)
+		);
+		root = nullptr;
+		std::get<0>(tup_height_alloc) = 0;
+		return;
+	}
+
+	loc_pair tree_loc[height - 1];
+	tree_loc[0] = loc_pair{root, 0};
+	size_type h(0);
+
+	while (true) {
+		auto pp(static_cast<ptr_node_base *>(
+			tree_loc[h].ptr
+		)->find_occupied(tree_loc[h].pos));
+
+		if (pp.second == ptr_node_type::apparent_size) {
+			tree_loc[h].ptr->destroy(
+				std::get<1>(tup_height_alloc)
+			);
+			if (!h) {
+				root = nullptr;
+				std::get<0>(tup_height_alloc) = 0;
+				return;
+			} else {
+				--h;
+				continue;
+			}
+		}
+
+		if ((h + 2) == height) {
+			static_cast<data_node_base *>(*pp.first)->destroy(
+				std::get<1>(tup_height_alloc)
+			);
+			++tree_loc[h].pos;
+			continue;
+		}
+
+		tree_loc[++h] = loc_pair{*pp.first, 0};
+	}
+}
+
+template <typename ValueType, typename Policy>
 auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 	sparse_vector<ValueType, Policy>::size_type pos
-) -> std::pair<data_node_base *, node_base **>
+) -> std::pair<data_node_base *, node_ptr *>
 {
 	typedef allocator::array_helper<ptr_node_type, allocator_type> a_hp;
 	typedef allocator::array_helper<data_node_type, allocator_type> a_hd;
@@ -21,7 +72,7 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 	auto &h(std::get<0>(tup_height_alloc));
 	auto p_h(height_at_pos(pos));
 	auto a(std::get<1>(tup_height_alloc));
-	std::pair<data_node_base *, node_base **> rv(nullptr, nullptr);
+	std::pair<data_node_base *, node_ptr *> rv(nullptr, nullptr);
 
 	if (h) {
 		while (p_h > h) {
@@ -33,8 +84,7 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 			++h;
 		}
 	} else {
-		rv.first = a_hd::alloc_n(a, 1);
-		rv.first->init(a);
+		rv.first = a_hd::alloc_n(a, 1)->init(a);
 		root = rv.first;
 		rv.second = &root;
 		h = 1;
@@ -63,25 +113,52 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 	}
 
 	rv.second = &root;
+	size_type d_pos(0);
+
+	auto release_p([&d_pos](ptr_node_base *p) -> void {
+		p->release_at(d_pos);
+	});
+
+	typedef std::unique_ptr<ptr_node_base, decltype(release_p)> u_node_ptr;
+
 	while (p_h > 1) {
-		auto d_pos(node_offset(pos, p_h));
+		d_pos = node_offset(pos, p_h);
 		auto p(static_cast<ptr_node_base *>(*(rv.second)));
 		auto pp(p->reserve_at(d_pos));
-		if (!pp->first) {
+		if (!pp.first) {
 			p = static_cast<ptr_node_base *>(
 				p->grow_node(a, rv.second)
 			);
 			pp = p->reserve_at(d_pos);
 		}
 
-		if (pp.second) {
-
-		} else {
-
+		rv.second = pp.first;
+		if (!pp.second) {
+			u_node_ptr up(p, release_p);
+			*(pp.first) = a_hp::alloc_n(a, 1)->init(a);
+			up.reset();
 		}
 		--p_h;
 	}
-	// add and return data node
+
+	auto p(static_cast<ptr_node_base *>(*(rv.second)));
+	auto pp(p->reserve_at(d_pos));
+	if (!pp.first) {
+		p = static_cast<ptr_node_base *>(
+			p->grow_node(a, rv.second)
+		);
+		pp = p->reserve_at(d_pos);
+	}
+	if (pp.second)
+		rv.first = static_cast<data_node_base *>(*pp.first);
+	else {
+		u_node_ptr up(p, release_p);
+		rv.first = a_hd::alloc_n(a, 1)->init(a);
+		*(pp.first) = rv.first;
+		up.reset();
+	}
+
+	return rv;
 }
 
 #if 0
