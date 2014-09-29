@@ -56,16 +56,16 @@ int main(int argc, char **argv)
 {
 	sparse_vector<pair_type, trie_vector_policy> trie;
 
-	trie.emplace_at(4096, pair_type::make(4096, 4096));
+	trie.emplace_at(10, pair_type::make(10, 10));
 	printf("-----------\n");
-	trie.emplace_at(96, pair_type::make(96, 96));
-	trie.emplace_at(1024, pair_type::make(1024, 1024));
+	trie.emplace_at(20, pair_type::make(20, 20));
+	trie.emplace_at(30, pair_type::make(30, 30));
 	printf("-----------\n");
 	trie.dump(std::cout);
 
-	auto r(*trie.ptr_at(4096));
+	auto r(*trie.ptr_at(10));
 	printf("b %zd c %zd\n", r.base, r.check);
-	r = *trie.ptr_at(1024);
+	r = *trie.ptr_at(20);
 	printf("b %zd c %zd\n", r.base, r.check);
 
 	return 0;

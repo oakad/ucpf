@@ -70,7 +70,7 @@ template <
 	typedef typename allocator_traits::size_type size_type;
 
 	sparse_vector()
-	: root(nullptr), tup_height_alloc(0, allocator_type())
+	: tup_height_alloc(0, allocator_type())
 	{}
 
 	~sparse_vector()
@@ -80,7 +80,7 @@ template <
 
 	void swap(sparse_vector &other)
 	{
-		std::swap(root, other.root);
+		std::swap(root.item, other.root.item);
 
 		if (allocator_traits::propagate_on_container_swap::value)
 			std::swap(tup_height_alloc, other.tup_height_alloc);
@@ -95,53 +95,57 @@ template <
 
 	bool empty() const
 	{
-		return !root;
+		return !root.item;
 	}
 
 	pointer ptr_at(size_type pos)
 	{
 		auto h(std::get<0>(tup_height_alloc));
-		node_ptr *p(&root);
+		ptr_node_base *p(&root);
+		size_type d_pos(0);
 
 		while (h > 1) {
-			p = static_cast<ptr_node_base *>(*p)->ptr_at(
-				node_offset(pos, h)
-			);
-
-			if (!p)
+			auto q(p->ptr_at(d_pos));
+			if (!q || !(*q))
 				return nullptr;
 
+			p = static_cast<ptr_node_base *>(*q);
+			d_pos = node_offset(pos, h);
 			--h;
 		}
 
-		if (*p) {
-			 return static_cast<data_node_base *>(*p)->ptr_at(
-				node_offset(pos, h)
-			);
-		}
+		auto q(p->ptr_at(d_pos));
+		if (!q || !(*q))
+			return nullptr;
+
+		return static_cast<data_node_base *>(*q)->ptr_at(
+			node_offset(pos, 1)
+		);
 	}
 
 	const_pointer ptr_at(size_type pos) const
 	{
 		auto h(std::get<0>(tup_height_alloc));
-		node_ptr *p(&root);
+		ptr_node_base *p(&root);
+		size_type d_pos(0);
 
 		while (h > 1) {
-			p = static_cast<ptr_node_base *>(*p)->ptr_at(
-				node_offset(pos, h)
-			);
-
-			if (!p)
+			auto q(p->ptr_at(d_pos));
+			if (!q || !(*q))
 				return nullptr;
 
+			p = static_cast<ptr_node_base *>(*q);
+			d_pos = node_offset(pos, h);
 			--h;
 		}
 
-		if (*p) {
-			 return static_cast<data_node_base *>(*p)->ptr_at(
-				node_offset(pos, h)
-			);
-		}
+		auto q(p->ptr_at(d_pos));
+		if (!q || !(*q))
+			return nullptr;
+
+		return static_cast<data_node_base *>(*q)->ptr_at(
+			node_offset(pos, 1)
+		);
 	}
 
 	template <typename... Args>
@@ -151,7 +155,9 @@ template <
 	{
 		auto d_pos(node_offset(pos, 1));
 		auto pp(alloc_data_node_at(pos));
+		printf("--1- %zd: %p - %p (%p)\n", d_pos, pp.first, pp.second, *pp.second);
 		auto qp(pp.first->reserve_at(d_pos));
+		printf("-a1- %p, %d\n", qp.first, qp.second);
 		if (!qp.first) {
 			pp.first = static_cast<data_node_base *>(
 				pp.first->grow_node(
@@ -180,7 +186,8 @@ template <
 			std::get<1>(tup_height_alloc), qp.first, 1,
 			std::forward<Args>(args)...
 		);
-		q.reset();
+		printf("-b1-\n");
+		q.release();
 		return qp.first;
 	}
 
@@ -189,35 +196,24 @@ template <
 		return std::get<1>(tup_height_alloc);
 	}
 
-	template <typename CharType, typename Traits>
-	auto dump(
-		std::basic_ostream<CharType, Traits> &os
-	) const -> std::basic_ostream<CharType, Traits> &;
+	std::ostream &dump(std::ostream &os) const;
 
 private:
-	struct node_base;
-	typedef node_base *node_ptr;
-
 	struct node_base {
 		virtual ~node_base()
 		{}
 
 		virtual void destroy(allocator_type const &a) = 0;
 		virtual void release_at(size_type pos) = 0;
-		virtual node_ptr grow_node(
-			allocator_type const &a, node_ptr *parent
+		virtual node_base *grow_node(
+			allocator_type const &a, node_base **parent
 		) = 0;
 	};
 
-	struct loc_pair {
-		node_ptr ptr;
-		size_type pos;
-	};
-
 	struct ptr_node_base : node_base {
-		typedef node_ptr node_value_type;
+		typedef node_base *node_value_type;
 		struct value_valid_pred {
-			static bool test(node_ptr v)
+			static bool test(node_base *v)
 			{
 				return v != nullptr;
 			}
@@ -230,6 +226,16 @@ private:
 		virtual std::pair<
 			node_value_type *, bool
 		> reserve_at(size_type pos) = 0;
+	};
+
+	struct loc_pair {
+		ptr_node_base *ptr;
+		size_type pos;
+	};
+
+	struct c_loc_pair {
+		ptr_node_base const *ptr;
+		size_type pos;
 	};
 
 	struct data_node_base : node_base {
@@ -285,10 +291,9 @@ private:
 			"next_node_type::real_order > real_order"
 		);
 
-		self_type *init(allocator_type const &a)
+		node(allocator_type const &a)
 		{
 			items.init(a);
-			return this;
 		}
 
 		virtual void destroy(allocator_type const &a)
@@ -318,7 +323,7 @@ private:
 			> rv(nullptr, items.find_occupied(first));
 
 			if (rv.second != items.size())
-				rv.first = items.ptr_at(first);
+				rv.first = items.ptr_at(rv.second);
 
 			return rv;
 		}
@@ -336,8 +341,8 @@ private:
 			return items.release_at(pos);
 		}
 
-		virtual node_ptr grow_node(
-			allocator_type const &a, node_ptr *parent
+		virtual node_base *grow_node(
+			allocator_type const &a, node_base **parent
 		)
 		{
 		}
@@ -379,10 +384,57 @@ private:
 	}
 
 	std::pair<
-		data_node_base *, node_ptr *
+		data_node_base *, node_base **
 	> alloc_data_node_at(size_type pos);
 
-	node_ptr root;
+	struct root_node : ptr_node_base {
+		root_node()
+		: item(nullptr)
+		{}
+
+		virtual void destroy(allocator_type const &a)
+		{
+			item = nullptr;
+		}
+
+		virtual void release_at(size_type pos)
+		{
+		}
+
+		virtual node_base *grow_node(
+			allocator_type const &a, node_base **parent
+		)
+		{
+		}
+
+		virtual typename ptr_node_base::node_value_type *ptr_at(
+			size_type pos
+		)
+		{
+			return pos ? nullptr : &item;
+		}
+
+		virtual std::pair<
+			typename ptr_node_base::node_value_type *, size_type
+		> find_occupied(size_type first)
+		{
+			return (!first && item)
+			       ? std::make_pair(&item, first)
+			       : std::make_pair(nullptr, first);
+		}
+
+		virtual std::pair<
+			typename ptr_node_base::node_value_type *, bool
+		> reserve_at(size_type pos)
+		{
+			return (!pos)
+			       ? std::make_pair(&item, item != nullptr)
+			       : std::make_pair(nullptr, false);
+		}
+
+		typename ptr_node_base::node_value_type item;
+	} root;
+
 	std::tuple<size_type, allocator_type> tup_height_alloc;
 };
 

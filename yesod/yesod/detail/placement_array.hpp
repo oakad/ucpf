@@ -140,7 +140,7 @@ template <
 		for (size_type pos(first); pos < size(); ++pos) {
 			if (!(
 				items.test(pos)
-				|| value_valid_pred::test((*this)[pos])
+				&& value_valid_pred::test((*this)[pos])
 			))
 				return pos;
 		}
