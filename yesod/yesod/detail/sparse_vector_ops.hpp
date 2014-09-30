@@ -29,11 +29,14 @@ void sparse_vector<ValueType, Policy>::clear()
 		auto pp(tree_loc[h].ptr->find_occupied(tree_loc[h].pos));
 
 		if (!pp.first) {
-			tree_loc[h].ptr->destroy(a);
 			if (h) {
+				tree_loc[h].ptr->destroy(a);
 				--h;
 				continue;
 			} else {
+				if (root.ptr_at(0))
+					*root.ptr_at(0) = nullptr;
+
 				std::get<0>(tup_height_alloc) = 0;
 				return;
 			}
@@ -52,6 +55,52 @@ void sparse_vector<ValueType, Policy>::clear()
 }
 
 template <typename ValueType, typename Policy>
+template <typename Pred>
+bool sparse_vector<ValueType, Policy>::for_each_above(
+	size_type pos, Pred &&pred
+)
+{
+	
+}
+
+template <typename ValueType, typename Policy>
+template <typename Pred>
+bool sparse_vector<ValueType, Policy>::for_each_above(
+	size_type pos, Pred &&pred
+) const
+{
+	
+}
+
+template <typename ValueType, typename Policy>
+auto sparse_vector<ValueType, Policy>::find_vacant(
+	size_type first
+) const -> size_type
+{
+	auto const height(std::get<0>(tup_height_alloc));
+
+	if (!height || (height_at_pos(first) > height))
+		return first;
+
+	c_loc_pair tree_loc[height];
+	tree_loc_at(tree_loc, first);
+
+	while (true) {
+		auto p(tree_loc[height - 1].ptr);
+		if (!p)
+			return first;
+
+		auto q(static_cast<data_node_base **>(p->ptr_at(
+			node_offset(first, 2)
+		)));
+		if (!q)
+			return first;
+
+	}
+	
+}
+
+template <typename ValueType, typename Policy>
 auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 	sparse_vector<ValueType, Policy>::size_type pos
 ) -> std::pair<data_node_base *, node_base **>
@@ -59,47 +108,10 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 	typedef allocator::array_helper<ptr_node_type, allocator_type> a_hp;
 	typedef allocator::array_helper<data_node_type, allocator_type> a_hd;
 
+	auto a(std::get<1>(tup_height_alloc));
 	auto &h(std::get<0>(tup_height_alloc));
 	auto p_h(height_at_pos(pos));
-	auto a(std::get<1>(tup_height_alloc));
-	std::pair<data_node_base *, node_base **> rv(nullptr, root.ptr_at(0));
-
-	if (!h) {
-		rv.first = a_hd::alloc_n(a, 1, a);
-		*(root.ptr_at(0)) = rv.first;
-		h = 1;
-
-		if (p_h > h) {
-			auto p(a_hp::alloc_n(a, 1, a));
-			auto pp(p->reserve_at(node_offset(pos, h + 1)));
-			*(pp.first) = *(root.ptr_at(0));
-			*(root.ptr_at(0)) = p;
-			rv.second = pp.first;
-			++h;
-		}
-
-		while (p_h > h) {
-			auto p(a_hp::alloc_n(a, 1, a));
-			auto pp(p->reserve_at(node_offset(pos, h + 1)));
-			*(pp.first) = *(root.ptr_at(0));
-			*(root.ptr_at(0)) = p;
-			++h;
-		}
-
-		return rv;
-	}
-
-	printf("--2- h %zd p_h %zd\n", h, p_h);
-	while (p_h > h) {
-		auto p(a_hp::alloc_n(a, 1, a));
-		auto pp(p->reserve_at(0));
-		*(pp.first) = *(root.ptr_at(0));
-		*(root.ptr_at(0)) = p;
-		++h;
-	}
-
 	size_type d_pos(0);
-	ptr_node_base *p(&root);
 
 	auto release_p([&d_pos](ptr_node_base *p) -> void {
 		p->release_at(d_pos);
@@ -109,40 +121,81 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 		nullptr, release_p
 	);
 
-	while (p_h > 1) {
-		auto pp(p->reserve_at(d_pos));
-		if (pp.first) {
-			rv.second = pp.first;
-			if (!pp.second) {
-				u_node_ptr.reset(p);
-				*pp.first = a_hp::alloc_n(a, 1, a);
+	if (!h) {
+		std::pair<data_node_base *, node_base **> rv(nullptr, nullptr);
+		u_node_ptr.reset(&root);
+		auto rr(root.reserve_at(0));
+		rv.first = a_hd::alloc_n(a, 1, a);
+		*rr.first = rv.first;
+		rv.second = rr.first;
+		u_node_ptr.release();
+		h = 1;
+
+		if (p_h == h)
+			return rv;
+
+		auto p(a_hp::alloc_n(a, 1, a));
+		auto pp(p->reserve_at(node_offset(pos, h + 1)));
+		*pp.first = rv.first;
+		*rr.first = p;
+		rv.second = pp.first;
+		++h;
+
+		while (p_h > h) {
+			p = a_hp::alloc_n(a, 1, a);
+			pp = p->reserve_at(node_offset(pos, h + 1));
+			*pp.first = rv.first;
+			*rr.first = p;
+			++h;
+		}
+
+		return rv;
+	}
+
+	printf("--2- h %zd p_h %zd\n", h, p_h);
+
+	auto qq(root.reserve_at(0));
+	while (p_h > h) {
+		auto p(a_hp::alloc_n(a, 1, a));
+		auto pp(p->reserve_at(0));
+		*pp.first = *qq.first;
+		*qq.first = p;
+		++h;
+	}
+
+	auto p(qq.first);
+	auto q(*p);
+	if (p_h == 1)
+		return std::make_pair(static_cast<data_node_base *>(q), p);
+
+	while (true) {
+		d_pos = node_offset(pos, h);
+		qq = static_cast<ptr_node_base *>(q)->reserve_at(d_pos);
+		if (qq.first) {
+			p = qq.first;
+			if (p_h == 2)
+				break;
+
+			if (!qq.second) {
+				u_node_ptr.reset(
+					static_cast<ptr_node_base *>(q)
+				);
+				*p = a_hp::alloc_n(a, 1, a);
 				u_node_ptr.release();
 			}
-			p = static_cast<ptr_node_base *>(*pp.first);
-			d_pos = node_offset(pos, --p_h);
+
+			q = *p;
+			--p_h;
 		} else
-			p = static_cast<ptr_node_base *>(
-				p->grow_node(a, rv.second)
-			);
+			q = static_cast<ptr_node_base *>(q)->grow_node(a, p);
 	}
 
-	p = static_cast<ptr_node_base *>(*rv.second);
-	d_pos = node_offset(pos, 1);
-	auto pp(p->reserve_at(d_pos));
-
-	if (!pp.first) {
-		p = static_cast<ptr_node_base *>(p->grow_node(a, rv.second));
-		pp = p->reserve_at(d_pos);
-	}
-
-	if (!pp.second) {
-		u_node_ptr.reset(p);
-		*pp.first = a_hd::alloc_n(a, 1, a);
+	if (!qq.second) {
+		u_node_ptr.reset(static_cast<ptr_node_base *>(q));
+		*p = a_hd::alloc_n(a, 1, a);
 		u_node_ptr.release();
 	}
-
-	rv.first = static_cast<data_node_base *>(*pp.first);
-	return rv;
+	return std::make_pair(static_cast<data_node_base *>(*p), p);
 }
 
 template <typename ValueType, typename Policy>
@@ -165,45 +218,63 @@ std::ostream &sparse_vector<ValueType, Policy>::dump(std::ostream &os) const
 		printer_type, allocator_type
 	> decorator(printer, std::get<1>(tup_height_alloc));
 
+	os << '<' << this << ">\n";
 	auto const height(std::get<0>(tup_height_alloc));
 	if (!height) {
-		os << "<null>\n";
 		return os;
 	}
-/*
-	if (height == 1) {
-		auto p(static_cast<data_node_base *>(root));
-		os << '<' << p << ">\n";
-		auto pp(p->find_occupied(0));
 
-		if (!pp.first)
-			return os;
-
-		auto pq(p->find_occupied(pp.second + 1));
-
-		while (true) {
-			if (!pq.first) {
-				decorator.last_child();
-				os << '[' << pp.second << "] ";
-				os << *pp.first << '\n';
-				break;
-			}
-
-			decorator.next_child();
-			os << '[' << pp.second << "] ";
-			os << *pp.first << '\n';
-			pp = pq;
-			pq = p->find_occupied(pp.second + 1);
-		}
-		return os;
-	}
-*/
-	c_loc_pair tree_loc[height - 1];
+	c_loc_pair tree_loc[height];
 	tree_loc[0] = c_loc_pair{&root, 0};
 	size_type h(0);
 
-	
-	return os;
+	while (true) {
+		auto pos(tree_loc[h].pos);
+		auto pp(tree_loc[h].ptr->find_occupied(pos));
+		if (!pp.first) {
+			if (!h)
+				return os;
+
+			--h;
+			decorator.pop_level();
+			continue;
+		}
+
+		auto pq(tree_loc[h].ptr->find_occupied(pp.second + 1));
+		tree_loc[h].pos = pq.second;
+		if (pq.first)
+			decorator.next_child();
+		else
+			decorator.last_child();
+
+		os << '[' << pp.second << "] <" << *pp.first << ">\n";
+		if ((h + 1) == height) {
+			auto q(static_cast<data_node_base *>(*pp.first));
+			auto qp(q->find_occupied(0));
+			if (!qp.first)
+				continue;
+
+			auto qq(q->find_occupied(qp.second + 1));
+			decorator.push_level();
+
+			while (qq.first) {
+				decorator.next_child();
+				os << '[' << qp.second << "] " << *qp.first
+				   << '\n';
+				qp = qq;
+				qq = q->find_occupied(qp.second + 1);
+			}
+			decorator.last_child();
+			os << '[' << qp.second << "] " << *qp.first
+			   << '\n';
+			decorator.pop_level();
+		} else {
+			decorator.push_level();
+			tree_loc[++h] = c_loc_pair{
+				static_cast<ptr_node_base *>(*pp.first), 0
+			};
+		}
+	}
 }
 
 #if 0
@@ -308,80 +379,6 @@ auto sparse_vector<ValueType, Policy>::find_empty_above(
 	return pos;
 }
 
-template <typename ValueType, typename Policy>
-template <typename CharType, typename Traits>
-auto sparse_vector<ValueType, Policy>::dump(
-	std::basic_ostream<CharType, Traits> &os
-) const -> std::basic_ostream<CharType, Traits> &
-{
-	auto r(std::get<0>(root_node));
-	os << os.widen('<') << r << os.widen('>') << std::endl;
-
-	auto fill([&os](int ident) -> void {
-		for (auto c(0); c < ident; ++c)
-			os << os.widen(' ');
-	});
-
-	auto print_data([&os](node_pointer p_, int ident) -> void {
-		auto p(reinterpret_cast<data_node *>(p_));
-		for (size_type c(0); c < data_node_size; ++c) {
-			auto q(p->ptr_at(c));
-			if (q) {
-				for (auto d(0); d < ident; ++d)
-					os << os.widen(' ');
-
-				os << c << os.widen(':') << os.widen(' ')
-				   << *q << std::endl;
-			}
-		}
-	});
-
-	if (!height)
-		return os;
-
-	if (height == 1) {
-		print_data(r, 2);
-		return os;
-	}
-
-	std::pair<loc_pair, int> tree_loc[height];
-	tree_loc[0] = std::make_pair(loc_pair{std::get<0>(root_node), 0}, 2);
-	size_type h(0);
-	while (true) {
-restart:
-		if (h == (height - 1)) {
-			print_data(tree_loc[h].first.ptr, tree_loc[h].second);
-			--h;
-			continue;
-		}
-
-		auto p(reinterpret_cast<ptr_node *>(tree_loc[h].first.ptr));
-		while (tree_loc[h].first.off < ptr_node_size) {
-			tree_loc[h + 1] = std::make_pair(loc_pair{
-				(*p)[tree_loc[h].first.off], 0
-			}, tree_loc[h].second + 2);
-			
-			if (tree_loc[h + 1].first.ptr) {
-				fill(tree_loc[h].second);
-				os << tree_loc[h].first.off;
-				os << os.widen(' ') << os.widen('<');
-				os << tree_loc[h + 1].first.ptr;
-				os << os.widen('>') << std::endl;
-				++tree_loc[h].first.off;
-				++h;
-				goto restart;
-			} else
-				++tree_loc[h].first.off;
-		}
-
-		if (!h)
-			break;
-		else
-			--h;
-	}
-
-	return os;
-}
 
 template <typename ValueType, typename Policy>
 bool sparse_vector<ValueType, Policy>::tree_loc_from_pos(
@@ -566,81 +563,6 @@ auto sparse_vector<
 	return reinterpret_cast<data_node const *>(p);
 }
 
-template <typename ValueType, typename Policy>
-auto sparse_vector<
-	ValueType, Policy
->::data_node_alloc_at(size_type pos) -> data_node *
-{
-	auto p_height(std::max(height, pos_height(pos)));
-
-	if (p_height == 1) {
-		if (!height) {
-			std::get<0>(root_node) = data_node::construct(
-				std::get<1>(root_node)
-			);
-			height = 1;
-		}
-		return reinterpret_cast<data_node *>(std::get<0>(root_node));
-	}
-
-	loc_pair tree_loc[p_height];
-	tree_off_from_pos(tree_loc, pos, p_height);
-	ptr_node *p(nullptr);
-	size_type h(0);
-
-	if (!height) {
-		std::get<0>(root_node) = ptr_node::construct(
-			std::get<1>(root_node)
-		);
-		tree_loc[0].ptr = std::get<0>(root_node);
-		++height;
-
-		for (h = 1; h < (p_height - 1); ++h) {
-			p = reinterpret_cast<ptr_node *>(tree_loc[h - 1].ptr);
-			(*p)[tree_loc[h - 1].off] = ptr_node::construct(
-				std::get<1>(root_node)
-			);
-			++height;
-		}
-
-		p = reinterpret_cast<ptr_node *>(tree_loc[h - 1].ptr);
-		auto q(data_node::construct(std::get<1>(root_node)));
-		(*p)[tree_loc[h - 1].off] = q;
-		++height;
-		return q;
-	}
-
-	while (p_height > height) {
-		p = ptr_node::construct(std::get<1>(root_node));
-		(*p)[0] = std::get<0>(root_node);
-		std::get<0>(root_node) = p;
-		++height;
-	}
-
-	tree_loc[0].ptr = std::get<0>(root_node);
-
-	for (h = 1; h < (height - 1); ++h) {
-		p = reinterpret_cast<ptr_node *>(tree_loc[h - 1].ptr);
-		tree_loc[h].ptr = p->ptr_at(tree_loc[h - 1].off);
-		if (!tree_loc[h].ptr) {
-			(*p)[tree_loc[h - 1].off] = ptr_node::construct(
-				std::get<1>(root_node)
-			);
-			tree_loc[h].ptr = (*p)[tree_loc[h - 1].off];
-		}
-	}
-
-	p = reinterpret_cast<ptr_node *>(tree_loc[h - 1].ptr);
-	tree_loc[h].ptr = p->ptr_at(tree_loc[h - 1].off);
-	if (!tree_loc[h].ptr) {
-		(*p)[tree_loc[h - 1].off] = data_node::construct(
-			std::get<1>(root_node)
-		);
-		tree_loc[h].ptr = (*p)[tree_loc[h - 1].off];
-	}
-
-	return reinterpret_cast<data_node *>(tree_loc[h].ptr);
-}
 #endif
 }}
 #endif

@@ -20,8 +20,20 @@ struct tree_print_decorator {
 
 	void push_level()
 	{
-		prefix.pop_back();
-		prefix.append("|   ");
+		if ((prefix.size() > 3) && (*(prefix.end() - 4) == '`')) {
+			prefix.erase(prefix.end() - 4, prefix.end());
+			prefix.append("    ");
+		} else
+			prefix.append("|   ");
+	}
+
+	void pop_level()
+	{
+		if ((prefix.size() > 3) && (*(prefix.end() - 4) == '`'))
+			prefix.erase(prefix.end() - 4, prefix.end());
+
+		if (prefix.size() > 3)
+			prefix.erase(prefix.end() - 4, prefix.end());
 	}
 
 	void next_child()
@@ -38,11 +50,6 @@ struct tree_print_decorator {
 		prefix.append("`-- ");
 
 		p(prefix.data());
-
-		auto bs(std::min(
-			prefix.size(), typename decltype(prefix)::size_type(8)
-		));
-		prefix.erase(prefix.end() - bs, prefix.end());
 	}
 
 	Printer &p;
