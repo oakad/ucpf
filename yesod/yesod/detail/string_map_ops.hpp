@@ -94,7 +94,7 @@ std::basic_ostream<
 ) const
 {
 	os << "r: " << trie_root << '\n';
-	trie.for_each_above(
+	trie.for_each(
 		0, [&os](size_type pos, pair_type const &p) -> bool {
 			os << log_offset(pos) << " (" << pos << "): ";
 			if (!p.is_leaf()) {
@@ -141,7 +141,7 @@ std::basic_ostream<
 				}
 				os << '\n';
 			}
-			return true;
+			return false;
 		}
 	);
 
@@ -251,7 +251,7 @@ auto string_map<CharType, ValueType, Policy>::split_subtree(
 	index_entry_set l_set(trie.get_allocator());
 	uintptr_t adj_pos(l_pos > 1 ? trie[vec_offset(l_pos)].base : trie_root);
 
-	trie.for_each_above(
+	trie.for_each(
 		std::min(
 			r_pos > 1 ? trie[vec_offset(r_pos)].base : trie_root,
 			adj_pos
@@ -269,7 +269,7 @@ auto string_map<CharType, ValueType, Policy>::split_subtree(
 					pair_ptr_list(trie.get_allocator())
 				));
 
-			return true;
+			return false;
 		}	
 	);
 
@@ -303,18 +303,18 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 		auto p(trie.ptr_at(xp));
 
 		if (p && (p->check != pos)) {
-			if (trie.for_each_above(
+			if (!trie.for_each(
 				xp + 1, [&xp, pos](
 					size_type t_pos, pair_type const &t_p
 				) -> bool {
 					if ((t_pos - xp) > 1) {
 						++xp;
-						return false;
+						return true;
 					}
 
 					xp = t_pos;
 
-					return t_p.check != pos;
+					return t_p.check == pos;
 				}
 			))
 				++xp;
@@ -356,7 +356,7 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 			min_base = std::get<0>(*iter)->base;
 	}
 
-	trie.for_each_above(
+	trie.for_each(
 		min_base > 1 ? vec_offset(min_base) : 0,
 		[&b_set](size_type pos, pair_type &p) -> bool {
 			auto iter(std::lower_bound(
@@ -365,7 +365,7 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 					index_entry_type const &idx,
 					uintptr_t q
 				) -> bool {
-					return q > log_offset(
+					return q <= log_offset(
 						std::get<1>(idx)
 					);
 				}
@@ -672,7 +672,7 @@ auto string_map<
 >::make_index() const -> const_reverse_index
 {
 	auto rv(const_reverse_index(*this, trie.get_allocator()));
-	trie.for_each_above(
+	trie.for_each(
 		0, [&rv, this](size_type pos, pair_type const &p) -> bool {
 			auto base(
 				p.check > 1
@@ -682,7 +682,7 @@ auto string_map<
 			rv.r_trie[p.check].emplace_back(
 				&p, log_offset(pos), offset_to_char(pos, base)
 			);
-			return true;
+			return false;
 		}
 	);
 	return rv;
@@ -694,7 +694,7 @@ auto string_map<
 >::make_index() -> reverse_index
 {
 	auto rv(reverse_index(*this, trie.get_allocator()));
-	trie.for_each_above(
+	trie.for_each(
 		0, [&rv, this](size_type pos, pair_type const &p) -> bool {
 			auto base(
 				p.check > 1
@@ -704,7 +704,7 @@ auto string_map<
 			rv.r_trie[p.check].emplace_back(
 				&p, log_offset(pos), offset_to_char(pos, base)
 			);
-			return true;
+			return false;
 		}
 	);
 	return rv;

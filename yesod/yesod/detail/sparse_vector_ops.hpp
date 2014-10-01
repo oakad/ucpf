@@ -56,20 +56,134 @@ void sparse_vector<ValueType, Policy>::clear()
 
 template <typename ValueType, typename Policy>
 template <typename Pred>
-bool sparse_vector<ValueType, Policy>::for_each_above(
-	size_type pos, Pred &&pred
+bool sparse_vector<ValueType, Policy>::for_each(
+	size_type first, Pred &&pred
 )
 {
-	
+		auto const height(std::get<0>(tup_height_alloc));
+
+	if (!height || (height_at_pos(first) > height))
+		return false;
+
+	c_loc_pair tree_loc[height];
+	tree_loc_at(tree_loc, first);
+
+	auto base_pos(first - node_offset(first, 1));
+	first -= base_pos;
+
+	if (tree_loc[height - 1].ptr) {
+		auto p(static_cast<data_node_base **>(
+			tree_loc[height - 1].ptr->ptr_at(
+				tree_loc[height - 1].pos
+			)
+		));
+
+		if (p) {
+			auto q(*p);
+			while (true) {
+				first = q->find_occupied(first);
+				if (first == node_size(1))
+					break;
+
+				if (pred(
+					base_pos + first,
+					*(q->ptr_at(first))
+				))
+					return true;
+			}
+		}
+	}
+
+	while (true) {
+		if (!tree_loc_next_valid(tree_loc))
+			return false;
+
+		base_pos = tree_loc_pos(tree_loc);
+
+		auto p(*static_cast<data_node_base **>(
+			tree_loc[height - 1].ptr->ptr_at(
+				tree_loc[height - 1].pos
+			)
+		));
+
+		while (true) {
+			first = p->find_occupied(first);
+			if (first == node_size(1))
+				break;
+
+			if (pred(base_pos + first, *(p->ptr_at(first))))
+				return true;
+		}
+
+		first = 0;
+		tree_loc_next(tree_loc);
+	}
 }
 
 template <typename ValueType, typename Policy>
 template <typename Pred>
-bool sparse_vector<ValueType, Policy>::for_each_above(
-	size_type pos, Pred &&pred
+bool sparse_vector<ValueType, Policy>::for_each(
+	size_type first, Pred &&pred
 ) const
 {
-	
+	auto const height(std::get<0>(tup_height_alloc));
+
+	if (!height || (height_at_pos(first) > height))
+		return false;
+
+	c_loc_pair tree_loc[height];
+	tree_loc_at(tree_loc, first);
+
+	auto base_pos(first - node_offset(first, 1));
+	first -= base_pos;
+
+	if (tree_loc[height - 1].ptr) {
+		auto p(static_cast<data_node_base **>(
+			tree_loc[height - 1].ptr->ptr_at(
+				tree_loc[height - 1].pos
+			)
+		));
+
+		if (p) {
+			auto q(*p);
+			while (true) {
+				first = q->find_occupied(first);
+				if (first == node_size(1))
+					break;
+
+				if (pred(
+					base_pos + first,
+					*(q->ptr_at(first))
+				))
+					return true;
+			}
+		}
+	}
+
+	while (true) {
+		if (!tree_loc_next_valid(tree_loc))
+			return false;
+
+		base_pos = tree_loc_pos(tree_loc);
+
+		auto p(*static_cast<data_node_base **>(
+			tree_loc[height - 1].ptr->ptr_at(
+				tree_loc[height - 1].pos
+			)
+		));
+
+		while (true) {
+			first = p->find_occupied(first);
+			if (first == node_size(1))
+				break;
+
+			if (pred(base_pos + first, *(p->ptr_at(first))))
+				return true;
+		}
+
+		first = 0;
+		tree_loc_next(tree_loc);
+	}
 }
 
 template <typename ValueType, typename Policy>
@@ -96,8 +210,92 @@ auto sparse_vector<ValueType, Policy>::find_vacant(
 		if (!q)
 			return first;
 
+		auto pos(*q->find_vacant(node_offset(first, 1)));
+		if (pos < node_size(1))
+			return first;
+
+		first += pos - node_offset(first, 1);
+		tree_loc_next(tree_loc);
 	}
-	
+}
+
+template <typename ValueType, typename Policy>
+std::ostream &sparse_vector<ValueType, Policy>::dump(std::ostream &os) const
+{
+	struct printer_type {
+		printer_type(std::ostream &os_)
+		: os(os_)
+		{}
+
+		void operator()(char const *str)
+		{
+			os << str;
+		}
+
+		std::ostream &os;
+	} printer(os);
+
+	detail::tree_print_decorator<
+		printer_type, allocator_type
+	> decorator(printer, std::get<1>(tup_height_alloc));
+
+	os << '<' << this << ">\n";
+	auto const height(std::get<0>(tup_height_alloc));
+	if (!height) {
+		return os;
+	}
+
+	c_loc_pair tree_loc[height];
+	tree_loc[0] = c_loc_pair{&root, 0};
+	size_type h(0);
+
+	while (true) {
+		auto pos(tree_loc[h].pos);
+		auto pp(tree_loc[h].ptr->find_occupied(pos));
+		if (!pp.first) {
+			if (!h)
+				return os;
+
+			--h;
+			decorator.pop_level();
+			continue;
+		}
+
+		auto pq(tree_loc[h].ptr->find_occupied(pp.second + 1));
+		tree_loc[h].pos = pq.second;
+		if (pq.first)
+			decorator.next_child();
+		else
+			decorator.last_child();
+
+		os << '[' << pp.second << "] <" << *pp.first << ">\n";
+		if ((h + 1) == height) {
+			auto q(static_cast<data_node_base *>(*pp.first));
+			auto qp(q->find_occupied(0));
+			if (!qp.first)
+				continue;
+
+			auto qq(q->find_occupied(qp.second + 1));
+			decorator.push_level();
+
+			while (qq.first) {
+				decorator.next_child();
+				os << '[' << qp.second << "] " << *qp.first
+				   << '\n';
+				qp = qq;
+				qq = q->find_occupied(qp.second + 1);
+			}
+			decorator.last_child();
+			os << '[' << qp.second << "] " << *qp.first
+			   << '\n';
+			decorator.pop_level();
+		} else {
+			decorator.push_level();
+			tree_loc[++h] = c_loc_pair{
+				static_cast<ptr_node_base *>(*pp.first), 0
+			};
+		}
+	}
 }
 
 template <typename ValueType, typename Policy>
@@ -199,82 +397,79 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 }
 
 template <typename ValueType, typename Policy>
-std::ostream &sparse_vector<ValueType, Policy>::dump(std::ostream &os) const
+void sparse_vector<ValueType, Policy>::tree_loc_at(
+	c_loc_pair *tree_loc, size_type pos
+) const
 {
-	struct printer_type {
-		printer_type(std::ostream &os_)
-		: os(os_)
-		{}
+	auto const height(std::get<0>(tup_height_alloc));
+	tree_loc[0] = c_loc_pair{&root, 0};
+	size_type h(1);
 
-		void operator()(char const *str)
-		{
-			os << str;
+	while (h < height) {
+		auto p(static_cast<ptr_node_base *>(
+			tree_loc[h - 1].ptr
+			? tree_loc[h - 1].ptr->ptr_at(tree_loc[h - 1].pos)
+			: nullptr
+		));
+		if (!p) {
+			while (h < height) {
+				tree_loc[h] = c_loc_pair{
+					nullptr, node_offset(pos, h)
+				};
+				++h;
+			}
+			return;
 		}
 
-		std::ostream &os;
-	} printer(os);
-
-	detail::tree_print_decorator<
-		printer_type, allocator_type
-	> decorator(printer, std::get<1>(tup_height_alloc));
-
-	os << '<' << this << ">\n";
-	auto const height(std::get<0>(tup_height_alloc));
-	if (!height) {
-		return os;
+		tree_loc[h] = c_loc_pair{*p, node_offset(pos, h)};
+		++h;
 	}
+}
 
-	c_loc_pair tree_loc[height];
-	tree_loc[0] = c_loc_pair{&root, 0};
-	size_type h(0);
+template <typename ValueType, typename Policy>
+auto sparse_vector<ValueType, Policy>::tree_loc_pos(
+	c_loc_pair *tree_loc
+) const -> size_type
+{
+	auto const height(std::get<0>(tup_height_alloc));
+	size_type rv(0);
+	for (size_type h(1); h < height; ++h) {
+		auto const f(pos_field_map::value[height - h + 1]);
+		auto pos(tree_loc[h].pos & ((size_type(1) << f.first) - 1));
+		rv |= pos << f.second;
+	}
+	return rv;
+}
 
-	while (true) {
-		auto pos(tree_loc[h].pos);
-		auto pp(tree_loc[h].ptr->find_occupied(pos));
-		if (!pp.first) {
-			if (!h)
-				return os;
+template <typename ValueType, typename Policy>
+void sparse_vector<ValueType, Policy>::tree_loc_next(
+	c_loc_pair *tree_loc
+) const
+{
+	auto const height(std::get<0>(tup_height_alloc));
+	auto h(height - 1);
+	size_type rv(0);
 
-			--h;
-			decorator.pop_level();
+	while (h > 0) {
+		++tree_loc[h].pos;
+		if (tree_loc[h].pos >= node_size(height - h + 1)) {
+			tree_loc[h--] = c_loc_pair{nullptr, 0};
 			continue;
 		}
 
-		auto pq(tree_loc[h].ptr->find_occupied(pp.second + 1));
-		tree_loc[h].pos = pq.second;
-		if (pq.first)
-			decorator.next_child();
-		else
-			decorator.last_child();
+		while (h < (height - 1)) {
+			if (!tree_loc[h].ptr)
+				return;
 
-		os << '[' << pp.second << "] <" << *pp.first << ">\n";
-		if ((h + 1) == height) {
-			auto q(static_cast<data_node_base *>(*pp.first));
-			auto qp(q->find_occupied(0));
-			if (!qp.first)
-				continue;
+			auto p(tree_loc[h].ptr->ptr_at(tree_loc[h].pos));
+			if (!p)
+				return;
 
-			auto qq(q->find_occupied(qp.second + 1));
-			decorator.push_level();
-
-			while (qq.first) {
-				decorator.next_child();
-				os << '[' << qp.second << "] " << *qp.first
-				   << '\n';
-				qp = qq;
-				qq = q->find_occupied(qp.second + 1);
-			}
-			decorator.last_child();
-			os << '[' << qp.second << "] " << *qp.first
-			   << '\n';
-			decorator.pop_level();
-		} else {
-			decorator.push_level();
-			tree_loc[++h] = c_loc_pair{
-				static_cast<ptr_node_base *>(*pp.first), 0
-			};
+			tree_loc[++h].ptr = p;
 		}
 	}
+
+	tree_loc[0].ptr = nullptr;
 }
 
 #if 0

@@ -213,6 +213,7 @@ private:
 
 		virtual void destroy(allocator_type const &a) = 0;
 		virtual void release_at(size_type pos) = 0;
+		virtual size_type find_vacant(size_type first) const = 0;
 		virtual node_base *grow_node(
 			allocator_type const &a, node_base **parent
 		) = 0;
@@ -358,6 +359,11 @@ private:
 			return rv;
 		}
 
+		virtual size_type find_vacant(size_type first) const
+		{
+			return items.find_vacant(first);
+		}
+
 		virtual std::pair<
 			typename base_type::node_value_type *, bool
 		> reserve_at(size_type pos)
@@ -398,11 +404,16 @@ private:
 		ptr_node_type::apparent_order
 	>::repeat_last::value_type pos_field_map;
 
+	constexpr static size_type node_size(size_type h)
+	{
+		return size_type(1) << pos_field_map::value[h - 1].first;
+	}
+
 	constexpr static size_type node_offset(size_type pos, size_type h)
 	{
-		return (pos >> pos_field_map::value[h - 1].second) & ((
-			size_type(1) << pos_field_map::value[h - 1].first
-		) - 1);
+		return (pos >> pos_field_map::value[h - 1].second) & (
+			node_size(h) - 1
+		);
 	}
 
 	constexpr static size_type height_at_pos(size_type pos)
@@ -416,6 +427,11 @@ private:
 	std::pair<
 		data_node_base *, node_base **
 	> alloc_data_node_at(size_type pos);
+
+	void tree_loc_at(c_loc_pair *tree_loc, size_type pos) const;
+	size_type tree_loc_pos(c_loc_pair *tree_loc) const;
+	void tree_loc_next(c_loc_pair *tree_loc) const;
+	bool tree_loc_next_valid(c_loc_pair *tree_loc) const;
 
 	constexpr static std::array<std::size_t, 1> root_node_order = {{0}};
 
