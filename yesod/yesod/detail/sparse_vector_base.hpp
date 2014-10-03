@@ -192,10 +192,10 @@ template <
 	}
 
 	template <typename Pred>
-	bool for_each(size_type first, Pred &&pred);
+	bool for_each(size_type first, Pred &&pred) const;
 
 	template <typename Pred>
-	bool for_each(size_type first, Pred &&pred) const;
+	bool for_each(size_type first, Pred &&pred);
 
 	size_type find_vacant(size_type first) const;
 
@@ -381,6 +381,24 @@ private:
 			allocator_type const &a, node_base **parent
 		)
 		{
+			if (std::is_same<next_node_type, self_type>::value)
+				return *parent;
+
+			typedef allocator::array_helper<
+				next_node_type, allocator_type
+			> a_h;
+
+			auto deleter = [a](next_node_type *p) -> void {
+				p->destroy(a);
+			};
+			std::unique_ptr<
+				next_node_type, decltype(deleter)
+			> p(a_h::alloc_n(a, 1, a), deleter);
+
+			p->items.init_move(a, items);
+			*parent = p.release();
+			destroy(a);
+			return *parent;
 		}
 
 		detail::compressed_array<

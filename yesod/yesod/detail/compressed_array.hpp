@@ -48,6 +48,22 @@ template <
 		items.init(a);
 	}
 
+	template <typename Alloc, std::size_t OtherOrder>
+	void init_move(
+		Alloc const &a, compressed_array<
+			ValueType, ApparentOrder, OtherOrder,
+			ValueValidPred
+		> &other
+	)
+	{
+		init(a);
+		for(
+			size_type pos(other.find_occupied(0));
+			pos < other.size(); pos = other.find_occupied(++pos)
+		)
+			emplace_at(a, pos, std::move(*other.ptr_at(pos)));
+	}
+
 	template <typename Alloc>
 	void destroy(Alloc const &a)
 	{
@@ -206,6 +222,22 @@ template <
 	void init(Alloc const &a)
 	{
 		items.init(a);
+	}
+
+	template <typename Alloc, std::size_t OtherOrder>
+	void init_move(
+		Alloc const &a, compressed_array<
+			ValueType, ApparentOrder, OtherOrder,
+			ValueValidPred
+		> &other
+	)
+	{
+		init(a);
+		for(
+			size_type pos(other.find_occupied(0));
+			pos < other.size(); pos = other.find_occupied(++pos)
+		)
+			emplace_at(a, pos, std::move(*other.ptr_at(pos)));
 	}
 
 	template <typename Alloc>

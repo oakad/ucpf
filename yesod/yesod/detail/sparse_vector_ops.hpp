@@ -58,9 +58,9 @@ template <typename ValueType, typename Policy>
 template <typename Pred>
 bool sparse_vector<ValueType, Policy>::for_each(
 	size_type first, Pred &&pred
-)
+) const
 {
-		auto const height(std::get<0>(tup_height_alloc));
+	auto const height(std::get<0>(tup_height_alloc));
 
 	if (!height || (height_at_pos(first) > height))
 		return false;
@@ -72,7 +72,7 @@ bool sparse_vector<ValueType, Policy>::for_each(
 	first -= base_pos;
 
 	if (tree_loc[height - 1].ptr) {
-		auto p(static_cast<data_node_base **>(
+		auto p(static_cast<data_node_base const * const *>(
 			tree_loc[height - 1].ptr->ptr_at(
 				tree_loc[height - 1].pos
 			)
@@ -100,7 +100,7 @@ bool sparse_vector<ValueType, Policy>::for_each(
 
 		base_pos = tree_loc_pos(tree_loc);
 
-		auto p(*static_cast<data_node_base **>(
+		auto p(*static_cast<data_node_base const * const *>(
 			tree_loc[height - 1].ptr->ptr_at(
 				tree_loc[height - 1].pos
 			)
@@ -124,7 +124,7 @@ template <typename ValueType, typename Policy>
 template <typename Pred>
 bool sparse_vector<ValueType, Policy>::for_each(
 	size_type first, Pred &&pred
-) const
+)
 {
 	auto const height(std::get<0>(tup_height_alloc));
 
