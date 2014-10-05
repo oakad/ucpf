@@ -9,55 +9,86 @@
 #define BOOST_TEST_MODULE yesod
 #include <boost/test/included/unit_test.hpp>
 
+#include <unordered_map>
+#include <unordered_set>
+
 #include <yesod/sparse_vector.hpp>
 
 namespace ucpf { namespace yesod {
 namespace test {
 
+template <typename Set>
 struct s {
-	static int global_count;
-	int count0, count1;
-
 	s()
-	: count0(global_count), count1(global_count * 5)
+	: ss(nullptr), value(0)
+	{}
+
+	s(std::size_t value_, Set *ss_)
+	: ss(ss_), value(value_)
 	{
-		printf("s t %p %d %d\n", this, count0, count1);
-		++global_count;
+		ss->emplace(value);
 	}
 
-	s(s const &other)
-	: count0(other.count0), count1(other.count1)
+	s(s &&other)
+	: ss(other.ss), value(other.value)
 	{
-		printf("s c %p %d %d\n", this, count0, count1);
+		other.ss = nullptr;
 	}
 
 	~s()
 	{
-		printf("s d %p %d %d\n", this, count0, count1);
+		if (ss)
+			ss->erase(value);
 	}
+
+	Set *ss;
+	std::size_t value;
 };
 
-int s::global_count = 0;
-
-struct char_vector_policy : sparse_vector_default_policy<char> {
-	constexpr static size_t data_node_order = 8;
-};
+template <typename Set>
+std::ostream &operator<<(std::ostream &os, s<Set> const &v)
+{
+	os << v.value << " (" << v.ss << ')';
+	return os;
+}
 
 }
 
 BOOST_AUTO_TEST_CASE(sparse_vector_0)
 {
-	sparse_vector<test::s> v0;
-	sparse_vector<char, test::char_vector_policy> v1;
+	static std::random_device src;
+	std::mt19937 gen(src());
+	std::uniform_int_distribution<std::size_t> dis;
+	constexpr static std::size_t max_value = 1000;
+	constexpr static std::size_t count = 10;
 
-	v0.emplace_at(10, test::s());
-	v0.emplace_at(20, test::s());
-	v0.emplace_at(30, test::s());
-	BOOST_CHECK_EQUAL(v0[20].count0, 1);
-	v1.emplace_at(5, 'a');
-	v1.emplace_at(10, 'b');
-	v1.emplace_at(15, 'c');
-	BOOST_CHECK_EQUAL(v1[15], 'c');
+	std::unordered_set<std::size_t> s0;
+	std::unordered_set<std::size_t> s1;
+
+	{
+		std::unordered_map<std::size_t, test::s<decltype(s0)>> m0;
+		sparse_vector<test::s<decltype(s1)>> v0;
+
+		for (std::size_t c(0); c < count; ++c) {
+			auto pos(dis(gen) % max_value);
+			printf("c %zd pos %zd\n", c, pos);
+			if (m0.emplace(
+				std::piecewise_construct,
+				std::forward_as_tuple(pos),
+				std::forward_as_tuple(c, &s0)
+			).second)
+				v0.emplace_at(pos, c, &s1);
+		}
+
+		v0.dump(std::cout);
+		BOOST_CHECK(s0 == s1);
+
+		for (auto const &p: m0) {
+			printf("xx %zd - %zd\n", p.first, p.second.value);
+			BOOST_CHECK_EQUAL(p.second.value, v0[p.first].value);
+		}
+	}
+	BOOST_CHECK(s1.empty());
 }
 
 }}

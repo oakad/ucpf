@@ -4,6 +4,7 @@
 
 using ucpf::yesod::bitset;
 using ucpf::yesod::sparse_vector;
+using ucpf::yesod::sparse_vector_default_policy;
 using ucpf::yesod::detail::compressed_array;
 using ucpf::yesod::test::demangle;
 
@@ -39,33 +40,49 @@ struct pair_valid_pred
 		return p.check != 0;
 	}
 };
-
+/*
 struct trie_vector_policy {
 	typedef std::allocator<void> allocator_type;
 
-	constexpr static std::array<std::size_t, 2> ptr_node_order = {{4, 6}};
+	constexpr static std::array<std::size_t, 2> ptr_node_order = {{2, 3}};
 
 	constexpr static std::array<
 		std::size_t, 3
-	> data_node_order = {{6, 8, 12}};
+	> data_node_order = {{4, 5, 6}};
 
 	typedef pair_valid_pred value_valid_pred;
 };
+*/
+
+struct x_policy : sparse_vector_default_policy {
+	typedef pair_valid_pred value_valid_pred;
+};
+
+#define X_PLACE(t, v) t.emplace_at(v, pair_type::make(v, v))
 
 int main(int argc, char **argv)
 {
-	sparse_vector<pair_type, trie_vector_policy> trie;
+	sparse_vector<pair_type, x_policy> trie;
 
-	trie.emplace_at(10, pair_type::make(10, 10));
+	X_PLACE(trie, 800);
+	X_PLACE(trie, 296);
+	X_PLACE(trie, 543);
 	printf("-----------\n");
-	trie.emplace_at(20, pair_type::make(20, 20));
-	trie.emplace_at(30, pair_type::make(30, 30));
+	X_PLACE(trie, 133);
+	//X_PLACE(trie, 625);
+	//X_PLACE(trie, 334);
+	//X_PLACE(trie, 897);
+	printf("-----------\n");
+	X_PLACE(trie, 918);
+	//X_PLACE(trie, 533);
+	//X_PLACE(trie, 333);
+
 	printf("-----------\n");
 	trie.dump(std::cout);
 
-	auto r(*trie.ptr_at(10));
+	auto r(*trie.ptr_at(133));
 	printf("b %zd c %zd\n", r.base, r.check);
-	r = *trie.ptr_at(20);
+	r = *trie.ptr_at(918);
 	printf("b %zd c %zd\n", r.base, r.check);
 
 	return 0;

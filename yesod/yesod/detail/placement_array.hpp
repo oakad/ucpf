@@ -92,11 +92,7 @@ template <
 	{
 		typedef allocator::array_helper<value_type, Alloc> a_h;
 
-		if (items.test(pos))
-			(*this)[pos] = std::move(
-				value_type(std::forward<Args>(args)...)
-			);
-		else {
+		if (!items.test(pos)) {
 			a_h::make_n(
 				a, items.data + pos, 1,
 				std::forward<Args>(args)...

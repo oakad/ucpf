@@ -148,6 +148,16 @@ template <
 		);
 	}
 
+	reference operator[](size_type pos)
+	{
+		return *ptr_at(pos);
+	}
+
+	const_reference operator[](size_type pos) const
+	{
+		return *ptr_at(pos);
+	}
+
 	template <typename... Args>
 	pointer emplace_at(
 		size_type pos, Args&&... args
@@ -155,9 +165,8 @@ template <
 	{
 		auto d_pos(node_offset(pos, 1));
 		auto pp(alloc_data_node_at(pos));
-		printf("--1- %zd: %p - %p (%p)\n", d_pos, pp.first, pp.second, *pp.second);
 		auto qp(pp.first->reserve_at(d_pos));
-		printf("-a1- %p, %d\n", qp.first, qp.second);
+
 		if (!qp.first) {
 			pp.first = static_cast<data_node_base *>(
 				pp.first->grow_node(
@@ -168,12 +177,8 @@ template <
 			qp = pp.first->reserve_at(d_pos);
 		}
 
-		if (qp.second) {
-			*qp.first = std::move(
-				value_type(std::forward<Args>(args)...)
-			);
+		if (qp.second)
 			return qp.first;
-		}
 
 		auto release = [pp, d_pos](pointer v) -> void {
 			pp.first->release_at(d_pos);
@@ -186,7 +191,7 @@ template <
 			std::get<1>(tup_height_alloc), qp.first, 1,
 			std::forward<Args>(args)...
 		);
-		printf("-b1-\n");
+
 		q.release();
 		return qp.first;
 	}
@@ -381,6 +386,7 @@ private:
 			allocator_type const &a, node_base **parent
 		)
 		{
+			printf("grow1 %p, %p - %p\n", this, parent, *parent);
 			if (std::is_same<next_node_type, self_type>::value)
 				return *parent;
 
@@ -398,6 +404,7 @@ private:
 			p->items.init_move(a, items);
 			*parent = p.release();
 			destroy(a);
+			printf("grow2 %p - %p\n", parent, *parent);
 			return *parent;
 		}
 

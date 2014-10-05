@@ -27,12 +27,12 @@ template <
 	constexpr static word_type upper_index_mask
 	= index_mask << (word_bits - index_order);
 
-	static_assert(Order >= 1, "Order >= 1");
+	static_assert(Order >= 2, "Order >= 2");
 	static_assert(ApparentOrder > Order, "ApparentOrder > Order");
 	static_assert(word_bits >= Order, "word_bits >= Order");
 
 	typedef placement_array<
-		ValueType, 1 << index_order, ValueValidPred
+		ValueType, (1 << index_order) - 1, ValueValidPred
 	> array_type;
 
 	typedef typename array_type::size_type size_type;
@@ -57,11 +57,14 @@ template <
 	)
 	{
 		init(a);
+		printf("init move\n");
 		for(
 			size_type pos(other.find_occupied(0));
 			pos < other.size(); pos = other.find_occupied(++pos)
-		)
+		) {
+			printf("xx %zd - %p\n", pos, *other.ptr_at(pos));
 			emplace_at(a, pos, std::move(*other.ptr_at(pos)));
+		}
 	}
 
 	template <typename Alloc>
@@ -159,6 +162,7 @@ template <
 	{
 		for (; first < size(); ++first) {
 			auto id(get_index(first));
+			printf("fo %zd %zd\n", first, id);
 			if ((id != index_mask) && (items.ptr_at(id)))
 				return first;
 		}

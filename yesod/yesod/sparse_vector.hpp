@@ -13,7 +13,6 @@
 
 namespace ucpf { namespace yesod {
 
-template <typename ValueType>
 struct sparse_vector_default_policy {
 	typedef std::allocator<void> allocator_type;
 	constexpr static std::array<
@@ -25,7 +24,7 @@ struct sparse_vector_default_policy {
 
 template <
 	typename ValueType,
-	typename Policy = sparse_vector_default_policy<ValueType>
+	typename Policy = sparse_vector_default_policy
 > struct sparse_vector;
 
 }}

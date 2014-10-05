@@ -27,11 +27,13 @@ void sparse_vector<ValueType, Policy>::clear()
 
 	while (true) {
 		auto pp(tree_loc[h].ptr->find_occupied(tree_loc[h].pos));
+		tree_loc[h].pos = pp.second;
 
 		if (!pp.first) {
 			if (h) {
 				tree_loc[h].ptr->destroy(a);
 				--h;
+				++tree_loc[h].pos;
 				continue;
 			} else {
 				if (root.ptr_at(0))
@@ -350,8 +352,6 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 		return rv;
 	}
 
-	printf("--2- h %zd p_h %zd\n", h, p_h);
-
 	auto qq(root.reserve_at(0));
 	while (p_h > h) {
 		auto p(a_hp::alloc_n(a, 1, a));
@@ -361,14 +361,18 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 		++h;
 	}
 
+	if (h > p_h)
+		p_h = h;
+
 	auto p(qq.first);
 	auto q(*p);
 	if (p_h == 1)
 		return std::make_pair(static_cast<data_node_base *>(q), p);
 
 	while (true) {
-		d_pos = node_offset(pos, h);
+		d_pos = node_offset(pos, p_h);
 		qq = static_cast<ptr_node_base *>(q)->reserve_at(d_pos);
+		printf("xx (%zd) %p, %zd - %p, %d\n", p_h, q, d_pos, qq.first, qq.second);
 		if (qq.first) {
 			p = qq.first;
 			if (p_h == 2)
@@ -389,6 +393,7 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 	}
 
 	if (!qq.second) {
+		printf("yy %p, %p, %zd\n", p, q, d_pos);
 		u_node_ptr.reset(static_cast<ptr_node_base *>(q));
 		*p = a_hd::alloc_n(a, 1, a);
 		u_node_ptr.release();
