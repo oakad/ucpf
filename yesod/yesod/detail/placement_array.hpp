@@ -98,7 +98,10 @@ template <
 				std::forward<Args>(args)...
 			);
 			items.set(pos);
-		}
+		} else
+			(*this)[pos] = std::move(value_type(
+				std::forward<Args>(args)...
+			));
 
 		return &(*this)[pos];
 	}

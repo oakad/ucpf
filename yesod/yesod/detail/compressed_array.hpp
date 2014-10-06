@@ -57,14 +57,11 @@ template <
 	)
 	{
 		init(a);
-		printf("init move\n");
 		for(
 			size_type pos(other.find_occupied(0));
 			pos < other.size(); pos = other.find_occupied(++pos)
-		) {
-			printf("xx %zd - %p\n", pos, *other.ptr_at(pos));
+		)
 			emplace_at(a, pos, std::move(*other.ptr_at(pos)));
-		}
 	}
 
 	template <typename Alloc>
@@ -162,7 +159,6 @@ template <
 	{
 		for (; first < size(); ++first) {
 			auto id(get_index(first));
-			printf("fo %zd %zd\n", first, id);
 			if ((id != index_mask) && (items.ptr_at(id)))
 				return first;
 		}

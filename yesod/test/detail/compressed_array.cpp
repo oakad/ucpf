@@ -9,9 +9,22 @@
 #define BOOST_TEST_MODULE yesod
 #include <boost/test/included/unit_test.hpp>
 
+#include <unordered_set>
+
 #include <yesod/detail/compressed_array.hpp>
 
-namespace ucpf { namespace yesod { namespace detail { namespace test {
+namespace ucpf { namespace yesod { namespace detail {
+namespace test {
+
+struct not_zero {
+	template <typename T>
+	static bool test(T v)
+	{
+		return v != 0;
+	}
+};
+
+}
 
 BOOST_AUTO_TEST_CASE(compressed_array_0)
 {
@@ -25,7 +38,7 @@ BOOST_AUTO_TEST_CASE(compressed_array_0)
 		v = dis(gen);
 
 	{
-		constexpr static std::size_t sub_order(1);
+		constexpr static std::size_t sub_order(2);
 		constexpr static uintptr_t sub_order_mask(
 			(uintptr_t(1) << sub_order) - 1
 		);
@@ -90,4 +103,35 @@ BOOST_AUTO_TEST_CASE(compressed_array_0)
 	}
 }
 
-}}}}
+BOOST_AUTO_TEST_CASE(compressed_array_1)
+{
+	constexpr static std::size_t base_order(7);
+	static std::random_device src;
+	std::mt19937 gen(src());
+	std::uniform_int_distribution<std::size_t> dis;
+	std::unordered_set<std::size_t> ref0;
+	std::unordered_set<std::size_t> ref1;
+
+	constexpr static std::size_t sub_order(6);
+	constexpr static std::size_t set_count(40);
+	compressed_array<int, base_order, sub_order, test::not_zero> ca;
+	ca.init(std::allocator<void>());
+
+	for (std::size_t c(1); c < (set_count + 1); ++c) {
+		auto pos(dis(gen) & ((std::size_t(1) << base_order) - 1));
+		if (ref0.emplace(pos).second)
+			ca.emplace_at(std::allocator<void>(), pos, c);
+	}
+
+	for (
+		std::size_t c(ca.find_vacant(0)); c < ca.size();
+		c = ca.find_vacant(++c)
+	)
+		ref1.emplace(c);
+
+	BOOST_CHECK_EQUAL(ref0.size() + ref1.size(), ca.size());
+	for (std::size_t c(0); c < ca.size(); ++c)
+		BOOST_CHECK(ref0.count(c) != ref1.count(c));
+}
+
+}}}

@@ -35,10 +35,28 @@ struct s {
 		other.ss = nullptr;
 	}
 
+	s(s const &other)
+	: ss(nullptr), value(other.value)
+	{
+	}
+
 	~s()
 	{
 		if (ss)
 			ss->erase(value);
+	}
+
+	s &operator=(s &&other)
+	{
+		ss = other.ss;
+		value = other.value;
+		other.ss = nullptr;
+		return *this;
+	}
+
+	bool operator==(s const &other) const
+	{
+		return value == other.value;
 	}
 
 	Set *ss;
@@ -59,19 +77,20 @@ BOOST_AUTO_TEST_CASE(sparse_vector_0)
 	static std::random_device src;
 	std::mt19937 gen(src());
 	std::uniform_int_distribution<std::size_t> dis;
-	constexpr static std::size_t max_value = 1000;
-	constexpr static std::size_t count = 10;
+	constexpr static std::size_t max_value = 1000000;
+	constexpr static std::size_t count = 900000;
 
 	std::unordered_set<std::size_t> s0;
 	std::unordered_set<std::size_t> s1;
+	std::unordered_set<std::size_t> s2;
 
 	{
 		std::unordered_map<std::size_t, test::s<decltype(s0)>> m0;
+		std::unordered_map<std::size_t, test::s<decltype(s0)>> m1;
 		sparse_vector<test::s<decltype(s1)>> v0;
 
 		for (std::size_t c(0); c < count; ++c) {
 			auto pos(dis(gen) % max_value);
-			printf("c %zd pos %zd\n", c, pos);
 			if (m0.emplace(
 				std::piecewise_construct,
 				std::forward_as_tuple(pos),
@@ -79,14 +98,23 @@ BOOST_AUTO_TEST_CASE(sparse_vector_0)
 			).second)
 				v0.emplace_at(pos, c, &s1);
 		}
-
-		v0.dump(std::cout);
+		//v0.dump(std::cout);
 		BOOST_CHECK(s0 == s1);
 
-		for (auto const &p: m0) {
-			printf("xx %zd - %zd\n", p.first, p.second.value);
+		for (auto const &p: m0)
 			BOOST_CHECK_EQUAL(p.second.value, v0[p.first].value);
-		}
+
+		auto not_all(v0.for_each(
+			0, [&m1](
+				std::size_t pos,
+				typename decltype(v0)::reference v
+			) -> bool {
+				m1.insert(std::make_pair(pos, v));
+				return false;
+			}
+		));
+		BOOST_CHECK(!not_all);
+		BOOST_CHECK(m0 == m1);
 	}
 	BOOST_CHECK(s1.empty());
 }

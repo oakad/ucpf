@@ -64,25 +64,42 @@ int main(int argc, char **argv)
 {
 	sparse_vector<pair_type, x_policy> trie;
 
-	X_PLACE(trie, 800);
-	X_PLACE(trie, 296);
-	X_PLACE(trie, 543);
-	printf("-----------\n");
-	X_PLACE(trie, 133);
-	//X_PLACE(trie, 625);
-	//X_PLACE(trie, 334);
-	//X_PLACE(trie, 897);
-	printf("-----------\n");
-	X_PLACE(trie, 918);
-	//X_PLACE(trie, 533);
-	//X_PLACE(trie, 333);
+	X_PLACE(trie, 344);
+	X_PLACE(trie, 258);
+	X_PLACE(trie, 223);
+	X_PLACE(trie, 116);
+	X_PLACE(trie, 498);
+	X_PLACE(trie, 230);
+	X_PLACE(trie, 153);
+	X_PLACE(trie, 448);
+	X_PLACE(trie, 52);
+	X_PLACE(trie, 44);
+	X_PLACE(trie, 320);
+	X_PLACE(trie, 138);
+	X_PLACE(trie, 213);
+	X_PLACE(trie, 477);
+	X_PLACE(trie, 76);
+	X_PLACE(trie, 446);
+	X_PLACE(trie, 129);
+	X_PLACE(trie, 425);
+	X_PLACE(trie, 15);
+	X_PLACE(trie, 242);
+	X_PLACE(trie, 253);
+	X_PLACE(trie, 248);
+	X_PLACE(trie, 470);
+	X_PLACE(trie, 433);
+	X_PLACE(trie, 358);
+	X_PLACE(trie, 86);
+	X_PLACE(trie, 301);
+	X_PLACE(trie, 27);
+	X_PLACE(trie, 387);
 
-	printf("-----------\n");
+	printf("-4---------\n");
 	trie.dump(std::cout);
 
-	auto r(*trie.ptr_at(133));
+	auto r(*trie.ptr_at(344));
 	printf("b %zd c %zd\n", r.base, r.check);
-	r = *trie.ptr_at(918);
+	r = *trie.ptr_at(258);
 	printf("b %zd c %zd\n", r.base, r.check);
 
 	return 0;

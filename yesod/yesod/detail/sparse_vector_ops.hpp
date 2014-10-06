@@ -133,31 +133,28 @@ bool sparse_vector<ValueType, Policy>::for_each(
 	if (!height || (height_at_pos(first) > height))
 		return false;
 
-	c_loc_pair tree_loc[height];
+	loc_pair tree_loc[height];
 	tree_loc_at(tree_loc, first);
 
 	auto base_pos(first - node_offset(first, 1));
 	first -= base_pos;
 
 	if (tree_loc[height - 1].ptr) {
-		auto p(static_cast<data_node_base **>(
-			tree_loc[height - 1].ptr->ptr_at(
-				tree_loc[height - 1].pos
-			)
+		auto p(tree_loc[height - 1].ptr->ptr_at(
+			tree_loc[height - 1].pos
 		));
 
 		if (p) {
-			auto q(*p);
+			auto q(static_cast<data_node_base *>(*p));
 			while (true) {
-				first = q->find_occupied(first);
-				if (first == node_size(1))
+				auto qq(q->find_occupied(first));
+				if (!qq.first)
 					break;
 
-				if (pred(
-					base_pos + first,
-					*(q->ptr_at(first))
-				))
+				if (pred(base_pos + qq.second, *qq.first))
 					return true;
+
+				first = qq.second + 1;
 			}
 		}
 	}
@@ -168,19 +165,21 @@ bool sparse_vector<ValueType, Policy>::for_each(
 
 		base_pos = tree_loc_pos(tree_loc);
 
-		auto p(*static_cast<data_node_base **>(
-			tree_loc[height - 1].ptr->ptr_at(
+		auto p(static_cast<data_node_base *>(
+			*tree_loc[height - 1].ptr->ptr_at(
 				tree_loc[height - 1].pos
 			)
 		));
 
 		while (true) {
-			first = p->find_occupied(first);
-			if (first == node_size(1))
+			auto pp(p->find_occupied(first));
+			if (!pp.first)
 				break;
 
-			if (pred(base_pos + first, *(p->ptr_at(first))))
+			if (pred(base_pos + pp.second, *pp.first))
 				return true;
+
+			first = pp.second + 1;
 		}
 
 		first = 0;
@@ -243,9 +242,8 @@ std::ostream &sparse_vector<ValueType, Policy>::dump(std::ostream &os) const
 
 	os << '<' << this << ">\n";
 	auto const height(std::get<0>(tup_height_alloc));
-	if (!height) {
+	if (!height)
 		return os;
-	}
 
 	c_loc_pair tree_loc[height];
 	tree_loc[0] = c_loc_pair{&root, 0};
@@ -271,6 +269,7 @@ std::ostream &sparse_vector<ValueType, Policy>::dump(std::ostream &os) const
 			decorator.last_child();
 
 		os << '[' << pp.second << "] <" << *pp.first << ">\n";
+
 		if ((h + 1) == height) {
 			auto q(static_cast<data_node_base *>(*pp.first));
 			auto qp(q->find_occupied(0));
@@ -344,7 +343,7 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 		while (p_h > h) {
 			p = a_hp::alloc_n(a, 1, a);
 			pp = p->reserve_at(node_offset(pos, h + 1));
-			*pp.first = rv.first;
+			*pp.first = *rr.first;
 			*rr.first = p;
 			++h;
 		}
@@ -372,7 +371,6 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 	while (true) {
 		d_pos = node_offset(pos, p_h);
 		qq = static_cast<ptr_node_base *>(q)->reserve_at(d_pos);
-		printf("xx (%zd) %p, %zd - %p, %d\n", p_h, q, d_pos, qq.first, qq.second);
 		if (qq.first) {
 			p = qq.first;
 			if (p_h == 2)
@@ -393,7 +391,6 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 	}
 
 	if (!qq.second) {
-		printf("yy %p, %p, %zd\n", p, q, d_pos);
 		u_node_ptr.reset(static_cast<ptr_node_base *>(q));
 		*p = a_hd::alloc_n(a, 1, a);
 		u_node_ptr.release();
