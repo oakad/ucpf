@@ -102,5 +102,14 @@ int main(int argc, char **argv)
 	r = *trie.ptr_at(258);
 	printf("b %zd c %zd\n", r.base, r.check);
 
+	auto const &x_trie(trie);
+	x_trie.for_each(
+		77, [](
+			typename decltype(trie)::size_type pos, pair_type const &r
+		) -> bool {
+			printf("ff %zd - b %zd c %zd\n", pos, r.base, r.check);
+			return false;
+		}
+	);
 	return 0;
 }

@@ -63,62 +63,56 @@ bool sparse_vector<ValueType, Policy>::for_each(
 ) const
 {
 	auto const height(std::get<0>(tup_height_alloc));
-
-	if (!height || (height_at_pos(first) > height))
+	if (!height)
 		return false;
 
 	c_loc_pair tree_loc[height];
-	tree_loc_at(tree_loc, first);
+	tree_loc[0] = c_loc_pair{&root, 0};
+	for (size_type h(1); h < height; ++h)
+		tree_loc[h].pos = node_offset(first, height - h + 1);
 
-	auto base_pos(first - node_offset(first, 1));
-	first -= base_pos;
-
-	if (tree_loc[height - 1].ptr) {
-		auto p(static_cast<data_node_base const * const *>(
-			tree_loc[height - 1].ptr->ptr_at(
-				tree_loc[height - 1].pos
-			)
-		));
-
-		if (p) {
-			auto q(*p);
-			while (true) {
-				first = q->find_occupied(first);
-				if (first == node_size(1))
-					break;
-
-				if (pred(
-					base_pos + first,
-					*(q->ptr_at(first))
-				))
-					return true;
-			}
-		}
-	}
+	size_type h(0);
+	size_type d_pos(node_offset(first, 1));
+	size_type n_pos(0);
 
 	while (true) {
-		if (!tree_loc_next_valid(tree_loc))
-			return false;
+		auto pp(tree_loc[h].ptr->find_occupied(tree_loc[h].pos));
 
-		base_pos = tree_loc_pos(tree_loc);
+		if (!pp.first) {
+			if (!h)
+				return false;
 
-		auto p(*static_cast<data_node_base const * const *>(
-			tree_loc[height - 1].ptr->ptr_at(
-				tree_loc[height - 1].pos
-			)
-		));
+			tree_loc[h].pos = 0;
+			n_pos >>= node_size_shift(height - h + 1);
+			++tree_loc[--h].pos;
+			continue;
+		} else
+			n_pos += pp.second - tree_loc[h].pos;
 
-		while (true) {
-			first = p->find_occupied(first);
-			if (first == node_size(1))
-				break;
+		tree_loc[h].pos = pp.second;
 
-			if (pred(base_pos + first, *(p->ptr_at(first))))
-				return true;
+		if ((h + 1) == height) {
+			auto q(static_cast<data_node_base const *>(*pp.first));
+			auto base_pos(n_pos << node_size_shift(1));
+			for (
+				auto qq(q->find_occupied(d_pos));
+				qq.first;
+				qq = q->find_occupied(qq.second + 1)
+			) {
+				if (pred(base_pos + qq.second, *qq.first))
+					return true;
+			}
+
+			d_pos = 0;
+			++tree_loc[h].pos;
+			++n_pos;
+		} else {
+			tree_loc[++h].ptr = static_cast<
+				ptr_node_base const *
+			>(*pp.first);
+			n_pos <<= node_size_shift(height - h + 1);
+			n_pos += tree_loc[h].pos;
 		}
-
-		first = 0;
-		tree_loc_next(tree_loc);
 	}
 }
 
@@ -129,61 +123,56 @@ bool sparse_vector<ValueType, Policy>::for_each(
 )
 {
 	auto const height(std::get<0>(tup_height_alloc));
-
-	if (!height || (height_at_pos(first) > height))
+	if (!height)
 		return false;
 
 	loc_pair tree_loc[height];
-	tree_loc_at(tree_loc, first);
+	tree_loc[0] = loc_pair{&root, 0};
+	for (size_type h(1); h < height; ++h)
+		tree_loc[h].pos = node_offset(first, height - h + 1);
 
-	auto base_pos(first - node_offset(first, 1));
-	first -= base_pos;
-
-	if (tree_loc[height - 1].ptr) {
-		auto p(tree_loc[height - 1].ptr->ptr_at(
-			tree_loc[height - 1].pos
-		));
-
-		if (p) {
-			auto q(static_cast<data_node_base *>(*p));
-			while (true) {
-				auto qq(q->find_occupied(first));
-				if (!qq.first)
-					break;
-
-				if (pred(base_pos + qq.second, *qq.first))
-					return true;
-
-				first = qq.second + 1;
-			}
-		}
-	}
+	size_type h(0);
+	size_type d_pos(node_offset(first, 1));
+	size_type n_pos(0);
 
 	while (true) {
-		if (!tree_loc_next_valid(tree_loc))
-			return false;
+		auto pp(tree_loc[h].ptr->find_occupied(tree_loc[h].pos));
 
-		base_pos = tree_loc_pos(tree_loc);
+		if (!pp.first) {
+			if (!h)
+				return false;
 
-		auto p(static_cast<data_node_base *>(
-			*tree_loc[height - 1].ptr->ptr_at(
-				tree_loc[height - 1].pos
-			)
-		));
+			tree_loc[h].pos = 0;
+			n_pos >>= node_size_shift(height - h + 1);
+			++tree_loc[--h].pos;
+			continue;
+		} else
+			n_pos += pp.second - tree_loc[h].pos;
 
-		while (true) {
-			auto pp(p->find_occupied(first));
-			if (!pp.first)
-				break;
+		tree_loc[h].pos = pp.second;
 
-			if (pred(base_pos + pp.second, *pp.first))
-				return true;
+		if ((h + 1) == height) {
+			auto q(static_cast<data_node_base *>(*pp.first));
+			auto base_pos(n_pos << node_size_shift(1));
+			for (
+				auto qq(q->find_occupied(d_pos));
+				qq.first;
+				qq = q->find_occupied(qq.second + 1)
+			) {
+				if (pred(base_pos + qq.second, *qq.first))
+					return true;
+			}
 
-			first = pp.second + 1;
+			d_pos = 0;
+			++tree_loc[h].pos;
+			++n_pos;
+		} else {
+			tree_loc[++h].ptr = static_cast<
+				ptr_node_base *
+			>(*pp.first);
+			n_pos <<= node_size_shift(height - h + 1);
+			n_pos += tree_loc[h].pos;
 		}
-
-		first = 0;
-		tree_loc_next(tree_loc);
 	}
 }
 
@@ -193,30 +182,26 @@ auto sparse_vector<ValueType, Policy>::find_vacant(
 ) const -> size_type
 {
 	auto const height(std::get<0>(tup_height_alloc));
-
-	if (!height || (height_at_pos(first) > height))
+	if (!height)
 		return first;
 
 	c_loc_pair tree_loc[height];
-	tree_loc_at(tree_loc, first);
+	tree_loc[0] = c_loc_pair{&root, 0};
+	for (size_type h(1); h < height; ++h) {
+		tree_loc[h] = c_loc_pair{
+			tree_loc[h - 1].ptr->ptr_at(tree_loc[h - 1].pos),
+			node_offset(first, height - h + 1)
+		};
+		if (!tree_loc[h].ptr)
+			return first;
+	}
+
+	size_type h(height - 1);
+	size_type d_pos(node_offset(first, 1));
+	size_type n_pos(first >> node_size_shift(1));
 
 	while (true) {
-		auto p(tree_loc[height - 1].ptr);
-		if (!p)
-			return first;
-
-		auto q(static_cast<data_node_base **>(p->ptr_at(
-			node_offset(first, 2)
-		)));
-		if (!q)
-			return first;
-
-		auto pos(*q->find_vacant(node_offset(first, 1)));
-		if (pos < node_size(1))
-			return first;
-
-		first += pos - node_offset(first, 1);
-		tree_loc_next(tree_loc);
+		
 	}
 }
 
@@ -398,368 +383,5 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 	return std::make_pair(static_cast<data_node_base *>(*p), p);
 }
 
-template <typename ValueType, typename Policy>
-void sparse_vector<ValueType, Policy>::tree_loc_at(
-	c_loc_pair *tree_loc, size_type pos
-) const
-{
-	auto const height(std::get<0>(tup_height_alloc));
-	tree_loc[0] = c_loc_pair{&root, 0};
-	size_type h(1);
-
-	while (h < height) {
-		auto p(static_cast<ptr_node_base *>(
-			tree_loc[h - 1].ptr
-			? tree_loc[h - 1].ptr->ptr_at(tree_loc[h - 1].pos)
-			: nullptr
-		));
-		if (!p) {
-			while (h < height) {
-				tree_loc[h] = c_loc_pair{
-					nullptr, node_offset(pos, h)
-				};
-				++h;
-			}
-			return;
-		}
-
-		tree_loc[h] = c_loc_pair{*p, node_offset(pos, h)};
-		++h;
-	}
-}
-
-template <typename ValueType, typename Policy>
-auto sparse_vector<ValueType, Policy>::tree_loc_pos(
-	c_loc_pair *tree_loc
-) const -> size_type
-{
-	auto const height(std::get<0>(tup_height_alloc));
-	size_type rv(0);
-	for (size_type h(1); h < height; ++h) {
-		auto const f(pos_field_map::value[height - h + 1]);
-		auto pos(tree_loc[h].pos & ((size_type(1) << f.first) - 1));
-		rv |= pos << f.second;
-	}
-	return rv;
-}
-
-template <typename ValueType, typename Policy>
-void sparse_vector<ValueType, Policy>::tree_loc_next(
-	c_loc_pair *tree_loc
-) const
-{
-	auto const height(std::get<0>(tup_height_alloc));
-	auto h(height - 1);
-	size_type rv(0);
-
-	while (h > 0) {
-		++tree_loc[h].pos;
-		if (tree_loc[h].pos >= node_size(height - h + 1)) {
-			tree_loc[h--] = c_loc_pair{nullptr, 0};
-			continue;
-		}
-
-		while (h < (height - 1)) {
-			if (!tree_loc[h].ptr)
-				return;
-
-			auto p(tree_loc[h].ptr->ptr_at(tree_loc[h].pos));
-			if (!p)
-				return;
-
-			tree_loc[++h].ptr = p;
-		}
-	}
-
-	tree_loc[0].ptr = nullptr;
-}
-
-#if 0
-
-template <typename ValueType, typename Policy>
-template <typename Pred>
-bool sparse_vector<ValueType, Policy>::for_each_above(
-	size_type pos, Pred &&pred
-)
-{
-	loc_pair tree_loc[height];
-	if (!height || tree_loc_from_pos(tree_loc, pos))
-		return true;
-
-	while (true) {
-		if (tree_loc[height - 1].ptr) {
-			auto node(reinterpret_cast<data_node *>(
-				tree_loc[height - 1].ptr
-			));
-			if (!node->for_each_above(
-				tree_loc[height - 1].off,
-				std::forward<Pred>(pred),
-				pos - tree_loc[height - 1].off
-			))
-				return false;
-		}
-		if (tree_loc_next_leaf(tree_loc))
-			return true;
-		else
-			pos = tree_loc_to_pos(tree_loc);
-	}
-}
-
-template <typename ValueType, typename Policy>
-template <typename Pred>
-bool sparse_vector<ValueType, Policy>::for_each_above(
-	size_type pos, Pred &&pred
-) const
-{
-	loc_pair tree_loc[height];
-	if (!height || tree_loc_from_pos(tree_loc, pos))
-		return true;
-
-	while (true) {
-		if (tree_loc[height - 1].ptr) {
-			auto node(reinterpret_cast<data_node const *>(
-				tree_loc[height - 1].ptr
-			));
-			if (!node->for_each_above(
-				tree_loc[height - 1].off,
-				std::forward<Pred>(pred),
-				pos - tree_loc[height - 1].off
-			))
-				return false;
-		}
-		if (tree_loc_next_leaf(tree_loc))
-			return true;
-		else
-			pos = tree_loc_to_pos(tree_loc);
-	}
-}
-
-template <typename ValueType, typename Policy>
-auto sparse_vector<ValueType, Policy>::find_empty_above(
-	size_type pos
-) const -> size_type
-{
-	constexpr size_type data_node_mask(
-		(size_type(1) << Policy::data_node_order) - 1
-	);
-
-	if (!height)
-		return 0;
-
-	loc_pair tree_loc[height];
-
-	printf("--1- pos %zd h %zd\n", pos, height);
-
-	if (!tree_loc_from_pos(tree_loc, pos)) {
-		for (size_type h(0); h < height; ++h)
-			printf("--1-- h %zd ptr %p off %zd\n", h, tree_loc[h].ptr, tree_loc[h].off);
-
-		do {
-			if (!tree_loc[height - 1].ptr)
-				return tree_loc_to_pos(tree_loc);
-
-			auto node(reinterpret_cast<data_node *>(
-				tree_loc[height - 1].ptr
-			));
-			printf("-x1- pos %zd node %p n_off %zd\n", pos, node, pos & data_node_mask);
-			tree_loc[height - 1].off = node->find_empty_above(
-				pos & data_node_mask
-			);
-			if (tree_loc[height - 1].off < node->size())
-				return tree_loc_to_pos(tree_loc);
-
-			--tree_loc[height - 1].off;
-		} while (!tree_loc_next(tree_loc));
-	}
-	pos = data_node_mask + 1;
-	pos <<= height * Policy::ptr_node_order;
-	return pos;
-}
-
-
-template <typename ValueType, typename Policy>
-bool sparse_vector<ValueType, Policy>::tree_loc_from_pos(
-	loc_pair *tree_loc, size_type pos
-) const
-{
-	constexpr size_type data_node_mask(data_node_size - 1);
-	constexpr size_type ptr_node_mask(ptr_node_size - 1);
-
-	if (height < 2) {
-		if (pos > data_node_mask) {
-			tree_loc[0] = loc_pair{nullptr, 0};
-			return true;
-		} else {
-			tree_loc[0] = loc_pair{std::get<0>(root_node), pos};
-			return false;
-		}
-	}
-
-	size_type shift(Policy::data_node_order);
-	shift += (height - 2) * Policy::ptr_node_order;
-
-	if ((pos >> shift) > ptr_node_mask) {
-		for (size_type h_pos(0); h_pos < height; ++h_pos)
-			tree_loc[h_pos] = loc_pair{nullptr, 0};
-
-		return true;
-	}
-
-	auto p_node(std::get<0>(root_node));
-	for (size_type h_pos(0); h_pos < (height - 1); ++h_pos) {
-		tree_loc[h_pos] = loc_pair{
-			p_node, (pos >> shift) & ptr_node_mask
-		};
-
-		if (p_node)
-			p_node = (*reinterpret_cast<ptr_node *>(p_node))[
-				(pos >> shift) & ptr_node_mask
-			];
-
-		shift -= Policy::ptr_node_order;
-	}
-
-	tree_loc[height - 1] = loc_pair{p_node, pos & data_node_mask};
-
-	return false;
-}
-
-template <typename ValueType, typename Policy>
-bool sparse_vector<ValueType, Policy>::tree_loc_next(loc_pair *tree_loc) const
-{
-	auto pos(height - 1);
-	++tree_loc[pos].off;
-	if (tree_loc[pos].off < data_node_size)
-		return false;
-
-	tree_loc[pos].off = 0;
-
-	if (height < 2)
-		return true;
-
-	for (auto pos(height - 2); pos >= 0; --pos) {
-		++tree_loc[pos].off;
-		if (tree_loc[pos].off < ptr_node_size) {
-			for (auto rpos(pos + 1); rpos < (height - 1); ++rpos) {
-				auto q(reinterpret_cast<ptr_node *>(
-					tree_loc[rpos - 1].ptr
-				));
-				tree_loc[rpos] = loc_pair{
-					q ? &q[tree_loc[rpos - 1].off]
-					  : nullptr, 0
-				};
-			}
-			return false;
-		} else
-			tree_loc[pos] = loc_pair{nullptr, 0};
-	}
-	return true;
-}
-
-template <typename ValueType, typename Policy>
-bool sparse_vector<ValueType, Policy>::tree_loc_next_leaf(
-	loc_pair *tree_loc
-) const
-{
-	tree_loc[height - 1] = loc_pair{nullptr, 0};
-
-	if (height < 2)
-		return true;
-
-	auto h_pos(height - 2);
-
-	while (true) {
-		if (!tree_loc[h_pos].ptr) {
-			tree_loc[h_pos].off = 0;
-			if (h_pos) {
-				--h_pos;
-				continue;
-			} else
-				return true;
-		}
-
-		auto node(reinterpret_cast<ptr_node *>(tree_loc[h_pos].ptr));
-		++tree_loc[h_pos].off;
-		auto n_pos(node->size());
-		if (node->for_each_above(
-			tree_loc[h_pos].off,
-			[&n_pos](size_type pos, node_pointer p) {
-				if (p) {
-					n_pos = pos;
-					return false;
-				} else
-					return true;
-			}
-		)) {
-			if (h_pos) {
-				--h_pos;
-				continue;
-			} else
-				return true;
-		}
-
-		++h_pos;
-		tree_loc[h_pos] = loc_pair{&node[n_pos], 0};
-		if ((h_pos + 1) == height)
-			return false;
-	}
-}
-
-template <typename ValueType, typename Policy>
-auto sparse_vector<ValueType, Policy>::tree_loc_to_pos(
-	loc_pair *tree_loc
-) const -> size_type
-{
-	size_type pos(tree_loc[height - 1].off);
-	size_type shift(Policy::data_node_order);
-
-	if (height < 2)
-		return pos;
-
-	for (auto h_pos(height - 2); h_pos >= 0; --h_pos) {
-		pos |= tree_loc[h_pos].off << shift;
-		shift += Policy::ptr_node_order;
-	}
-
-	return pos;
-}
-
-template <typename ValueType, typename Policy>
-auto sparse_vector<
-	ValueType, Policy
->::data_node_at(size_type pos) -> data_node *
-{
-	auto h(height);
-	auto p(std::get<0>(root_node));
-
-	while (h > 1) {
-		auto &q(*reinterpret_cast<ptr_node *>(p));
-		p = q[node_offset(pos, h)];
-		if (!p)
-			return nullptr;
-		--h;
-	}
-	return reinterpret_cast<data_node *>(p);
-}
-
-template <typename ValueType, typename Policy>
-auto sparse_vector<
-	ValueType, Policy
->::data_node_at(size_type pos) const -> data_node const *
-{
-	auto h(height);
-	auto p(std::get<0>(root_node));
-
-	while (h > 1) {
-		auto &q(*reinterpret_cast<ptr_node const *>(p));
-		p = q[node_offset(pos, h)];
-		if (!p)
-			return nullptr;
-		--h;
-	}
-	return reinterpret_cast<data_node const *>(p);
-}
-
-#endif
 }}
 #endif
