@@ -119,4 +119,37 @@ BOOST_AUTO_TEST_CASE(sparse_vector_0)
 	BOOST_CHECK(s1.empty());
 }
 
+BOOST_AUTO_TEST_CASE(sparse_vector_1)
+{
+	static std::random_device src;
+	std::mt19937 gen(src());
+	std::uniform_int_distribution<std::size_t> dis;
+	constexpr static std::size_t max_value = 1000000;
+	constexpr static std::size_t count = 999000;
+	constexpr static std::size_t test_count = 1000;
+
+	std::unordered_set<std::size_t> s0;
+	sparse_vector<test::s<decltype(s0)>> v0;
+
+	for (std::size_t c(0); c < count; ++c) {
+		auto pos(dis(gen) % max_value);
+		v0.emplace_at(pos, c, &s0);
+	}
+
+	for (std::size_t c(0); c < test_count; ++c) {
+		auto pos(dis(gen) % max_value);
+		auto v_pos(v0.find_vacant(pos));
+
+		BOOST_CHECK_GE(v_pos, pos);
+		BOOST_CHECK_EQUAL(
+			v0.ptr_at(v_pos),
+			typename decltype(v0)::pointer(nullptr)
+		);
+		for (; pos < v_pos; ++pos)
+			BOOST_CHECK_NE(v0.ptr_at(pos),
+			typename decltype(v0)::pointer(nullptr)
+		);
+	}
+}
+
 }}

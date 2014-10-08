@@ -188,21 +188,74 @@ auto sparse_vector<ValueType, Policy>::find_vacant(
 	c_loc_pair tree_loc[height];
 	tree_loc[0] = c_loc_pair{&root, 0};
 	for (size_type h(1); h < height; ++h) {
+		auto p(tree_loc[h - 1].ptr->ptr_at(tree_loc[h - 1].pos));
+		if (!p)
+			return first;
+
 		tree_loc[h] = c_loc_pair{
-			tree_loc[h - 1].ptr->ptr_at(tree_loc[h - 1].pos),
+			static_cast<ptr_node_base const *>(*p),
 			node_offset(first, height - h + 1)
 		};
-		if (!tree_loc[h].ptr)
-			return first;
 	}
 
 	size_type h(height - 1);
-	size_type d_pos(node_offset(first, 1));
 	size_type n_pos(first >> node_size_shift(1));
+	size_type d_pos;
+
+	{
+		auto p(tree_loc[h].ptr->ptr_at(tree_loc[h].pos));
+		if (!p)
+			return first;
+
+		auto q(static_cast<data_node_base const *>(*p));
+		d_pos = q->find_vacant(node_offset(first, 1));
+		if (d_pos < node_size(1))
+			return (n_pos << node_size_shift(1)) + d_pos;
+	}
+
+	++tree_loc[h].pos;
 
 	while (true) {
-		
+		if (tree_loc[h].pos == node_size(height - h + 1)) {
+			n_pos >>= node_size_shift(height - h + 1);
+			++n_pos;
+			if (h) {
+				++tree_loc[--h].pos;
+				continue;
+			} else
+				break;
+		}
+
+		while ((h + 1) < height) {
+			auto p(tree_loc[h].ptr->ptr_at(tree_loc[h].pos));
+			if (!p)
+				goto out;
+
+			tree_loc[++h] = c_loc_pair{
+				static_cast<ptr_node_base const *>(*p), 0
+			};
+		}
+
+		auto p(tree_loc[h].ptr->ptr_at(tree_loc[h].pos));
+		d_pos = 0;
+		if (!p || (
+			node_size(1) > (
+				d_pos = static_cast<
+					data_node_base const *
+				>(*p)->find_vacant(0)
+			)
+		))
+			return (n_pos << node_size_shift(1)) + d_pos;
+		else {
+			++tree_loc[h].pos;
+			++n_pos;
+		}
 	}
+out:
+	for (; h < height; ++h)
+		n_pos <<= node_size_shift(height - h + 1);
+
+	return n_pos << node_size_shift(1);
 }
 
 template <typename ValueType, typename Policy>

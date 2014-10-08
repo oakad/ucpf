@@ -10,7 +10,7 @@
 #define UCPF_YESOD_DYNAMIC_BITSET_20140417T2300
 
 #include <limits>
-#include <iostream>
+#include <ostream>
 #include <algorithm>
 #include <yesod/allocator/array_helper.hpp>
 #include <yesod/allocator/policy/power2.hpp>

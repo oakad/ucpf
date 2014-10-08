@@ -111,5 +111,11 @@ int main(int argc, char **argv)
 			return false;
 		}
 	);
+
+	printf("vv %d, %zd\n", 470, trie.find_vacant(470));
+	printf("vv %d, %zd\n", 475, trie.find_vacant(475));
+	printf("vv %d, %zd\n", 477, trie.find_vacant(477));
+	printf("vv %d, %zd\n", 500, trie.find_vacant(500));
+	
 	return 0;
 }

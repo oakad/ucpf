@@ -234,6 +234,7 @@ private:
 		};
 
 		virtual node_value_type *ptr_at(size_type pos) = 0;
+		virtual node_value_type const *ptr_at(size_type pos) const = 0;
 		virtual std::pair<
 			node_value_type *, size_type
 		> find_occupied(size_type first) = 0;
@@ -262,6 +263,7 @@ private:
 		>::type value_valid_pred;
 
 		virtual node_value_type *ptr_at(size_type pos) = 0;
+		virtual node_value_type const *ptr_at(size_type pos) const = 0;
 		virtual std::pair<
 			node_value_type *, size_type
 		> find_occupied(size_type first) = 0;
@@ -329,6 +331,13 @@ private:
 		virtual typename base_type::node_value_type *ptr_at(
 			size_type pos
 		)
+		{
+			return items.ptr_at(pos);
+		}
+
+		virtual typename base_type::node_value_type const *ptr_at(
+			size_type pos
+		) const
 		{
 			return items.ptr_at(pos);
 		}
