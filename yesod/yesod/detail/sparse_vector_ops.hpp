@@ -214,11 +214,11 @@ auto sparse_vector<ValueType, Policy>::find_vacant(
 	}
 
 	++tree_loc[h].pos;
+	++n_pos;
 
 	while (true) {
 		if (tree_loc[h].pos == node_size(height - h + 1)) {
 			n_pos >>= node_size_shift(height - h + 1);
-			++n_pos;
 			if (h) {
 				++tree_loc[--h].pos;
 				continue;
@@ -234,6 +234,7 @@ auto sparse_vector<ValueType, Policy>::find_vacant(
 			tree_loc[++h] = c_loc_pair{
 				static_cast<ptr_node_base const *>(*p), 0
 			};
+			n_pos <<= node_size_shift(height - h + 1);
 		}
 
 		auto p(tree_loc[h].ptr->ptr_at(tree_loc[h].pos));
