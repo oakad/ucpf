@@ -148,6 +148,31 @@ template <
 		);
 	}
 
+	bool erase(size_type pos)
+	{
+		auto h(std::get<0>(tup_height_alloc));
+		ptr_node_base *p(&root);
+		size_type d_pos(0);
+
+		while (h > 1) {
+			auto q(p->ptr_at(d_pos));
+			if (!q)
+				return false;
+
+			p = static_cast<ptr_node_base *>(*q);
+			d_pos = node_offset(pos, h);
+			--h;
+		}
+
+		auto q(p->ptr_at(d_pos));
+		if (!q)
+			return false;
+
+		return static_cast<data_node_base *>(*q)->erase(
+			std::get<1>(tup_height_alloc), node_offset(pos, 1)
+		);
+	}
+
 	reference operator[](size_type pos)
 	{
 		return *ptr_at(pos);
@@ -211,6 +236,10 @@ template <
 
 	std::ostream &dump(std::ostream &os) const;
 
+	void shrink_to_fit();
+
+	std::pair<size_type, size_type> utilization() const;
+
 private:
 	struct node_base {
 		virtual ~node_base()
@@ -219,9 +248,14 @@ private:
 		virtual void destroy(allocator_type const &a) = 0;
 		virtual void release_at(size_type pos) = 0;
 		virtual size_type find_vacant(size_type first) const = 0;
+		virtual bool erase(allocator_type const &a, size_type pos) = 0;
 		virtual node_base *grow_node(
 			allocator_type const &a, node_base **parent
 		) = 0;
+		virtual node_base *shrink_node(
+			allocator_type const &a, node_base **parent
+		) = 0;
+		virtual std::pair<size_type, size_type> utilization() const = 0;
 	};
 
 	struct ptr_node_base : node_base {
@@ -378,6 +412,11 @@ private:
 			return items.find_vacant(first);
 		}
 
+		virtual bool erase(allocator_type const &a, size_type pos)
+		{
+			return items.erase_at(a, pos);
+		}
+
 		virtual std::pair<
 			typename base_type::node_value_type *, bool
 		> reserve_at(size_type pos)
@@ -415,10 +454,83 @@ private:
 			return *parent;
 		}
 
+		virtual node_base *shrink_node(
+			allocator_type const &a, node_base **parent
+		)
+		{
+			auto sz(items.count());
+
+			if (!sz) {
+				*parent = nullptr;
+				destroy(a);
+				return nullptr;
+			}
+
+			if (std::is_same<prev_node_type, self_type>::value)
+				return *parent;
+
+			if (sz > prev_node_type::storage_size())
+				return *parent;
+
+			return shrink_node_impl<self_type, prev_node_type>(
+				a, parent, this, sz
+			);
+		}
+
+		template <typename CurNodeType, typename OtherNodeType>
+		static node_base *shrink_node_impl(
+			allocator_type const &a, node_base **parent,
+			CurNodeType *self, size_type sz
+		)
+		{
+			typedef typename OtherNodeType::prev_node_type
+			pp_node_type;
+
+			if (
+				!std::is_same<
+					OtherNodeType, pp_node_type
+				>::value
+				&& (sz <= pp_node_type::storage_size())
+			)
+				return shrink_node_impl<
+					CurNodeType, pp_node_type
+				>(a, parent, self, sz);
+
+			typedef allocator::array_helper<
+				OtherNodeType, allocator_type
+			> a_h;
+
+			auto deleter = [a](OtherNodeType *p) -> void {
+				p->destroy(a);
+			};
+
+			std::unique_ptr<
+				OtherNodeType, decltype(deleter)
+			> p(a_h::alloc_n(a, 1, a), deleter);
+
+			p->items.init_move(a, self->items);
+			*parent = p.release();
+			self->destroy(a);
+			return *parent;
+		}
+
+		virtual std::pair<size_type, size_type> utilization() const
+		{
+			return std::make_pair(
+				sizeof(*this),
+				items.count() * sizeof(value_type)
+			);
+		}
+
 		detail::compressed_array<
 			typename base_type::node_value_type, apparent_order,
 			real_order, typename base_type::value_valid_pred
 		> items;
+
+		constexpr static size_type storage_size()
+		{
+			return decltype(items)::storage_size();
+		}
 	};
 
 	typedef node<

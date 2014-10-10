@@ -339,6 +339,112 @@ std::ostream &sparse_vector<ValueType, Policy>::dump(std::ostream &os) const
 }
 
 template <typename ValueType, typename Policy>
+void sparse_vector<ValueType, Policy>::shrink_to_fit()
+{
+	auto a(std::get<1>(tup_height_alloc));
+	auto const height(std::get<0>(tup_height_alloc));
+
+	if (!height)
+		return;
+
+	loc_pair tree_loc[height];
+	tree_loc[0] = loc_pair{&root, 0};
+	size_type h(0);
+
+	while (true) {
+		auto pp(tree_loc[h].ptr->find_occupied(tree_loc[h].pos));
+
+		if (!pp.first) {
+			if (!h)
+				break;
+
+			auto p(tree_loc[h - 1].ptr->ptr_at(
+				tree_loc[h - 1].pos
+			));
+			tree_loc[h].ptr->shrink_node(a, p);
+			tree_loc[h].pos = 0;
+			++tree_loc[--h].pos;
+			continue;
+		}
+
+		tree_loc[h].pos = pp.second;
+
+		if ((h + 1) == height) {
+			auto q(static_cast<data_node_base *>(*pp.first));
+			q->shrink_node(a, pp.first);
+			++tree_loc[h].pos;
+		} else
+			tree_loc[++h] = loc_pair{
+				static_cast<ptr_node_base *>(*pp.first), 0
+			};
+	}
+
+	auto p(root.ptr_at(0));
+	if (!p) {
+		std::get<0>(tup_height_alloc) = 0;
+		return;
+	}
+
+	auto q(static_cast<ptr_node_base *>(*p));
+	h = height;
+	while ((h > 1) && (q->find_occupied(0).second == 0)) {
+		if (q->find_occupied(1).first)
+			break;
+
+		*p = *(q->ptr_at(0));
+		q->destroy(a);
+		q = static_cast<ptr_node_base *>(*p);
+		--std::get<0>(tup_height_alloc);
+		--h;
+	}
+}
+
+template <typename ValueType, typename Policy>
+auto sparse_vector<ValueType, Policy>::utilization() const
+-> std::pair<size_type, size_type>
+{
+		auto a(std::get<1>(tup_height_alloc));
+	auto const height(std::get<0>(tup_height_alloc));
+
+	std::pair<size_type, size_type> rv(0, 0);
+	if (!height)
+		return rv;
+
+	c_loc_pair tree_loc[height];
+	tree_loc[0] = c_loc_pair{&root, 0};
+	size_type h(0);
+
+	while (true) {
+		auto pp(tree_loc[h].ptr->find_occupied(tree_loc[h].pos));
+
+		if (!pp.first) {
+			if (!h)
+				break;
+
+			rv.first += tree_loc[h].ptr->utilization().first;
+			tree_loc[h].pos = 0;
+			++tree_loc[--h].pos;
+			continue;
+		}
+
+		tree_loc[h].pos = pp.second;
+
+		if ((h + 1) == height) {
+			auto q(static_cast<data_node_base *>(*pp.first));
+			auto qp(q->utilization());
+			rv.first += qp.first;
+			rv.second += qp.second;
+			++tree_loc[h].pos;
+		} else
+			tree_loc[++h] = c_loc_pair{
+				static_cast<ptr_node_base *>(*pp.first), 0
+			};
+	}
+
+	return rv;
+}
+
+template <typename ValueType, typename Policy>
 auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 	sparse_vector<ValueType, Policy>::size_type pos
 ) -> std::pair<data_node_base *, node_base **>

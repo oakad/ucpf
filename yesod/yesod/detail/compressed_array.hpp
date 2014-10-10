@@ -75,6 +75,11 @@ template <
 		return size_type(1) << ApparentOrder;
 	}
 
+	constexpr static size_type storage_size()
+	{
+		return array_type::storage_size();
+	}
+
 	pointer ptr_at(size_type pos)
 	{
 		auto id(get_index(pos));
@@ -165,6 +170,11 @@ template <
 		return size();
 	}
 
+	size_type count() const
+	{
+		return items.count();
+	}
+
 	word_type get_index(size_type pos) const
 	{
 		auto b_pos(pos * index_order);
@@ -251,6 +261,11 @@ template <
 		return items.size();
 	}
 
+	constexpr static size_type storage_size()
+	{
+		return array_type::storage_size();
+	}
+
 	pointer ptr_at(size_type pos)
 	{
 		return items.ptr_at(pos);
@@ -293,6 +308,11 @@ template <
 	size_type find_occupied(size_type first) const
 	{
 		return items.find_occupied(first);
+	}
+
+	size_type count() const
+	{
+		return items.count();
 	}
 
 	array_type items;

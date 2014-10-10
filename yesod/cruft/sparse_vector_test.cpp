@@ -79,21 +79,29 @@ int main(int argc, char **argv)
 */
 	std::size_t base = 10000;
 
-	for (auto c(base / 2); c < (800 + base); ++c)
+	for (auto c(1); c < 10; ++c)
 		X_PLACE(trie, c);
 
-	X_PLACE(trie, 800 + base);
-	X_PLACE(trie, 801 + base);
-	X_PLACE(trie, 803 + base);
-	X_PLACE(trie, 805 + base);
-	X_PLACE(trie, 807 + base);
-	X_PLACE(trie, 809 + base);
-
-	for (auto c(820 + base); c < (900 + base); ++c)
+	for (auto c(base); c < (40 + base); ++c)
 		X_PLACE(trie, c);
 
-	//x_trie.dump(std::cout);
-	printf("vv %zd, %zd\n", 820 + base, trie.find_vacant(820 + base));
-	
+	trie.dump(std::cout);
+	auto up(trie.utilization());
+	printf("ut1 %zd/%zd, %f\n", up.first, up.second, double(up.second) / up.first);
+	printf("-----\n");
+
+	for (auto c(1); c < 10; ++c)
+		trie.erase(c);
+
+	trie.dump(std::cout);
+	up = trie.utilization();
+	printf("ut2 %zd/%zd, %f\n", up.first, up.second, double(up.second) / up.first);
+	printf("-----\n");
+
+	trie.shrink_to_fit();
+	trie.dump(std::cout);
+	up = trie.utilization();
+	printf("ut3 %zd/%zd, %f\n", up.first, up.second, double(up.second) / up.first);
+
 	return 0;
 }

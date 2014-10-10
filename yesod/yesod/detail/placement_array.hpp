@@ -52,11 +52,16 @@ template <
 					);
 				}
 			);
-			items.reset();
 		}
+		init(a);
 	}
 
 	constexpr size_type size() const
+	{
+		return N;
+	}
+
+	constexpr static size_type storage_size()
 	{
 		return N;
 	}
@@ -113,6 +118,9 @@ template <
 
 		if (items.test(pos)) {
 			a_h::destroy(a, &(*this)[pos], 1, false);
+			if (is_pod_container)
+				a_h::make_n(a, &(*this)[pos], 1);
+
 			items.reset(pos);
 			return true;
 		} else
@@ -190,6 +198,22 @@ template <
 		}
 
 		return false;
+	}
+
+	size_type count() const
+	{
+		size_type rv(0);
+
+		for (
+			size_type pos(items.find_first_set(0));
+			pos < size();
+			pos = items.find_first_set(pos + 1)
+		) {
+			if (value_valid_pred::test((*this)[pos]))
+				++rv;
+		}
+
+		return rv;
 	}
 
 private:
