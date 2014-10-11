@@ -40,11 +40,13 @@ void test_for_each()
 	}
 
 	size_t u(0);
-	s.for_each_set([&ref, &s, &u](size_t pos) -> void {
+	s.for_each_one(0, [&ref, &s, &u](size_t pos) -> bool {
 		BOOST_CHECK(ref.test(pos));
 		BOOST_CHECK(s.test(pos));
 		if (ref.test(pos))
 			++u;
+
+		return false;
 	});
 	BOOST_CHECK_EQUAL(u, u_cnt);
 }
@@ -74,9 +76,9 @@ void test_find_first()
 
 	size_t u(0);
 	for (
-		auto pos(s.find_first_set(0));
+		auto pos(s.find_first_one(0));
 		pos < set_size;
-		pos = s.find_first_set(pos + 1)
+		pos = s.find_first_one(pos + 1)
 	) {
 		BOOST_CHECK(ref.count(pos));
 		if (ref.count(pos))

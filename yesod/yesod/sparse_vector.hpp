@@ -18,14 +18,25 @@ struct sparse_vector_default_policy {
 	constexpr static std::array<
 		std::size_t, 3
 	> ptr_node_order = {{2, 3, 4}};
-	constexpr static std::array<std::size_t, 3> data_node_order = {{2, 3, 4}};
+	constexpr static std::array<
+		std::size_t, 3
+	> data_node_order = {{2, 3, 4}};
 	/* optional value_valid_pred type */
 };
 
-template <
-	typename ValueType,
-	typename Policy = sparse_vector_default_policy
-> struct sparse_vector;
+template <>
+struct sparse_vector<> {
+	template <typename ValueType, typename Policy>
+	struct rebind {
+		typedef sparse_vector<ValueType, Policy> other;
+	};
+};
+
+
+template <typename ValueType>
+struct sparse_vector<ValueType> : sparse_vector<
+	ValueType, sparse_vector_default_policy
+> {};
 
 }}
 #endif

@@ -45,11 +45,12 @@ template <
 		if (is_pod_container)
 			a_h::destroy(a, items.data, size(), false);
 		else {
-			items.for_each_set(
-				[this, &a](size_t pos) -> void {
+			items.for_each_one(
+				0, [this, &a](size_t pos) -> bool {
 					a_h::destroy(
 						a, &items.data[pos], 1, false
 					);
+					return false;
 				}
 			);
 		}
@@ -144,25 +145,32 @@ template <
 
 	size_type find_vacant(size_type first) const
 	{
-		for (size_type pos(first); pos < size(); ++pos) {
+		for (
+			size_type pos(items.find_first_zero(first));
+			pos < size();
+			pos = items.find_first_zero(pos + 1)
+		) {
 			if (!(
-				items.test(pos)
+				is_pod_container
 				&& value_valid_pred::test((*this)[pos])
 			))
 				return pos;
 		}
+
 		return size();
 	}
 
 	size_type find_occupied(size_type first) const
 	{
-		for (size_type pos(first); pos < size(); ++pos) {
-			if (
-				items.test(pos)
-				&& value_valid_pred::test((*this)[pos])
-			)
+		for (
+			size_type pos(items.find_first_one(first));
+			pos < size();
+			pos = items.find_first_one(pos + 1)
+		) {
+			if (value_valid_pred::test((*this)[pos]))
 				return pos;
 		}
+
 		return size();
 	}
 
@@ -170,9 +178,9 @@ template <
 	bool for_each(size_type first, Pred &&pred)
 	{
 		for (
-			size_type pos(items.find_first_set(first));
+			size_type pos(items.find_first_one(first));
 			pos < size();
-			pos = items.find_first_set(pos + 1)
+			pos = items.find_first_one(pos + 1)
 		) {
 			if (value_valid_pred::test((*this)[pos])) {
 				if (pred(pos, (*this)[pos]))
@@ -187,9 +195,9 @@ template <
 	bool for_each(size_type first, Pred &&pred) const
 	{
 		for (
-			size_type pos(items.find_first_set(first));
+			size_type pos(items.find_first_one(first));
 			pos < size();
-			pos = items.find_first_set(pos + 1)
+			pos = items.find_first_one(pos + 1)
 		) {
 			if (value_valid_pred::test((*this)[pos])) {
 				if (pred(pos, (*this)[pos]))
@@ -205,9 +213,9 @@ template <
 		size_type rv(0);
 
 		for (
-			size_type pos(items.find_first_set(0));
+			size_type pos(items.find_first_one(0));
 			pos < size();
-			pos = items.find_first_set(pos + 1)
+			pos = items.find_first_one(pos + 1)
 		) {
 			if (value_valid_pred::test((*this)[pos]))
 				++rv;
@@ -247,16 +255,25 @@ private:
 			return true;
 		}
 
-		constexpr size_t find_first_set(size_type first) const
+		constexpr size_type find_first_one(size_type first) const
+		{
+			return first;
+		}
+
+		constexpr size_type find_first_zero(size_type first) const
 		{
 			return first;
 		}
 
 		template <typename Pred>
-		void for_each_set(Pred &&pred) const
+		bool for_each_one(size_type first, Pred &&pred) const
 		{
-			for (size_type pos(0); pos < N; ++pos)
-				pred(pos);
+			for (size_type pos(0); pos < N; ++pos) {
+				if (pred(pos))
+					return true;
+			}
+
+			return false;
 		}
 	};
 

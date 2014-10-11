@@ -16,38 +16,18 @@ namespace ucpf { namespace yesod {
 
 constexpr int clz(uint32_t v)
 {
-	return v ? __builtin_clz(v) : 32;
+	return __builtin_clz(v);
 }
 
 constexpr int clz(uint64_t v)
 {
-	return v ? __builtin_clzll(v) : 64;
+	return __builtin_clzll(v);
 }
 
 constexpr int clz(uint128_t v)
 {
-	return v ? (
-		(v >> 64u) ? __builtin_clzll(uint64_t(v >> 64u))
-			   : (64 + __builtin_clzll(uint64_t(v)))
-	) : 128;
-}
-
-constexpr int ctz(uint32_t v)
-{
-	return v ? (__builtin_ffs(v) - 1) : 32;
-}
-
-constexpr int ctz(uint64_t v)
-{
-	return v ? (__builtin_ffsll(v) - 1) : 64;
-}
-
-constexpr int ctz(uint128_t v)
-{
-	return v ? (
-		uint64_t(v) ? (__builtin_ffsll(uint64_t(v)) - 1)
-			    : (__builtin_ffsll(uint64_t(v >> 64u)) + 63)
-	) : 128;
+	return (v >> 64u) ? __builtin_clzll(uint64_t(v >> 64u))
+			  : (64 + __builtin_clzll(uint64_t(v)));
 }
 
 constexpr int fls(uint32_t v)
@@ -74,12 +54,12 @@ constexpr int order_base_2(T v)
 
 constexpr int ffs(uint32_t v)
 {
-	return __builtin_ffs(v) - 1;
+	return __builtin_ffs(v);
 }
 
 constexpr int ffs(uint64_t v)
 {
-	return __builtin_ffsll(v) - 1;
+	return __builtin_ffsll(v);
 }
 
 constexpr int ffs(uint128_t v)

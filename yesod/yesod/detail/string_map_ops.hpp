@@ -25,17 +25,17 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 {
 	value_pair *rv(nullptr);
 	uintptr_t l_pos(1);
-	uintptr_t adj_pos(trie_root);
+	uintptr_t adj_pos(root);
 	bool inserted(true);
 
 	do {
 		auto n_pos(char_offset(adj_pos, deref_char(first)));
-		auto &p(trie.at(vec_offset(n_pos)));
+		auto &p(items.at(vec_offset(n_pos)));
 		auto n_char(deref_char(first));
 		++first;
 		if (!p.check) {
 			rv = value_pair::construct(
-				trie.get_allocator(), first, last,
+				items.get_allocator(), first, last,
 				std::forward<Args>(args)...
 			);
 			p = pair_type::make(rv, l_pos);
@@ -59,7 +59,7 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 
 			auto loc(unroll_key(&p, n_pos, c_len, n_char));
 			rv = value_pair::construct(
-				trie.get_allocator(), first, last,
+				items.get_allocator(), first, last,
 				std::forward<Args>(args)...
 			);
 			*loc.first = pair_type::make(rv, loc.second);
@@ -72,7 +72,7 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 			} else {
 				auto loc(split_subtree(p.check, l_pos, n_char));
 				rv = value_pair::construct(
-					trie.get_allocator(), first, last,
+					items.get_allocator(), first, last,
 					std::forward<Args>(args)...
 				);
 				*loc.first = pair_type::make(rv, loc.second);
@@ -93,8 +93,8 @@ std::basic_ostream<
 	> &os
 ) const
 {
-	os << "r: " << trie_root << '\n';
-	trie.for_each(
+	os << "r: " << root << '\n';
+	items.for_each(
 		0, [&os](size_type pos, pair_type const &p) -> bool {
 			os << log_offset(pos) << " (" << pos << "): ";
 			if (!p.is_leaf()) {
@@ -155,12 +155,12 @@ auto string_map<CharType, ValueType, Policy>::find_impl(
 ) const -> std::pair<pair_type const *, uintptr_t>
 {
 	uintptr_t l_pos(1), n_pos(0);
-	uintptr_t adj_pos(trie_root);
+	uintptr_t adj_pos(root);
 	pair_type const *p(nullptr);
 
 	do {
 		n_pos = char_offset(adj_pos, deref_char(first));
-		p = trie.ptr_at(vec_offset(n_pos));
+		p = items.ptr_at(vec_offset(n_pos));
 		++first;
 
 		if (!p || !p->base || (p->check != l_pos))
@@ -184,7 +184,7 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 	size_type shrink(0);
 	auto deleter([&shrink, this](value_pair *v) -> void {
 		if (shrink)
-			v->shrink_suffix(trie.get_allocator(), shrink);
+			v->shrink_suffix(items.get_allocator(), shrink);
 	});
 
 	std::unique_ptr<value_pair, decltype(deleter)> v_ptr(
@@ -199,8 +199,8 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 	uintptr_t next_pos(0);
 	while (count > shrink) {
 		next_pos = char_offset(1, suffix[shrink] + null_char);
-		auto xp(trie.find_empty_above(vec_offset(next_pos)));
-		auto &q(trie.emplace_at(
+		auto xp(items.find_empty_above(vec_offset(next_pos)));
+		auto &q(items.emplace_at(
 			xp, pair_type::make(v_ptr.get(), pos)
 		));
 		p->base = adjust_encoded(1, xp - vec_offset(next_pos));
@@ -215,11 +215,11 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 
 	while (true) {
 		next_pos = char_offset(adj_pos, min_char);
-		auto xp(trie.find_empty_above(vec_offset(next_pos)));
+		auto xp(items.find_empty_above(vec_offset(next_pos)));
 
 		adj_pos = adjust_encoded(adj_pos, xp - vec_offset(next_pos));
 
-		if (!trie.ptr_at(
+		if (!items.ptr_at(
 			vec_offset(char_offset(adj_pos, max_char))
 		))
 			break;
@@ -227,7 +227,7 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 		adj_pos  = adjust_encoded(adj_pos, 1);
 	}
 
-	trie.emplace_at(
+	items.emplace_at(
 		vec_offset(char_offset(adj_pos, k_char)),
 		pair_type::make(v_ptr.get(), pos)
 	);
@@ -235,7 +235,7 @@ auto string_map<CharType, ValueType, Policy>::unroll_key(
 	++shrink;
 
 	return std::make_pair(
-		&trie.emplace_at(
+		&items.emplace_at(
 			vec_offset(char_offset(adj_pos, other)),
 			pair_type::make(uintptr_t(0), uintptr_t(0))
 		), pos
@@ -247,13 +247,13 @@ auto string_map<CharType, ValueType, Policy>::split_subtree(
 	uintptr_t r_pos, uintptr_t l_pos, uintptr_t k_char
 )-> std::pair<pair_type *, uintptr_t>
 {
-	index_entry_set r_set(trie.get_allocator());
-	index_entry_set l_set(trie.get_allocator());
-	uintptr_t adj_pos(l_pos > 1 ? trie[vec_offset(l_pos)].base : trie_root);
+	index_entry_set r_set(items.get_allocator());
+	index_entry_set l_set(items.get_allocator());
+	uintptr_t adj_pos(l_pos > 1 ? items[vec_offset(l_pos)].base : root);
 
-	trie.for_each(
+	items.for_each(
 		std::min(
-			r_pos > 1 ? trie[vec_offset(r_pos)].base : trie_root,
+			r_pos > 1 ? items[vec_offset(r_pos)].base : root,
 			adj_pos
 		), [&r_set, &l_set, r_pos, l_pos, this](
 			size_type pos, pair_type const &p
@@ -261,12 +261,12 @@ auto string_map<CharType, ValueType, Policy>::split_subtree(
 			if (p.check == r_pos)
 				r_set.push_back(std::make_tuple(
 					const_cast<pair_type *>(&p), pos,
-					pair_ptr_list(trie.get_allocator())
+					pair_ptr_list(items.get_allocator())
 				));
 			else if (p.check == l_pos)
 				l_set.push_back(std::make_tuple(
 					const_cast<pair_type *>(&p), pos,
-					pair_ptr_list(trie.get_allocator())
+					pair_ptr_list(items.get_allocator())
 				));
 
 			return false;
@@ -279,7 +279,7 @@ auto string_map<CharType, ValueType, Policy>::split_subtree(
 		adj_pos = advance_edges(l_pos, l_set, k_char);
 
 	return std::make_pair(
-		&trie[vec_offset(char_offset(adj_pos, k_char))], l_pos
+		&items[vec_offset(char_offset(adj_pos, k_char))], l_pos
 	);
 }
 
@@ -288,7 +288,7 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 	uintptr_t pos, index_entry_set &b_set, uintptr_t k_char
 ) -> uintptr_t
 {
-	auto adj_orig(pos > 1 ? trie[vec_offset(pos)].base : trie_root);
+	auto adj_orig(pos > 1 ? items[vec_offset(pos)].base : root);
 	auto adj(adj_orig);
 	bool fit(true);
 
@@ -300,10 +300,10 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 			adj, offset_to_char(std::get<1>(*iter), adj_orig)
 		));
 		auto xp(vec_offset(n_pos));
-		auto p(trie.ptr_at(xp));
+		auto p(items.ptr_at(xp));
 
 		if (p && (p->check != pos)) {
-			if (!trie.for_each(
+			if (!items.for_each(
 				xp + 1, [&xp, pos](
 					size_type t_pos, pair_type const &t_p
 				) -> bool {
@@ -325,7 +325,7 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 			n_pos = char_offset(adj, offset_to_char(
 				std::get<1>(*iter), adj_orig
 			));
-			p = trie.ptr_at(vec_offset(n_pos));
+			p = items.ptr_at(vec_offset(n_pos));
 			if (p && (p->check != pos)) {
 				fit = false;
 				break;
@@ -334,7 +334,7 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 
 		if (k_char && fit) {
 			n_pos = char_offset(adj, k_char);
-			p = trie.ptr_at(vec_offset(n_pos));
+			p = items.ptr_at(vec_offset(n_pos));
 			if (p && (p->check != pos))
 				fit = false;
 		}
@@ -346,9 +346,9 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 		auto n_pos(char_offset(
 			adj, offset_to_char(std::get<1>(*iter), adj_orig)
 		));
-		auto p(trie.ptr_at(vec_offset(n_pos)));
+		auto p(items.ptr_at(vec_offset(n_pos)));
 		if (!p)
-			trie.emplace_at(vec_offset(n_pos), pair_type::make(
+			items.emplace_at(vec_offset(n_pos), pair_type::make(
 				uintptr_t(0), uintptr_t(0)
 			));
 
@@ -356,7 +356,7 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 			min_base = std::get<0>(*iter)->base;
 	}
 
-	trie.for_each(
+	items.for_each(
 		min_base > 1 ? vec_offset(min_base) : 0,
 		[&b_set](size_type pos, pair_type &p) -> bool {
 			auto iter(std::lower_bound(
@@ -389,14 +389,14 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 		for (auto cp: std::get<2>(*iter))
 			cp->check = n_pos;
 
-		trie.emplace_at(vec_offset(n_pos), *std::get<0>(*iter));
+		items.emplace_at(vec_offset(n_pos), *std::get<0>(*iter));
 		*std::get<0>(*iter) = pair_type::make(uintptr_t(0), 0);
 	}
 
 	if (pos > 1)
-		trie[vec_offset(pos)].base = adj;
+		items[vec_offset(pos)].base = adj;
 	else
-		trie_root = adj;
+		root = adj;
 
 	return adj;
 }
@@ -560,7 +560,7 @@ void string_map<
 	if (r_iter == r_trie.end())
 		return;
 
-	auto a(parent.trie.get_allocator());
+	auto a(parent.items.get_allocator());
 	state_stack_type ss(state_allocator_adaptor(a, a));
 
 	ss.emplace_back(r_iter, r_iter->second.begin());
@@ -581,7 +581,7 @@ void string_map<
 	if (!rv.first)
 		return;
 
-	auto a(parent.trie.get_allocator());
+	auto a(parent.items.get_allocator());
 
 	if (rv.first->is_leaf()) {
 		auto l_ptr(rv.first->leaf_ptr());
@@ -671,13 +671,13 @@ auto string_map<
 	CharType, ValueType, Policy
 >::make_index() const -> const_reverse_index
 {
-	auto rv(const_reverse_index(*this, trie.get_allocator()));
-	trie.for_each(
+	auto rv(const_reverse_index(*this, items.get_allocator()));
+	items.for_each(
 		0, [&rv, this](size_type pos, pair_type const &p) -> bool {
 			auto base(
 				p.check > 1
-				? trie[vec_offset(p.check)].base
-				: trie_root
+				? items[vec_offset(p.check)].base
+				: root
 			);
 			rv.r_trie[p.check].emplace_back(
 				&p, log_offset(pos), offset_to_char(pos, base)
@@ -693,13 +693,13 @@ auto string_map<
 	CharType, ValueType, Policy
 >::make_index() -> reverse_index
 {
-	auto rv(reverse_index(*this, trie.get_allocator()));
-	trie.for_each(
+	auto rv(reverse_index(*this, items.get_allocator()));
+	items.for_each(
 		0, [&rv, this](size_type pos, pair_type const &p) -> bool {
 			auto base(
 				p.check > 1
-				? trie[vec_offset(p.check)].base
-				: trie_root
+				? items[vec_offset(p.check)].base
+				: root
 			);
 			rv.r_trie[p.check].emplace_back(
 				&p, log_offset(pos), offset_to_char(pos, base)

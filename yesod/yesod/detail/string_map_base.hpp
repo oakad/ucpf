@@ -21,7 +21,6 @@
 #include <scoped_allocator>
 
 #include <yesod/flat_map.hpp>
-#include <yesod/sparse_vector.hpp>
 
 namespace ucpf { namespace yesod {
 
@@ -45,9 +44,8 @@ struct string_map {
 	typedef typename allocator_traits::pointer pointer;
 	typedef typename allocator_traits::const_pointer const_pointer;
 
-
-	string_map()
-	: trie_root(1)
+	string_map(allocator_type const &a = allocator_type())
+	: root(1), items(a)
 	{}
 
 	template <typename StringType, typename... Args>
@@ -89,7 +87,7 @@ struct string_map {
 			auto n_pos(char_offset(
 				rv.first->base, terminator_char
 			));
-			auto p(trie.ptr_at(vec_offset(n_pos)));
+			auto p(items.ptr_at(vec_offset(n_pos)));
 			if (
 				p && p->base && (p->check == rv.second)
 				&& p->is_leaf()
@@ -328,20 +326,15 @@ private:
 		}
 	};
 
-	struct trie_vector_policy {
+	struct storage_policy : Policy::storage_policy_base {
 		typedef typename Policy::allocator_type allocator_type;
-
-		constexpr static size_t
-		ptr_node_order = Policy::ptr_node_order;
-
-		constexpr static size_t
-		data_node_order = Policy::trie_node_order;
-
 		typedef pair_valid_pred value_valid_pred;
 	};
 
-	uintptr_t trie_root;
-	sparse_vector<pair_type, trie_vector_policy> trie;
+	uintptr_t root;
+	typename Policy::storage_type::template rebind<
+		pair_type, storage_policy
+	>::other items;
 
 public:
 	struct const_reverse_index {
@@ -449,7 +442,7 @@ public:
 
 		const_reverse_index(
 			string_map const &parent_,
-			typename decltype(trie)::allocator_type const &a
+			typename decltype(items)::allocator_type const &a
 		) : parent(parent_), r_trie(
 			10, typename r_trie_type::hasher(),
 			typename r_trie_type::key_equal(),
@@ -469,7 +462,7 @@ public:
 
 		reverse_index(
 			string_map &parent_,
-			typename decltype(trie)::allocator_type const &a
+			typename decltype(items)::allocator_type const &a
 		) : const_reverse_index(parent_, a)
 		{}
 	};

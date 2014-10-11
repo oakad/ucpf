@@ -8,6 +8,8 @@
 #if !defined(UCPF_YESOD_STRING_MAP_JAN_06_2014_1145)
 #define UCPF_YESOD_STRING_MAP_JAN_06_2014_1145
 
+#include <yesod/sparse_vector.hpp>
+
 #include <yesod/detail/string_map_base.hpp>
 #include <yesod/detail/string_map_ops.hpp>
 
@@ -21,9 +23,9 @@ struct string_map_default_policy {
 		typename char_traits_type::char_type
 	>::type index_char_type;
 
+	typedef sparse_vector<> storage_type;
+	typedef sparse_vector_default_policy storage_policy_base;
 	constexpr static size_t short_suffix_length = 16;
-	constexpr static size_t ptr_node_order = 4;
-	constexpr static size_t trie_node_order = 8;
 };
 
 template <

@@ -50,9 +50,12 @@ struct sparse_vector_value_predicate<Policy, true> {
 
 }
 
+template <typename...>
+struct sparse_vector;
+
 template <
 	typename ValueType, typename Policy
-> struct sparse_vector {
+> struct sparse_vector<ValueType, Policy> {
 	typedef ValueType value_type;
 
 	typedef typename std::allocator_traits<

@@ -153,21 +153,39 @@ template <
 
 	size_type find_vacant(size_type first) const
 	{
-		for (; first < size(); ++first) {
-			if (get_index(first) == index_mask)
+		auto x_first(find_occupied(first));
+		for (; x_first < size(); x_first = find_occupied(first)){
+			if (x_first > first)
 				return first;
+
+			first = x_first + 1;
 		}
-		return size();
+
+		return x_first > first ? first : size();
 	}
 
 	size_type find_occupied(size_type first) const
 	{
-		for (; first < size(); ++first) {
-			auto id(get_index(first));
-			if ((id != index_mask) && (items.ptr_at(id)))
-				return first;
+		auto first_bit(first * index_order);
+		auto w_pos(first_bit / word_bits);
+		auto w_off(first_bit % word_bits);
+
+		auto w(~index[w_pos] & ~((word_type(1) << w_off) - 1));
+		if (w)
+			first_bit = yesod::ffs(w) - 1 + w_pos * word_bits;
+		else {
+			for(++w_pos; w_pos < word_count; ++w_pos) {
+				w = ~index[w_pos];
+				if (w)
+					first_bit = yesod::ffs(w) - 1
+						    + w_pos * word_bits;
+			}
 		}
-		return size();
+
+		if (first_bit < bit_count)
+			return first_bit / index_order;
+		else
+			return size();
 	}
 
 	size_type count() const
