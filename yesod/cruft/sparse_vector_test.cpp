@@ -90,7 +90,9 @@ int main(int argc, char **argv)
 	printf("ut1 %zd/%zd, %f\n", up.first, up.second, double(up.second) / up.first);
 	printf("-----\n");
 
-	for (auto c(1); c < 10; ++c)
+	//for (auto c(1); c < 10; ++c)
+	//	trie.erase(c);
+	for (auto c(base); c < (40 + base); ++c)
 		trie.erase(c);
 
 	trie.dump(std::cout);

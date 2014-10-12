@@ -29,7 +29,7 @@ struct s {
 		ss->emplace(value);
 	}
 
-	s(s &&other)
+	s(s &&other) noexcept
 	: ss(other.ss), value(other.value)
 	{
 		other.ss = nullptr;
@@ -46,7 +46,7 @@ struct s {
 			ss->erase(value);
 	}
 
-	s &operator=(s &&other)
+	s &operator=(s &&other) noexcept
 	{
 		ss = other.ss;
 		value = other.value;
@@ -99,7 +99,10 @@ BOOST_AUTO_TEST_CASE(sparse_vector_0)
 				v0.emplace_at(pos, c, &s1);
 		}
 		//v0.dump(std::cout);
-		BOOST_CHECK(s0 == s1);
+		BOOST_CHECK_EQUAL_COLLECTIONS(
+			s0.begin(), s0.end(), s1.begin(), s1.end()
+		);
+		
 
 		for (auto const &p: m0)
 			BOOST_CHECK_EQUAL(p.second.value, v0[p.first].value);

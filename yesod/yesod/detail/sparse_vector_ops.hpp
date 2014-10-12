@@ -353,15 +353,11 @@ void sparse_vector<ValueType, Policy>::shrink_to_fit()
 
 	while (true) {
 		auto pp(tree_loc[h].ptr->find_occupied(tree_loc[h].pos));
-
 		if (!pp.first) {
 			if (!h)
 				break;
 
-			auto p(tree_loc[h - 1].ptr->ptr_at(
-				tree_loc[h - 1].pos
-			));
-			tree_loc[h].ptr->shrink_node(a, p);
+			tree_loc[h].ptr->shrink_node(a, tree_loc[h - 1]);
 			tree_loc[h].pos = 0;
 			++tree_loc[--h].pos;
 			continue;
@@ -371,7 +367,7 @@ void sparse_vector<ValueType, Policy>::shrink_to_fit()
 
 		if ((h + 1) == height) {
 			auto q(static_cast<data_node_base *>(*pp.first));
-			q->shrink_node(a, pp.first);
+			q->shrink_node(a, tree_loc[h]);
 			++tree_loc[h].pos;
 		} else
 			tree_loc[++h] = loc_pair{

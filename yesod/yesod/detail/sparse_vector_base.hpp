@@ -244,6 +244,8 @@ template <
 	std::pair<size_type, size_type> utilization() const;
 
 private:
+	struct loc_pair;
+
 	struct node_base {
 		virtual ~node_base()
 		{}
@@ -256,7 +258,7 @@ private:
 			allocator_type const &a, node_base **parent
 		) = 0;
 		virtual node_base *shrink_node(
-			allocator_type const &a, node_base **parent
+			allocator_type const &a, loc_pair parent
 		) = 0;
 		virtual std::pair<size_type, size_type> utilization() const = 0;
 	};
@@ -389,7 +391,7 @@ private:
 			> rv(nullptr, items.find_occupied(first));
 
 			if (rv.second != items.size())
-				rv.first = items.ptr_at(rv.second);
+				rv.first = items.unsafe_ptr_at(rv.second);
 
 			return rv;
 		}
@@ -405,7 +407,7 @@ private:
 			> rv(nullptr, items.find_occupied(first));
 
 			if (rv.second != items.size())
-				rv.first = items.ptr_at(rv.second);
+				rv.first = items.unsafe_ptr_at(rv.second);
 
 			return rv;
 		}
@@ -458,22 +460,21 @@ private:
 		}
 
 		virtual node_base *shrink_node(
-			allocator_type const &a, node_base **parent
+			allocator_type const &a, loc_pair parent
 		)
 		{
 			auto sz(items.count());
-
 			if (!sz) {
-				*parent = nullptr;
+				parent.ptr->erase(a, parent.pos);
 				destroy(a);
 				return nullptr;
 			}
 
 			if (std::is_same<prev_node_type, self_type>::value)
-				return *parent;
+				return this;
 
 			if (sz > prev_node_type::storage_size())
-				return *parent;
+				return this;
 
 			return shrink_node_impl<self_type, prev_node_type>(
 				a, parent, this, sz
@@ -482,7 +483,7 @@ private:
 
 		template <typename CurNodeType, typename OtherNodeType>
 		static node_base *shrink_node_impl(
-			allocator_type const &a, node_base **parent,
+			allocator_type const &a, loc_pair parent,
 			CurNodeType *self, size_type sz
 		)
 		{
@@ -512,9 +513,9 @@ private:
 			> p(a_h::alloc_n(a, 1, a), deleter);
 
 			p->items.init_move(a, self->items);
-			*parent = p.release();
+			*(parent.ptr->ptr_at(parent.pos)) = p.get();
 			self->destroy(a);
-			return *parent;
+			return p.release();
 		}
 
 		virtual std::pair<size_type, size_type> utilization() const

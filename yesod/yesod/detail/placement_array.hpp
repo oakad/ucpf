@@ -48,7 +48,7 @@ template <
 			items.for_each_one(
 				0, [this, &a](size_t pos) -> bool {
 					a_h::destroy(
-						a, &items.data[pos], 1, false
+						a, unsafe_ptr_at(pos), 1, false
 					);
 					return false;
 				}
@@ -67,28 +67,30 @@ template <
 		return N;
 	}
 
-	reference operator[](size_type pos)
-	{
-		return reinterpret_cast<reference>(items.data[pos]);
-	}
-
-	const_reference operator[](size_type pos) const
-	{
-		return reinterpret_cast<const_reference>(items.data[pos]);
-	}
-
 	pointer ptr_at(size_type pos)
 	{
 		return (
-			items.test(pos) && value_valid_pred::test((*this)[pos])
-		) ? &(*this)[pos] : nullptr;
+			items.test(pos)
+			&& value_valid_pred::test(*unsafe_ptr_at(pos))
+		) ? unsafe_ptr_at(pos) : nullptr;
 	}
 
 	const_pointer ptr_at(size_type pos) const
 	{
 		return (
-			items.test(pos) && value_valid_pred::test((*this)[pos])
-		) ? &(*this)[pos] : nullptr;
+			items.test(pos)
+			&& value_valid_pred::test(*unsafe_ptr_at(pos))
+		) ? unsafe_ptr_at(pos) : nullptr;
+	}
+
+	pointer unsafe_ptr_at(size_type pos)
+	{
+		return reinterpret_cast<pointer>(items.data + pos);
+	}
+
+	const_pointer unsafe_ptr_at(size_type pos) const
+	{
+		return reinterpret_cast<const_pointer>(items.data + pos);
 	}
 
 	template <typename Alloc, typename... Args>
@@ -100,16 +102,16 @@ template <
 
 		if (!items.test(pos)) {
 			a_h::make_n(
-				a, items.data + pos, 1,
+				a, unsafe_ptr_at(pos), 1,
 				std::forward<Args>(args)...
 			);
 			items.set(pos);
 		} else
-			(*this)[pos] = std::move(value_type(
-				std::forward<Args>(args)...
-			));
+			*unsafe_ptr_at(pos) = std::move(
+				value_type(std::forward<Args>(args)...)
+			);
 
-		return &(*this)[pos];
+		return ptr_at(pos);
 	}
 
 	template <typename Alloc>
@@ -118,9 +120,9 @@ template <
 		typedef allocator::array_helper<value_type, Alloc> a_h;
 
 		if (items.test(pos)) {
-			a_h::destroy(a, &(*this)[pos], 1, false);
+			a_h::destroy(a, unsafe_ptr_at(pos), 1, false);
 			if (is_pod_container)
-				a_h::make_n(a, &(*this)[pos], 1);
+				a_h::make_n(a, unsafe_ptr_at(pos), 1);
 
 			items.reset(pos);
 			return true;
@@ -132,7 +134,7 @@ template <
 	{
 		auto rv(
 			items.test(pos)
-			&& value_valid_pred::test((*this)[pos])
+			&& value_valid_pred::test(*unsafe_ptr_at(pos))
 		);
 		items.set(pos);
 		return rv;
@@ -152,7 +154,7 @@ template <
 		) {
 			if (!(
 				is_pod_container
-				&& value_valid_pred::test((*this)[pos])
+				&& value_valid_pred::test(*unsafe_ptr_at(pos))
 			))
 				return pos;
 		}
@@ -167,7 +169,7 @@ template <
 			pos < size();
 			pos = items.find_first_one(pos + 1)
 		) {
-			if (value_valid_pred::test((*this)[pos]))
+			if (value_valid_pred::test(*unsafe_ptr_at(pos)))
 				return pos;
 		}
 
@@ -182,8 +184,8 @@ template <
 			pos < size();
 			pos = items.find_first_one(pos + 1)
 		) {
-			if (value_valid_pred::test((*this)[pos])) {
-				if (pred(pos, (*this)[pos]))
+			if (value_valid_pred::test(*unsafe_ptr_at(pos))) {
+				if (pred(pos, *unsafe_ptr_at(pos)))
 					return true;
 			}
 		}
@@ -199,8 +201,8 @@ template <
 			pos < size();
 			pos = items.find_first_one(pos + 1)
 		) {
-			if (value_valid_pred::test((*this)[pos])) {
-				if (pred(pos, (*this)[pos]))
+			if (value_valid_pred::test(*unsafe_ptr_at(pos))) {
+				if (pred(pos, *unsafe_ptr_at(pos)))
 					return true;
 			}
 		}
@@ -217,7 +219,7 @@ template <
 			pos < size();
 			pos = items.find_first_one(pos + 1)
 		) {
-			if (value_valid_pred::test((*this)[pos]))
+			if (value_valid_pred::test(*unsafe_ptr_at(pos)))
 				++rv;
 		}
 

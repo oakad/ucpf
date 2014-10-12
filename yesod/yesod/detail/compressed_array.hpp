@@ -61,7 +61,10 @@ template <
 			size_type pos(other.find_occupied(0));
 			pos < other.size(); pos = other.find_occupied(++pos)
 		)
-			emplace_at(a, pos, std::move(*other.ptr_at(pos)));
+			emplace_at(
+				a, pos,
+				std::move_if_noexcept(*other.ptr_at(pos))
+			);
 	}
 
 	template <typename Alloc>
@@ -92,6 +95,16 @@ template <
 		return (id != index_mask) ? items.ptr_at(id) : nullptr;
 	}
 
+	pointer unsafe_ptr_at(size_type pos)
+	{
+		return items.unsafe_ptr_at(get_index(pos));
+	}
+
+	const_pointer unsafe_ptr_at(size_type pos) const
+	{
+		return items.unsafe_ptr_at(get_index(pos));
+	}
+
 	std::pair<pointer, bool> reserve_at(size_type pos)
 	{
 		auto id(get_index(pos));
@@ -102,9 +115,13 @@ template <
 
 			items.set_valid(x_pos);
 			set_index(pos, x_pos);
-			return std::make_pair(&items[x_pos], false);
+			return std::make_pair(
+				items.unsafe_ptr_at(x_pos), false
+			);
 		} else
-			return std::make_pair(&items[id], items.set_valid(id));
+			return std::make_pair(
+				items.unsafe_ptr_at(id), items.set_valid(id)
+			);
 	}
 
 	void release_at(size_type pos)
@@ -131,12 +148,19 @@ template <
 			auto rv(items.emplace_at(
 				a, x_pos, std::forward<Args>(args)...
 			));
-			set_index(pos, x_pos);
+			if (rv)
+				set_index(pos, x_pos);
+
 			return rv;
-		} else
-			return items.emplace_at(
+		} else {
+			auto rv(items.emplace_at(
 				a, id, std::forward<Args>(args)...
-			);
+			));
+			if (!rv)
+				set_index(pos, index_mask);
+
+			return rv;
+		}
 	}
 
 	template <typename Alloc>
@@ -170,22 +194,23 @@ template <
 		auto w_pos(first_bit / word_bits);
 		auto w_off(first_bit % word_bits);
 
-		auto w(~index[w_pos] & ~((word_type(1) << w_off) - 1));
-		if (w)
-			first_bit = yesod::ffs(w) - 1 + w_pos * word_bits;
-		else {
-			for(++w_pos; w_pos < word_count; ++w_pos) {
-				w = ~index[w_pos];
-				if (w)
-					first_bit = yesod::ffs(w) - 1
-						    + w_pos * word_bits;
-			}
-		}
-
-		if (first_bit < bit_count)
-			return first_bit / index_order;
-		else
+		if (w_pos >= word_count)
 			return size();
+
+		auto w(~index[w_pos] & ~((word_type(1) << w_off) - 1));
+		while(true) {
+			if (w) {
+				first_bit = yesod::ffs(w) - 1
+					    + w_pos * word_bits;
+
+				return first_bit / index_order;
+			}
+
+			if (w_pos == (word_count - 1))
+				return size();
+
+			w = ~index[++w_pos];
+		}
 	}
 
 	size_type count() const
@@ -265,7 +290,10 @@ template <
 			size_type pos(other.find_occupied(0));
 			pos < other.size(); pos = other.find_occupied(++pos)
 		)
-			emplace_at(a, pos, std::move(*other.ptr_at(pos)));
+			emplace_at(
+				a, pos,
+				std::move_if_noexcept(*other.ptr_at(pos))
+			);
 	}
 
 	template <typename Alloc>
@@ -294,9 +322,21 @@ template <
 		return items.ptr_at(pos);
 	}
 
+	pointer unsafe_ptr_at(size_type pos)
+	{
+		return items.unsafe_ptr_at(pos);
+	}
+
+	const_pointer unsafe_ptr_at(size_type pos) const
+	{
+		return items.unsafe_ptr_at(pos);
+	}
+
 	std::pair<pointer, bool> reserve_at(size_type pos)
 	{
-		return std::make_pair(&items[pos], items.set_valid(pos));
+		return std::make_pair(
+			items.unsafe_ptr_at(pos), items.set_valid(pos)
+		);
 	}
 
 	void release_at(size_type pos)
