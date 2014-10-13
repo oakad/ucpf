@@ -1,30 +1,26 @@
-#include <array>
-#include <tuple>
-#include <bitset>
-#include <iostream>
-#include <yesod/flat_map.hpp>
+#include <yesod/detail/dense_encoding_map.hpp>
+#include <cstdio>
 
-using ucpf::yesod::flat_map;
+using ucpf::yesod::detail::dense_encoding_map;
 
 int main()
 {
-	flat_map<int, int> m0{
-		std::make_tuple(1, 10),
-		std::make_tuple(2, 20),
-		std::make_tuple(3, 30)
-	};
+	dense_encoding_map<char> m0;
+	m0.reset();
 
-	printf("s %zd, v[2] %d\n", m0.size(), m0[2]);
+	m0.set('a', 0);
+	m0.set('c', 1);
+	m0.set('z', 2);
+	m0.set('\0', 3);
+	m0.set('d', 4);
 
-	for (auto &r: m0) {
-		printf("k: %d, v: %d\n", std::get<0>(r), std::get<1>(r));
-		printf("xx %d\n", std::get<0>(*m0.lower_bound(std::get<0>(r))));
+	for (std::size_t c(0); c < 128; ++c) {
+		printf("val %zd: %d (%c)\n", c, m0.value(c), m0.value(c));
 	}
-
-
-	auto i_p1(m0.insert(std::make_tuple(4, 40)));
-	auto i_p2(m0.insert(std::make_pair(3, 30)));
-	m0.erase(1);
-
+	printf("ix 'a' - %d\n", m0.index('a'));
+	printf("ix 'c' - %d\n", m0.index('c'));
+	printf("ix 'z' - %d\n", m0.index('z'));
+	printf("ix '0' - %d\n", m0.index('\0'));
+	printf("ix 'd' - %d\n", m0.index('d'));
 	return 0;
 }

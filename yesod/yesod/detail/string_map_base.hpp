@@ -45,7 +45,7 @@ struct string_map {
 	typedef typename allocator_traits::const_pointer const_pointer;
 
 	string_map(allocator_type const &a = allocator_type())
-	: root(1), items(a)
+	: root{0, 0}, items(a), tup_breadth_map(0, Policy::encoding_map(a))
 	{}
 
 	template <typename StringType, typename... Args>
@@ -175,13 +175,13 @@ private:
 		>::template rebind_alloc<index_entry_type>
 	> index_entry_set;
 
-	constexpr static uintptr_t terminator_char = 1;
-	constexpr static uintptr_t null_char = 2;
+	constexpr static uintptr_t terminator_index = 1;
+	constexpr static uintptr_t base_index = 2;
 
 	template <typename Iterator>
 	static uintptr_t deref_char(Iterator const &iter)
 	{
-		return static_cast<uintptr_t>(*iter) + null_char;
+		return static_cast<uintptr_t>(*iter) + base_index;
 	}
 
 	/* logical:  0 1 2 3 4 5...
@@ -218,6 +218,25 @@ private:
 	static uintptr_t offset_to_char(uintptr_t v, uintptr_t adj)
 	{
 		return (log_offset(v) - adj) >> 1;
+	}
+
+	index_char_type char_index(char_type c) const
+	{
+		return std::min(
+			size_type(std::get<1>(tup_breadth_map).index(c)),
+			std::get<0>(tup_breadth_map)
+		);
+	}
+
+	index_char_type assign_char_index(char_type c)
+	{
+		auto id(std::get<1>(tup_breadth_map).index(c));
+		if (id >= std::get<0>(tup_breadth_map)) {
+			id = std::get<0>(tup_breadth_map);
+			std::get<1>(tup_breadth_map).set(c, id);
+			++std::get<0>(tup_breadth_map);
+		}
+		return id;
 	}
 
 	template <typename Iterator>
@@ -331,144 +350,11 @@ private:
 		typedef pair_valid_pred value_valid_pred;
 	};
 
-	uintptr_t root;
+	pair_type root;
 	typename Policy::storage_type::template rebind<
 		pair_type, storage_policy
 	>::other items;
-
-public:
-	struct const_reverse_index {
-		typedef std::basic_string<
-			char_type, typename Policy::char_traits_type,
-			typename std::allocator_traits<
-				typename Policy::allocator_type
-			>::template rebind_alloc<char_type>
-		> prefix_string_type;
-
-		template <typename Pred>
-		void for_each(Pred &&pred) const;
-
-		template <typename Iterator, typename Pred>
-		void for_each_prefix(
-			Iterator first, Iterator last, Pred &&pred
-		) const;
-
-		template <typename StringType, typename Pred>
-		void for_each_prefix(StringType &&s, Pred &&pred) const
-		{
-			for_each_prefix(
-				std::begin(s), std::end(s),
-				std::forward<Pred>(pred)
-			);
-		}
-
-	private:
-		friend string_map;
-
-		struct r_node {
-			r_node()
-			: pair(nullptr), pos(0), char_id(0)
-			{}
-
-			r_node(
-				pair_type const *pair_, uintptr_t pos_,
-				uintptr_t char_id_
-			) : pair(pair_), pos(pos_), char_id(char_id_)
-			{}
-
-			pair_type const *pair;
-			uintptr_t pos;
-			uintptr_t char_id;
-		};
-
-		typedef std::vector<r_node, typename std::allocator_traits<
-			typename Policy::allocator_type
-		>::template rebind_alloc<r_node>> r_node_vec;
-
-		typedef std::scoped_allocator_adaptor<
-			typename std::allocator_traits<
-				typename Policy::allocator_type
-			>::template rebind_alloc<std::pair<
-				uintptr_t, r_node_vec
-			>>, typename r_node_vec::allocator_type
-		> trie_allocator_adaptor;
-
-		typedef std::unordered_map<
-			uintptr_t, r_node_vec, std::hash<uintptr_t>,
-			std::equal_to<uintptr_t>, trie_allocator_adaptor
-		> r_trie_type;
-
-		struct state {
-			typedef typename prefix_string_type::allocator_type
-			allocator_type;
-
-			state(
-				typename r_trie_type::const_iterator r_pos_,
-				typename r_node_vec::const_iterator b_pos_,
-				allocator_type const &a
-			) : prefix(a), r_pos(r_pos_), b_pos(b_pos_)
-			{}
-
-			state(allocator_type const &a)
-			: prefix(a)
-			{}
-
-			state(state const &other, allocator_type const &a)
-			: prefix(other.prefix), r_pos(other.r_pos),
-			  b_pos(other.b_pos)
-			{}
-
-			state(state &&other, allocator_type const &a)
-			: prefix(std::move(other.prefix)),
-			  r_pos(std::move(other.r_pos)),
-			  b_pos(std::move(other.b_pos))
-			{}
-
-			prefix_string_type prefix;
-			typename r_trie_type::const_iterator r_pos;
-			typename r_node_vec::const_iterator b_pos;
-		};
-
-		typedef std::scoped_allocator_adaptor<
-			typename std::allocator_traits<
-				typename Policy::allocator_type
-			>::template rebind_alloc<state>,
-			typename state::allocator_type
-		> state_allocator_adaptor;
-
-		typedef std::vector<
-			state, state_allocator_adaptor
-		> state_stack_type;
-
-		const_reverse_index(
-			string_map const &parent_,
-			typename decltype(items)::allocator_type const &a
-		) : parent(parent_), r_trie(
-			10, typename r_trie_type::hasher(),
-			typename r_trie_type::key_equal(),
-			trie_allocator_adaptor(a, a)
-		) {}
-
-		template <typename Pred>
-		void for_each_impl(state_stack_type &ss, Pred &&pred) const;
-
-		string_map const &parent;
-		r_trie_type r_trie;
-	};
-
-	struct reverse_index : const_reverse_index {
-	private:
-		friend string_map;
-
-		reverse_index(
-			string_map &parent_,
-			typename decltype(items)::allocator_type const &a
-		) : const_reverse_index(parent_, a)
-		{}
-	};
-
-	const_reverse_index make_index() const;
-	reverse_index make_index();
+	std::tuple<size_type, Policy::encoding_map> tup_breadth_map;
 };
 
 }}

@@ -9,7 +9,7 @@
 #define UCPF_YESOD_STRING_MAP_JAN_06_2014_1145
 
 #include <yesod/sparse_vector.hpp>
-
+#include <yesod/detail/dense_encoding_map.hpp>
 #include <yesod/detail/string_map_base.hpp>
 #include <yesod/detail/string_map_ops.hpp>
 
@@ -19,10 +19,10 @@ template <typename CharType>
 struct string_map_default_policy {
 	typedef std::allocator<void> allocator_type;
 	typedef std::char_traits<CharType> char_traits_type;
-	typedef typename std::make_unsigned<
-		typename char_traits_type::char_type
-	>::type index_char_type;
-
+	typedef detail::dense_encoding_map<
+		CharType, allocator_type
+	> encoding_map;
+	typedef typename encoding_map::index_type index_char_type;
 	typedef sparse_vector<> storage_type;
 	typedef sparse_vector_default_policy storage_policy_base;
 	constexpr static size_t short_suffix_length = 16;
