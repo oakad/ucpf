@@ -519,13 +519,13 @@ struct facade {
 	}
 
 	typedef typename std::conditional<
-		(sizeof...(Tn) > 3),
+		sizeof...(Tn) > 3,
 		typename mpl::apply_wrap<mpl::arg<3>, Tn...>::type,
 		x_value_type &
 	>::type reference;
 
 	typedef typename std::conditional<
-		(sizeof...(Tn) > 4),
+		sizeof...(Tn) > 4,
 		typename mpl::apply_wrap<mpl::arg<4>, Tn...>::type,
 		std::ptrdiff_t
 	>::type difference_type;

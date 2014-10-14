@@ -24,7 +24,7 @@ struct string_map_default_policy {
 	> encoding_map;
 	typedef typename encoding_map::index_type index_char_type;
 	typedef sparse_vector<> storage_type;
-	typedef sparse_vector_default_policy storage_policy_base;
+	typedef sparse_vector_default_policy storage_policy;
 	constexpr static size_t short_suffix_length = 16;
 };
 

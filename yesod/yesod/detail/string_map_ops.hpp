@@ -16,7 +16,7 @@
 #define UCPF_YESOD_DETAIL_STRING_MAP_OPS_JAN_06_2014_1145
 
 namespace ucpf { namespace yesod {
-
+#if 0
 template <typename CharType, typename ValueType, typename Policy>
 template <typename Iterator, typename... Args>
 auto string_map<CharType, ValueType, Policy>::emplace_at(
@@ -400,11 +400,13 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 
 	return adj;
 }
-
+#endif
 template <typename CharType, typename ValueType, typename Policy>
-template <typename Alloc, typename Iterator, typename... Args>
-auto string_map<CharType, ValueType, Policy>::value_pair::construct(
-	Alloc const &a, Iterator first, Iterator last, Args&&... args
+template <
+	typename Alloc, typename Encoding, typename Iterator, typename... Args
+> auto string_map<CharType, ValueType, Policy>::value_pair::construct(
+	Alloc const &a, Encoding const &e, Iterator first, Iterator last,
+	Args&&... args
 ) -> value_pair *
 {
 	typedef allocator::array_helper<char_type, Alloc> ah_c;

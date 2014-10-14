@@ -89,7 +89,7 @@ struct string_map {
 			));
 			auto p(items.ptr_at(vec_offset(n_pos)));
 			if (
-				p && p->base && (p->check == rv.second)
+				p && (p->check == rv.second)
 				&& p->is_leaf()
 			) {
 				auto vp(p->leaf_ptr());
@@ -257,10 +257,12 @@ private:
 	);
 
 	struct alignas(uintptr_t) value_pair {
-		template <typename Alloc, typename Iterator, typename... Args>
-		static value_pair *construct(
-			Alloc const &a, Iterator first, Iterator last,
-			Args&&... args
+		template <
+			typename Alloc, typename Encoding, typename Iterator,
+			typename... Args
+		> static value_pair *construct(
+			Alloc const &a, Encoding const &e,
+			Iterator first, Iterator last, Args&&... args
 		);
 
 		template <typename Alloc>
@@ -269,7 +271,7 @@ private:
 		template <typename Alloc>
 		void shrink_suffix(Alloc const &a, size_type count);
 
-		char_type *suffix()
+		index_char_type *suffix()
 		{
 			if (suffix_length <= Policy::short_suffix_length)
 				return short_suffix;
@@ -277,7 +279,7 @@ private:
 				return long_suffix.data + long_suffix.offset;
 		}
 
-		char_type const *suffix() const
+		index_char_type const *suffix() const
 		{
 			if (suffix_length <= Policy::short_suffix_length)
 				return short_suffix;
@@ -285,28 +287,16 @@ private:
 				return long_suffix.data + long_suffix.offset;
 		}
 
-		template <typename Iterator>
-		bool match(Iterator first, Iterator last) const
-		{
-			return (suffix_length == std::distance(first, last))
-			       && (suffix_length == common_length(first, last));
-		}
-
-		template <typename Iterator>
-		bool prefix_match(Iterator first, Iterator last) const
-		{
-			return std::distance(first, last)
-			       == common_length(first, last);
-		}
-
-		template <typename Iterator>
-		size_type common_length(Iterator first, Iterator last) const
+		template <typename Encoding, typename Iterator>
+		size_type common_length(
+			Encoding const &e, Iterator first, Iterator last
+		) const
 		{
 			size_type pos(0);
 			auto s_ptr(suffix());
 
 			while ((pos < suffix_length) && (first != last)) {
-				if (s_ptr[pos] != *first)
+				if (e.value(s_ptr[pos]) != *first)
 					break;
 
 				++first;
@@ -315,16 +305,38 @@ private:
 			return pos;
 		}
 
+		template <typename Encoding, typename Iterator>
+		bool prefix_match(
+			Encoding const &e, Iterator first, Iterator last
+		) const
+		{
+			return std::distance(first, last) == common_key_length(
+				e, first, last
+			);
+		}
+
+		template <typename Encoding, typename Iterator>
+		bool match(
+			Encoding const &e, Iterator first, Iterator last
+		) const
+		{
+			return (
+				suffix_length == std::distance(first, last)
+			) && (suffix_length == common_length(e, first, last));
+		}
+
 		size_type suffix_length;
 		value_type value;
 
 		union {
 			struct {
-				char_type *data;
+				index_char_type *data;
 				size_type offset;
 			} long_suffix;
 
-			char_type short_suffix[Policy::short_suffix_length];
+			index_char_type short_suffix[
+				Policy::short_suffix_length
+			];
 		};
 
 		template <typename... Args>
@@ -337,22 +349,8 @@ private:
 		{}
 	};
 
-	struct pair_valid_pred
-	{
-		static bool test(pair_type const &p)
-		{
-			return p.check != 0;
-		}
-	};
-
-	struct storage_policy : Policy::storage_policy_base {
-		typedef typename Policy::allocator_type allocator_type;
-		typedef pair_valid_pred value_valid_pred;
-	};
-
-	pair_type root;
 	typename Policy::storage_type::template rebind<
-		pair_type, storage_policy
+		pair_type, typename Policy::storage_policy
 	>::other items;
 	std::tuple<size_type, Policy::encoding_map> tup_breadth_map;
 };
