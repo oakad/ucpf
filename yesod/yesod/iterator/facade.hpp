@@ -18,10 +18,13 @@
     file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ==============================================================================*/
 
-#if !defined(UCPF_YESOD_ITERATOR_FACADE_DEC_19_2013_1330)
-#define UCPF_YESOD_ITERATOR_FACADE_DEC_19_2013_1330
+#if !defined(UCPF_YESOD_ITERATOR_FACADE_20131219T1330)
+#define UCPF_YESOD_ITERATOR_FACADE_20131219T1330
 
 #include <yesod/iterator/categories.hpp>
+#include <yesod/mpl/at.hpp>
+#include <yesod/mpl/size.hpp>
+#include <yesod/mpl/package_range_c.hpp>
 
 namespace ucpf { namespace yesod { namespace iterator {
 namespace detail {
@@ -314,11 +317,11 @@ template <
 
 }
 
-template <typename... Tn>
+template <typename... Args>
 struct facade;
 
 struct core_access {
-	template <typename... Tn>
+	template <typename... Args>
 	friend struct facade;
 
 	template <typename... Tn, typename... Un>
@@ -487,26 +490,17 @@ private:
 	core_access();
 };
 
-/* Expected arguments in order:
- * 1. Derived type for CRTP
- * 2. Value type
- * 3. Iterator category or traversal type
- * 4. Reference type
- * 5. Difference type
+/* Optional arguments in order:
+ * 1. Reference type
+ * 2. Difference type
  */
-template <typename... Tn>
-struct facade {
-	static_assert(
-		sizeof...(Tn) > 2,
-		"At least the derived type for CRTP, value type and category "
-		"must be specified."
-	);
-
-	typedef typename mpl::apply_wrap<mpl::arg<0>, Tn...>::type derived_type;
-	typedef typename mpl::apply_wrap<mpl::arg<1>, Tn...>::type x_value_type;
-	typedef typename mpl::apply_wrap<
-		mpl::arg<2>, Tn...
-	>::type x_category_type;
+template <
+	typename Derived, typename ValueType, typename CategoryOrTraversal,
+	typename... Args
+>
+struct facade<Derived, ValueType, CategoryOrTraversal, Args...> {
+	typedef Derived derived_type;
+	typedef ValueType x_value_type;
 
 	derived_type &derived()
 	{
@@ -518,19 +512,32 @@ struct facade {
 		return *static_cast<derived_type const *>(this);
 	}
 
-	typedef typename std::conditional<
-		sizeof...(Tn) > 3,
-		typename mpl::apply_wrap<mpl::arg<3>, Tn...>::type,
-		x_value_type &
-	>::type reference;
+	typedef mpl::package<x_value_type &, std::ptrdiff_t> default_args_pack;
 
-	typedef typename std::conditional<
-		sizeof...(Tn) > 4,
-		typename mpl::apply_wrap<mpl::arg<4>, Tn...>::type,
-		std::ptrdiff_t
+	static_assert(
+		sizeof...(Args) <= mpl::size<default_args_pack>::type::value,
+		"too many optional parameters"
+	);
+
+	typedef typename mpl::at_c_indices<
+		mpl::at_c_value<default_args_pack>::template at_c,
+		typename mpl::package_range_c<
+			long, sizeof...(Args),
+			mpl::size<default_args_pack>::type::value
+		>::type
+        >::type x_default_args_pack;
+
+	typedef typename mpl::join_pack<
+		mpl::package<Args...>, x_default_args_pack
+	>::type optional_args_pack;
+
+	typedef typename mpl::at_c<optional_args_pack, 0>::type reference;
+	typedef typename mpl::at_c<
+		optional_args_pack, 1
 	>::type difference_type;
 
 private:
+	typedef CategoryOrTraversal x_category_type;
 
 	typedef detail::facade_types<
 		x_value_type, x_category_type, reference, difference_type

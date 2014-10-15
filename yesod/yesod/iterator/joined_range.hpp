@@ -5,8 +5,10 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_YESOD_ITERATOR_JOINED_RANGE_MAR_27_2014_1630)
-#define UCPF_YESOD_ITERATOR_JOINED_RANGE_MAR_27_2014_1630
+#if !defined(UCPF_YESOD_ITERATOR_JOINED_RANGE_20140327T1630)
+#define UCPF_YESOD_ITERATOR_JOINED_RANGE_20140327T1630
+
+#include <functional>
 
 #include <yesod/mpl/min_max.hpp>
 #include <yesod/mpl/common_base.hpp>
@@ -89,10 +91,8 @@ public:
 
 	template <typename ValueType>
 	struct iterator_base : facade<
-		iterator_base<ValueType>, ValueType,
-		iterator_category
+		iterator_base<ValueType>, ValueType, iterator_category
 	> {
-
 		~iterator_base()
 		{
 			if (r && (slice_pos < r->s_access.size()))

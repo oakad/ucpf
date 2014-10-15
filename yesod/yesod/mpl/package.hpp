@@ -20,6 +20,7 @@
 #if !defined(UCPF_YESOD_MPL_PACKAGE_DEC_12_2013_1230)
 #define UCPF_YESOD_MPL_PACKAGE_DEC_12_2013_1230
 
+#include <yesod/mpl/at.hpp>
 #include <yesod/mpl/deref.hpp>
 #include <yesod/mpl/next_prior.hpp>
 #include <yesod/mpl/sequence_fwd.hpp>
@@ -71,6 +72,14 @@ struct at_c_always {
 	template <typename Index, Index I>
 	struct at_c {
 		typedef T type;
+	};
+};
+
+template <typename Sequence>
+struct at_c_value {
+	template <typename Index, Index I>
+	struct at_c {
+		typedef typename mpl::at_c<Sequence, I>::type type;
 	};
 };
 

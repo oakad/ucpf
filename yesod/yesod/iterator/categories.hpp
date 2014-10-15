@@ -19,8 +19,8 @@
 #define UCPF_YESOD_ITERATOR_CATEGORIES_DEC_20_2013_2300
 
 #include <yesod/mpl/pair.hpp>
-#include <yesod/mpl/list.hpp>
 #include <yesod/mpl/find.hpp>
+#include <yesod/mpl/package.hpp>
 
 #include <iterator>
 
@@ -40,7 +40,7 @@ struct random_access_traversal_tag : bidirectional_traversal_tag {};
 
 namespace detail {
 
-typedef mpl::list<
+typedef mpl::package<
 	mpl::pair<std::random_access_iterator_tag, random_access_traversal_tag>,
 	mpl::pair<std::bidirectional_iterator_tag, bidirectional_traversal_tag>,
 	mpl::pair<std::forward_iterator_tag, forward_traversal_tag>,
@@ -81,8 +81,7 @@ struct category_to_traversal {
 	struct has_category {
 		template <typename U>
 		using apply = std::is_convertible<
-			T,
-			typename mpl::first<U>::type
+			T, typename mpl::first<U>::type
 		>;
 	};
 

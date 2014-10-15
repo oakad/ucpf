@@ -9,4 +9,4 @@ run facade.cpp : : test_case ;
 run joined_range.cpp : : test_case ;
 run object_collector.cpp : : test_case ;
 run range.cpp : : test_case ;
-
+run transform.cpp : : test_case ;

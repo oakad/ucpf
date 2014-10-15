@@ -9,3 +9,6 @@ p_array_test: p_array_test.cpp
 
 string_map_test: string_map_test.cpp
 	$(CC) $(CXXFLAGS) -g -o $@ $^
+
+t2: t2.cpp
+	$(CC) $(CXXFLAGS) -g -o $@ $^

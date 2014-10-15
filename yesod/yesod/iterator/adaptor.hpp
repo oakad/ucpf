@@ -23,61 +23,73 @@
 #include <yesod/iterator/facade.hpp>
 
 namespace ucpf { namespace yesod { namespace iterator {
+
+template <typename... Args>
+struct adaptor;
+
 namespace detail {
 
-template <typename... Tn>
+template <typename Derived, typename Base, typename... Args>
 struct adaptor_base {
-	static_assert(
-		sizeof...(Tn) > 1,
-		"At least the derived type for CRTP and base iterator type "
-		"must be specified."
-	);
+	typedef Derived derived_type;
+	typedef Base iterator_type;
 
-	typedef mpl::apply_wrap<mpl::arg<0>, Tn...>::type derived_type;
-	typedef mpl::apply_wrap<mpl::arg<1>, Tn...>::type iterator_type;
-	typedef std::iterator_traits<iterator_type> traits_type;
+	template <typename IterType, size_t N>
+	struct default_args {
+		typedef std::iterator_traits<IterType> traits_type;
 
-	typedef typename facade<
-		derived_type,
-		typename std::conditional<
-			sizeof...(Tn) > 2,
-			typename mpl::apply_wrap<mpl::arg<2>, Tn...>::type,
-			typename traits_type::value_type
-		>::type,
-		typename std::conditional<
-			sizeof...(Tn) > 3,
-			typename mpl::apply_wrap<mpl::arg<3>, Tn...>::type,
-			typename traits_type::iterator_category
-		>::type,
-		typename std::conditional<
-			sizeof...(Tn) > 4,
-			typename mpl::apply_wrap<mpl::arg<4>, Tn...>::type,
-			typename traits_type::reference
-		>::type,
-		typename std::conditional<
-			sizeof...(Tn) > 5,
-			typename mpl::apply_wrap<mpl::arg<5>, Tn...>::type,
+		typedef mpl::package<
+			typename traits_type::value_type,
+			typename traits_type::iterator_category,
+			typename traits_type::reference,
 			typename traits_type::difference_type
-		>::type
-	>::type type;
+		> all_traits_pack;
+
+		typedef typename mpl::at_c_indices<
+			mpl::at_c_value<all_traits_pack>::template at_c,
+			typename mpl::package_range_c<
+				long, N,
+				mpl::size<all_traits_pack>::type::value
+			>::type
+	        >::type pack;
+	};
+
+	template <typename IterType>
+	struct default_args<IterType, 4> {
+		typedef mpl::package<> pack;
+	};
+
+	typedef typename mpl::join_pack<
+		mpl::package<Args...>,
+		typename default_args<iterator_type, sizeof...(Args)>::pack
+	>::type optional_args_pack;
+
+	typedef facade<
+		derived_type,
+		typename mpl::at_c<optional_args_pack, 0>::type,
+		typename mpl::at_c<optional_args_pack, 1>::type,
+		typename mpl::at_c<optional_args_pack, 2>::type,
+		typename mpl::at_c<optional_args_pack, 3>::type
+	> type;
 };
 
 }
 
-/* Expected arguments in order:
- * 1. Derived type for CRTP
- * 2. Base iterator type
- * 3. Value type
- * 4. Iterator category or traversal type
- * 5. Reference type
- * 6. Difference type
+/* Optional arguments in order:
+ * 1. Value type
+ * 2. Iterator category or traversal type
+ * 3. Reference type
+ * 4. Difference type
  */
-template <typename... Tn>
-struct adaptor : adaptor_base<Tn...>::type
-{
-	typedef typename adaptor_base<Tn...> base_type;
+template <typename Derived, typename Base, typename... Args>
+struct adaptor<Derived, Base, Args...> : detail::adaptor_base<
+	Derived, Base, Args...
+>::type {
+	static_assert(sizeof...(Args) < 5, "too many optional parameters");
+
+	typedef detail::adaptor_base<Derived, Base, Args...> base_type;
 	typedef typename base_type::iterator_type base_iterator_type;
-	typedef adaptor<Tn...> adaptor_type;
+	typedef adaptor<Derived, Base, Args...> adaptor_type;
 
 	adaptor()
 	{}
