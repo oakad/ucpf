@@ -268,7 +268,7 @@ BOOST_AUTO_TEST_CASE(transform_4)
 	test::random_access_readable_iterator_test(
 		make_transform(values, test::const_select_first()), count, x
 	);
-#if 0
+
 	test::constant_lvalue_iterator_test(
 		make_transform(values, test::const_select_first()), x[0]
 	); 
@@ -276,7 +276,7 @@ BOOST_AUTO_TEST_CASE(transform_4)
 	test::non_const_lvalue_iterator_test(
 		make_transform(values, test::select_first()), x[0], 17
 	);
-#endif
+
 	test::const_nonconst_iterator_test(
 		++make_transform(values, test::select_first()),
 		make_transform(values, test::const_select_first())

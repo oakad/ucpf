@@ -134,6 +134,16 @@ private:
 			return !(base & 1);
 		}
 
+		bool is_vacant() const
+		{
+			return !(check & 1);
+		}
+
+		uintptr_t prev_vacant() const
+		{
+			return check + 3;
+		}
+
 		value_pair const *leaf_ptr() const
 		{
 			return reinterpret_cast<value_pair const *>(base);

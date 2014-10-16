@@ -19,6 +19,25 @@ std::string demangle()
 {
 	auto *s(abi::__cxa_demangle(typeid(T).name(), 0, 0, 0));
 	std::string rv(s);
+	if (std::is_const<T>::value)
+		rv.append(" const");
+
+	if (std::is_rvalue_reference<T>::value) {
+		if (std::is_const<
+			typename std::remove_reference<T>::type
+		>::value)
+			rv.append(" const");
+
+		rv.append(" &&");
+	} else if (std::is_lvalue_reference<T>::value) {
+		if (std::is_const<
+			typename std::remove_reference<T>::type
+		>::value)
+			rv.append(" const");
+
+		rv.append(" &");
+	}
+
 	free(s);
 	return rv;
 }

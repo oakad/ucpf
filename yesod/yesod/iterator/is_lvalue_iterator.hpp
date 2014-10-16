@@ -15,8 +15,8 @@
     file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ==============================================================================*/
 
-#if !defined(UCPF_YESOD_ITERATOR_IS_LVALUE_ITERATOR_DEC_23_2013_1400)
-#define UCPF_YESOD_ITERATOR_IS_LVALUE_ITERATOR_DEC_23_2013_1400
+#if !defined(UCPF_YESOD_ITERATOR_IS_LVALUE_ITERATOR_20131223T1400)
+#define UCPF_YESOD_ITERATOR_IS_LVALUE_ITERATOR_20131223T1400
 
 namespace ucpf { namespace yesod { namespace iterator {
 namespace detail {
@@ -41,12 +41,12 @@ struct is_lvalue_iterator_impl {
 	};
 
 	static std::true_type tester(conversion_eater, int);
-	static std::false_type tester(any_conversion_eater, int);
+	static std::false_type tester(any_conversion_eater, ...);
 
-	template <typename It>
+	template <typename Iterator>
 	struct rebind {
-		static It &x;
-		static constexpr bool value = decltype(tester(
+		static Iterator &x;
+		constexpr static bool value = decltype(tester(
 			lvalue_preserver(*x, 0), 0
 		))::value;
 	};
@@ -54,48 +54,48 @@ struct is_lvalue_iterator_impl {
 
 template <>
 struct is_lvalue_iterator_impl<void> {
-	template <typename It>
+	template <typename Iterator>
 	using rebind = std::false_type;
 };
 
 template <>
 struct is_lvalue_iterator_impl<void const> {
-	template <typename It>
+	template <typename Iterator>
 	using rebind = std::false_type;
 };
 
 template <>
 struct is_lvalue_iterator_impl<void volatile> {
-	template <typename It>
+	template <typename Iterator>
 	using rebind = std::false_type;
 };
 
 template <>
 struct is_lvalue_iterator_impl<void const volatile> {
-	template <typename It>
+	template <typename Iterator>
 	using rebind = std::false_type;
 };
 
-template <typename It>
+template <typename Iterator>
 using is_readable_lvalue_iterator_impl = typename is_lvalue_iterator_impl<
-	typename std::iterator_traits<It>::value_type const
->::template rebind<It>;
+	typename std::iterator_traits<Iterator>::value_type const
+>::template rebind<Iterator>;
 
-template <typename It>
+template <typename Iterator>
 using is_non_const_lvalue_iterator_impl = typename is_lvalue_iterator_impl<
-	typename std::iterator_traits<It>::value_type
->::template rebind<It>;
+	typename std::iterator_traits<Iterator>::value_type
+>::template rebind<Iterator>;
 
 }
 
-template <typename T>
+template <typename Iterator>
 using is_lvalue_iterator = std::integral_constant<
-	bool, detail::is_readable_lvalue_iterator_impl<T>::value
+	bool, detail::is_readable_lvalue_iterator_impl<Iterator>::value
 >;
 
-template <typename T>
+template <typename Iterator>
 using is_non_const_lvalue_iterator = std::integral_constant<
-	bool, detail::is_non_const_lvalue_iterator_impl<T>::value
+	bool, detail::is_non_const_lvalue_iterator_impl<Iterator>::value
 >;
 
 }}}

@@ -8,9 +8,10 @@
     file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ==============================================================================*/
 
-#if !defined(UCPF_YESOD_ITERATOR_TEST_ITERATOR_DEC_20_2013_2300)
-#define UCPF_YESOD_ITERATOR_TEST_ITERATOR_DEC_20_2013_2300
+#if !defined(UCPF_YESOD_ITERATOR_TEST_ITERATOR_20131220T2300)
+#define UCPF_YESOD_ITERATOR_TEST_ITERATOR_20131220T2300
 
+#include <yesod/mpl/logical.hpp>
 #include <yesod/iterator/is_lvalue_iterator.hpp>
 
 namespace ucpf { namespace yesod { namespace iterator { namespace test {

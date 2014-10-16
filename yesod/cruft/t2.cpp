@@ -10,7 +10,8 @@
 #include <yesod/mpl/size.hpp>
 #include <yesod/iterator/range.hpp>
 #include <yesod/iterator/joined_range.hpp>
-
+#include <yesod/iterator/transform.hpp>
+#include <yesod/iterator/is_lvalue_iterator.hpp>
 
 #include "../test/test_demangle.hpp"
 
@@ -107,11 +108,51 @@ void t2()
 	std::cout << mpl::size<p3>::type::value << '\n';
 }
 
+struct const_select_first {
+	int const &operator()(std::pair<int, int> &p) const
+	{
+		return p.first;
+	}
+};
+
+int &func_x()
+{
+	static int xx = 5;
+	return xx;
+}
+
+void t3()
+{
+	constexpr static std::size_t count = 10;
+	typedef std::pair<int, int> pair_type;
+
+	int x[count], y[count];
+	pair_type values[count];
+
+	typedef decltype(make_transform(values, const_select_first())) iter_type;
+	printf("aa %s\n", t::demangle<iter_type>().c_str());
+	printf("aa %s\n", t::demangle<typename iter_type::value_type>().c_str());
+	printf("aa %s\n", t::demangle<typename iter_type::reference>().c_str());
+	printf("bb %s\n", t::demangle<
+		std::iterator_traits<pair_type *>::reference
+	>().c_str());
+
+	printf("bb %s\n", t::demangle<
+		typename std::result_of<
+			const const_select_first(
+				typename std::iterator_traits<pair_type *>::reference
+			)
+		>::type
+	>().c_str());
+	printf("xx %d\n", is_lvalue_iterator<iter_type>::value);
+}
+
 }}}
 
 int main()
 {
 	//ucpf::yesod::iterator::t1();
-	ucpf::yesod::iterator::t2();
+	//ucpf::yesod::iterator::t2();
+	ucpf::yesod::iterator::t3();
 	return 0;
 }
