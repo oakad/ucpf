@@ -45,21 +45,33 @@ struct string_map {
 	typedef typename allocator_traits::const_pointer const_pointer;
 
 	string_map(allocator_type const &a = allocator_type())
-	: root{0, 0}, items(a), tup_breadth_map(0, Policy::encoding_map(a))
-	{}
-
-	template <typename StringType, typename... Args>
-	std::pair<reference, bool> emplace_at(StringType &&s, Args&&... args)
+	: items(a), tup_breadth_map(0, Policy::encoding_map(a))
 	{
-		return emplace_at(
-			std::begin(s), std::end(s), std::forward<Args>(args)...
-		);
+		items.emplace_at(0, pair_type::make(1, 1));
 	}
 
-	template <typename Iterator, typename... Args>
-	std::pair<reference, bool> emplace_at(
-		Iterator first, Iterator last, Args&&... args
-	);
+	~string_map()
+	{
+		clear();
+	}
+
+	void clear()
+	{
+		auto &a(items.get_allocator());
+		items.for_each(
+			0, [a](
+				decltype(items)::size_type pos,
+				pair_type &p
+			) -> bool {
+				if (p.is_leaf())
+					value_pair::destroy(a, p.leaf_ptr());
+
+				return false;
+			}
+		);
+		items.clear();
+		items.emplace_at(0, pair_type::make(1, 1));
+	}
 
 	template <typename StringType>
 	pointer find(StringType &&s)
@@ -74,29 +86,28 @@ struct string_map {
 	}
 
 	template <typename Iterator>
-	const_pointer find(Iterator first, Iterator last) const
+	const_pointer find(Iterator first_, Iterator last_) const
 	{
+		c_encoding_adapter<
+			decltype(tup_breadth_map)
+		> map(tup_breadth_map);
+
+		auto first(iterator::make_transform(first_, map));
+		auto last(iterator::make_transform(last_, map));
+
 		auto rv(find_impl(first, last));
 		if (!rv.first)
 			return nullptr;
 
-		if (!rv.first->is_leaf()) {
-			/* Check for virtual key terminator (will appear if
-			 * one key is a substring of another).
-			 */
-			auto n_pos(char_offset(
-				rv.first->base, terminator_char
-			));
-			auto p(items.ptr_at(vec_offset(n_pos)));
-			if (
-				p && (p->check == rv.second)
-				&& p->is_leaf()
-			) {
-				auto vp(p->leaf_ptr());
-				if (vp->match(first, last))
-					return &vp->value;
-			}
-		} else {
+		/* Check for virtual key terminator (will appear if
+		 * one key is a substring of another).
+		 */
+		if (!rv.first->is_leaf())
+			rv = rv.first->child_at(
+				items, rv.second, terminator_char
+			);
+
+		if (rv.first->is_leaf()) {
 			auto vp(rv.first->leaf_ptr());
 			if (vp->match(first, last))
 				return &vp->value;
@@ -111,8 +122,22 @@ struct string_map {
 		auto rv(
 			const_cast<string_map const *>(this)->find(first, last)
 		);
+
 		return const_cast<pointer>(rv);
 	}
+
+	template <typename StringType, typename... Args>
+	std::pair<reference, bool> emplace_at(StringType &&s, Args&&... args)
+	{
+		return emplace_at(
+			std::begin(s), std::end(s), std::forward<Args>(args)...
+		);
+	}
+
+	template <typename Iterator, typename... Args>
+	std::pair<reference, bool> emplace_at(
+		Iterator first_, Iterator last_, Args&&... args
+	);
 
 	std::basic_ostream<
 		CharType, typename Policy::char_traits_type
@@ -123,12 +148,15 @@ struct string_map {
 	) const;
 
 private:
+	struct pair_type;
 	struct alignas(uintptr_t) value_pair;
+	typedef Policy::encoding_map encoding_map_type;
+	typedef std::pair<pair_type *, uintptr_t> pair_loc;
+	typedef std::pair<pair_type const *, uintptr_t> c_pair_loc;
+	constexpr static uintptr_t terminator_index = 1;
+	constexpr static uintptr_t base_index = 2;
 
 	struct pair_type {
-		uintptr_t base;
-		uintptr_t check;
-
 		bool is_leaf() const
 		{
 			return !(base & 1);
@@ -139,9 +167,38 @@ private:
 			return !(check & 1);
 		}
 
-		uintptr_t prev_vacant() const
+		template <typename StorageType>
+		pair_loc pair_at(
+			StorageType &items, uintptr_t char_index
+		)
 		{
-			return check + 3;
+			auto pos = (base >> 1) + char_index;
+			return pair_loc(items.ptr_at(pos), pos);
+		}
+
+		template <typename StorageType>
+		c_pair_loc child_at(
+			StorageType const &items, uintptr_t pos,
+			uintptr_t char_index
+		) const
+		{
+			c_pair_loc rv(nullptr, (base >> 1) + char_index);
+
+			auto p(items.ptr_at(rv.second));
+			if (p && ((p->check >> 1) == pos))
+				rv.first = p;
+
+			return rv;
+		}
+
+		uintptr_t base_offset() const
+		{
+			return base >> 1;
+		}
+
+		uintptr_t parent() const
+		{
+			return check >> 1;
 		}
 
 		value_pair const *leaf_ptr() const
@@ -165,114 +222,54 @@ private:
 				reinterpret_cast<uintptr_t>(base_), check_
 			};
 		}
+
+		uintptr_t base;
+		uintptr_t check;
 	};
 
-	typedef std::forward_list<
-		pair_type *,
-		typename std::allocator_traits<
-			typename Policy::allocator_type
-		>::template rebind_alloc<pair_type *>
-	> pair_ptr_list;
+	template <typename EncTuple>
+	struct encoding_adapter {
+		encoding_adapter(EncTuple &tup_)
+		: tup(tup_)
+		{}
 
-	typedef std::tuple<
-		pair_type *, uintptr_t, pair_ptr_list
-	> index_entry_type;
-
-	typedef std::vector<
-		index_entry_type,
-		typename std::allocator_traits<
-			typename Policy::allocator_type
-		>::template rebind_alloc<index_entry_type>
-	> index_entry_set;
-
-	constexpr static uintptr_t terminator_index = 1;
-	constexpr static uintptr_t base_index = 2;
-
-	template <typename Iterator>
-	static uintptr_t deref_char(Iterator const &iter)
-	{
-		return static_cast<uintptr_t>(*iter) + base_index;
-	}
-
-	/* logical:  0 1 2 3 4 5...
-	 * physical: r 0 1 2 3 4...
-	 * encoded:  1 3 5 7 9 11...
-	 *
-	 * encoded v -> encoded (v + c)
-	 * offset 1 is a virtual string terminator
-	 */
-	static uintptr_t char_offset(uintptr_t v, uintptr_t c)
-	{
-		return v + (c << 1);
-	}
-
-	/* encoded -> physical */
-	static uintptr_t vec_offset(uintptr_t v)
-	{
-		return (v - 3) >> 1;
-	}
-
-	/* physical -> encoded */
-	static uintptr_t log_offset(uintptr_t v)
-	{
-		return (v << 1) + 3;
-	}
-
-	/* encoded + physical -> encoded */
-	static uintptr_t adjust_encoded(uintptr_t v, uintptr_t adj)
-	{
-		return v + (adj << 1);
-	}
-
-	/* physical - encoded -> char */
-	static uintptr_t offset_to_char(uintptr_t v, uintptr_t adj)
-	{
-		return (log_offset(v) - adj) >> 1;
-	}
-
-	index_char_type char_index(char_type c) const
-	{
-		return std::min(
-			size_type(std::get<1>(tup_breadth_map).index(c)),
-			std::get<0>(tup_breadth_map)
-		);
-	}
-
-	index_char_type assign_char_index(char_type c)
-	{
-		auto id(std::get<1>(tup_breadth_map).index(c));
-		if (id >= std::get<0>(tup_breadth_map)) {
-			id = std::get<0>(tup_breadth_map);
-			std::get<1>(tup_breadth_map).set(c, id);
-			++std::get<0>(tup_breadth_map);
+		index_char_type operator()(char_type c) const
+		{
+			auto id(std::get<1>(tup).index(c));
+			auto next_id(std::get<0>(tup));
+			if (id < next_id)
+				return id;
+			else {
+				std::get<1>(tup).set(c, next_id);
+				++std::get<0>(tup);
+				return next_id;
+			}
 		}
-		return id;
-	}
 
-	template <typename Iterator>
-	std::pair<pair_type const *, uintptr_t> find_impl(
-		Iterator &first, Iterator const &last
-	) const;
+		EncTuple &tup;
+	};
 
-	std::pair<pair_type *, uintptr_t> unroll_key(
-		pair_type *p, uintptr_t pos, size_type count, uintptr_t other
-	);
+	template <typename EncTuple>
+	struct c_encoding_adapter {
+		c_encoding_adapter(EncTuple const &tup_)
+		: tup(tup_)
+		{}
 
-	std::pair<pair_type *, uintptr_t> split_subtree(
-		uintptr_t r_pos, uintptr_t l_pos, uintptr_t k_char
-	);
+		index_char_type operator()(char_type c) const
+		{
+			return std::get<1>(tup).index(c);
+		}
 
-	uintptr_t advance_edges(
-		uintptr_t pos, index_entry_set &b_set, uintptr_t k_char
-	);
+		EncTuple const &tup;
+	};
 
 	struct alignas(uintptr_t) value_pair {
 		template <
-			typename Alloc, typename Encoding, typename Iterator,
+			typename Alloc, typename IndexIterator,
 			typename... Args
 		> static value_pair *construct(
-			Alloc const &a, Encoding const &e,
-			Iterator first, Iterator last, Args&&... args
+			Alloc const &a, IndexIterator first,
+			IndexIterator last, Args&&... args
 		);
 
 		template <typename Alloc>
@@ -297,16 +294,16 @@ private:
 				return long_suffix.data + long_suffix.offset;
 		}
 
-		template <typename Encoding, typename Iterator>
+		template <typename IndexIterator>
 		size_type common_length(
-			Encoding const &e, Iterator first, Iterator last
+			IndexIterator first, IndexIterator last
 		) const
 		{
 			size_type pos(0);
 			auto s_ptr(suffix());
 
 			while ((pos < suffix_length) && (first != last)) {
-				if (e.value(s_ptr[pos]) != *first)
+				if (s_ptr[pos] != *first)
 					break;
 
 				++first;
@@ -315,24 +312,22 @@ private:
 			return pos;
 		}
 
-		template <typename Encoding, typename Iterator>
+		template <typename IndexIterator>
 		bool prefix_match(
-			Encoding const &e, Iterator first, Iterator last
+			IndexIterator first, IndexIterator last
 		) const
 		{
 			return std::distance(first, last) == common_key_length(
-				e, first, last
+				first, last
 			);
 		}
 
-		template <typename Encoding, typename Iterator>
-		bool match(
-			Encoding const &e, Iterator first, Iterator last
-		) const
+		template <typename IndexIterator>
+		bool match(IndexIterator first, IndexIterator last) const
 		{
 			return (
 				suffix_length == std::distance(first, last)
-			) && (suffix_length == common_length(e, first, last));
+			) && (suffix_length == common_length(first, last));
 		}
 
 		size_type suffix_length;
@@ -359,10 +354,42 @@ private:
 		{}
 	};
 
+	template <typename IndexIterator>
+	static uintptr_t index_offset(IndexIterator iter)
+	{
+		return base_index + *iter;
+	}
+
+	char_type offset_char(uintptr_t index) const
+	{
+		return std::get<1>(tup_breadth_map).value(index - base_index);
+	}
+
+	template <typename IndexIterator>
+	c_pair_loc find_impl(
+		IndexIterator &first, IndexIterator const &last
+	) const
+	{
+		c_pair_loc rv(items.ptr_at(0), 0);
+
+		while (first != last) {
+			rv = rv.first->child_at(
+				items, rv.second, index_offset(first)
+			);
+
+			if (!rv.first || rv.first->is_leaf())
+				break;
+
+			++first;
+		}
+
+		return rv;
+	}
+
 	typename Policy::storage_type::template rebind<
 		pair_type, typename Policy::storage_policy
 	>::other items;
-	std::tuple<size_type, Policy::encoding_map> tup_breadth_map;
+	std::tuple<uintptr_t, encoding_map_type> tup_breadth_map;
 };
 
 }}

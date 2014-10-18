@@ -16,72 +16,78 @@
 #define UCPF_YESOD_DETAIL_STRING_MAP_OPS_JAN_06_2014_1145
 
 namespace ucpf { namespace yesod {
-#if 0
+
 template <typename CharType, typename ValueType, typename Policy>
 template <typename Iterator, typename... Args>
 auto string_map<CharType, ValueType, Policy>::emplace_at(
-	Iterator first, Iterator last, Args&&... args
+	Iterator first_, Iterator last_, Args&&... args
 ) -> std::pair<reference, bool>
 {
-	value_pair *rv(nullptr);
-	uintptr_t l_pos(1);
-	uintptr_t adj_pos(root);
-	bool inserted(true);
+	encoding_adapter<decltype(tup_breadth_map)> map(tup_breadth_map);
+	auto first(iterator::make_transform(first_, map));
+	auto last(iterator::make_transform(last_, map));
+	auto &a(items.get_allocator());
+	auto value_deleter([a](value_pair *p) -> void {
+		value_pair::destroy(a, p);
+	});
 
-	do {
-		auto n_pos(char_offset(adj_pos, deref_char(first)));
-		auto &p(items.at(vec_offset(n_pos)));
-		auto n_char(deref_char(first));
-		++first;
-		if (!p.check) {
-			rv = value_pair::construct(
-				items.get_allocator(), first, last,
-				std::forward<Args>(args)...
+	std::unique_ptr<
+		value_pair, decltype(value_deleter)
+	> vp(nullptr, value_deleter);
+
+	uintptr_t l_pos(0);
+	auto p(items.ptr_at(0));
+
+	while (first != last) {
+		auto n_index(index_offset(first));
+		auto q(p->pair_at(items, n_index));
+
+		if (!q.first || q.first->is_vacant()) {
+			vp.reset(value_pair::construct(
+				a, ++first, last, std::forward<Args>(args)...
+			));
+			reserve_vacant(l_pos, q, vp.get());
+			return std::make_pair(
+				vp.release()->value, true
 			);
-			p = pair_type::make(rv, l_pos);
-			break;
-		} else if (p.is_leaf()) {
-			rv = p.leaf_ptr();
-			auto c_len(rv->common_length(first, last));
+		} else if (q.first->parent() != l_pos) {
+			vp.reset(value_pair::construct(
+				a, ++first, last, std::forward<Args>(args)...
+			));
+			detangle(p, q, n_index, vp.get());
+			return std::make_pair(
+				vp.release()->value, true
+			);
+		} else if (q.first->is_leaf()) {
+			auto l_ptr(q.first->leaf_ptr());
+			auto c_len(l_ptr->common_length(first, last));
 
-			if ((last - first) == c_len) {
-				if (rv->suffix_length == c_len) {
-					inserted = false;
-					break;
-				}
+			if (std::distance(first, last) == c_len) {
+				if (l_ptr->suffix_length == c_len)
+					return std::make_pair(
+						l_ptr->value, false
+					);
+
 				first = last;
-				n_char = terminator_char;
+				n_index = terminator_index;
 			} else {
-				first += c_len;
-				n_char = deref_char(first);
+				std::advance(first, c_len);
+				n_index = index_offset(first);
 				++first;
 			}
 
-			auto loc(unroll_key(&p, n_pos, c_len, n_char));
-			rv = value_pair::construct(
-				items.get_allocator(), first, last,
-				std::forward<Args>(args)...
+			vp.reset(value_pair::construct(
+				a, first, last, std::forward<Args>(args)...
+			));
+			unroll_suffix(q, c_len, n_index, vp.get());
+			return std::make_pair(
+				vp.release()->value, true
 			);
-			*loc.first = pair_type::make(rv, loc.second);
-			break;
 		} else {
-			if (p.check == l_pos) {
-				adj_pos = p.base;
-				l_pos = n_pos;
-				continue;
-			} else {
-				auto loc(split_subtree(p.check, l_pos, n_char));
-				rv = value_pair::construct(
-					items.get_allocator(), first, last,
-					std::forward<Args>(args)...
-				);
-				*loc.first = pair_type::make(rv, loc.second);
-				break;
-			}
+			++first;
+			p = q;
 		}
-	} while (first != last);
-
-	return std::pair<reference, bool>(rv->value, inserted);
+	}
 }
 
 template <typename CharType, typename ValueType, typename Policy>
@@ -93,53 +99,61 @@ std::basic_ostream<
 	> &os
 ) const
 {
-	os << "r: " << root << '\n';
+	{
+		auto p(items.ptr_at(0));
+		os << "r: " << p->base_offset() << ", ";
+		os << "freelist: " << p->parent() << '\n';
+	}
+
 	items.for_each(
-		0, [&os](size_type pos, pair_type const &p) -> bool {
-			os << log_offset(pos) << " (" << pos << "): ";
-			if (!p.is_leaf()) {
-				os << p.base << " (";
-				if (p.base > 1)
-					os << vec_offset(p.base);
-				else
-					os << 'r';
+		1, [&os](size_type pos, pair_type const &p) -> bool {
+			os << pos << ": ";
+			if (p.is_vacant()) {
+				os << "vacant (next: " << p.base_offset();
+				os << ", prev: " << p.parent() << ")\n";
+			} else if (p.is_leaf()) {
+				auto l_ptr(p.leaf_ptr());
 
-				os << "), ";
-				os << p.check << " (";
-				if (p.check > 1)
-					os << vec_offset(p.check);
-				else
-					os << (p.check ? 'r' : 'n');
+				os << "(parent: " << p.parent();
+				os << ", leaf: " << l_ptr << ") ";
 
-				os << ")\n";
-			} else {
-				auto vp(p.leaf_ptr());
-
-				os << vp << ", " << p.check << " (";
-
-				if (p.check > 1)
-					os << vec_offset(p.check);
-				else
-					os << (p.check ? 'r' : 'n');
-
-				os << ')';
-
-				if (vp) {
-					os << " -> \"";
-					auto sp(vp->suffix());
-					for (
-						size_type c(0);
-						c < vp->suffix_length;
-						++c
-					) {
-						if (sp[c])
-							os << sp[c];
-						else
-							os << "\\0";
-					}
-					os << "\" <" << vp->value << '>';
+				auto q(items.ptr_at(p.parent()));
+				auto n_off(pos - q->base_offset);
+				if (n_off < base_index)
+					os << "'<eok>' [";
+				else {
+					auto n_char(offset_char(n_off));
+					os << '\'' <<  n_char << "' (";
+					os << static_cast<uintptr_t>(n_char);
+					os << ") [";
 				}
-				os << '\n';
+
+				os << '"';
+				auto suffix(l_ptr->suffix());
+				for (
+					size_type c(0);
+					c < l_ptr->suffix_length;
+					++c
+				)
+					os << std::get<1>(
+						tup_breadth_map
+					).value(suffix[c]);
+
+				os << "\"] -> " << l_ptr->value << '\n';
+			} else {
+				os << "(parent: " << p.parent();
+				os << ", offset: " << p.base_offset() << ") ";
+
+				auto q(items.ptr_at(p.parent()));
+				auto n_off(pos - q->base_offset);
+				if (n_off < base_index)
+					os << "'<eok>'\n";
+				else {
+					auto n_char(offset_char(n_off));
+					os << '\'' <<  n_char << "' (";
+					os << static_cast<uintptr_t>(n_char);
+					os << ")\n";
+				}
 			}
 			return false;
 		}
@@ -148,34 +162,7 @@ std::basic_ostream<
 	return os;
 }
 
-template <typename CharType, typename ValueType, typename Policy>
-template <typename Iterator>
-auto string_map<CharType, ValueType, Policy>::find_impl(
-	Iterator &first, Iterator const &last
-) const -> std::pair<pair_type const *, uintptr_t>
-{
-	uintptr_t l_pos(1), n_pos(0);
-	uintptr_t adj_pos(root);
-	pair_type const *p(nullptr);
-
-	do {
-		n_pos = char_offset(adj_pos, deref_char(first));
-		p = items.ptr_at(vec_offset(n_pos));
-		++first;
-
-		if (!p || !p->base || (p->check != l_pos))
-			return std::make_pair(nullptr, 0);
-
-		if (p->is_leaf())
-			return std::make_pair(p, n_pos);
-
-		adj_pos = p->base;
-		l_pos = n_pos;
-	} while (first != last);
-
-	return std::make_pair(p, n_pos);
-}
-
+#if 0
 template <typename CharType, typename ValueType, typename Policy>
 auto string_map<CharType, ValueType, Policy>::unroll_key(
 	pair_type *p, uintptr_t pos, size_type count, uintptr_t other
@@ -401,12 +388,11 @@ auto string_map<CharType, ValueType, Policy>::advance_edges(
 	return adj;
 }
 #endif
+
 template <typename CharType, typename ValueType, typename Policy>
-template <
-	typename Alloc, typename Encoding, typename Iterator, typename... Args
-> auto string_map<CharType, ValueType, Policy>::value_pair::construct(
-	Alloc const &a, Encoding const &e, Iterator first, Iterator last,
-	Args&&... args
+template <typename Alloc, typename Iterator, typename... Args>
+auto string_map<CharType, ValueType, Policy>::value_pair::construct(
+	Alloc const &a, Iterator first, Iterator last, Args&&... args
 ) -> value_pair *
 {
 	typedef allocator::array_helper<char_type, Alloc> ah_c;
@@ -549,168 +535,7 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 	}
 }
 
-template <typename CharType, typename ValueType, typename Policy>
-template <typename Pred>
-void string_map<
-	CharType, ValueType, Policy
->::const_reverse_index::for_each(Pred &&pred) const
-{
-	if (r_trie.empty())
-		return;
 
-	auto r_iter(r_trie.find(1));
-	if (r_iter == r_trie.end())
-		return;
-
-	auto a(parent.items.get_allocator());
-	state_stack_type ss(state_allocator_adaptor(a, a));
-
-	ss.emplace_back(r_iter, r_iter->second.begin());
-
-	for_each_impl(ss, std::forward<Pred>(pred));
-}
-
-template <typename CharType, typename ValueType, typename Policy>
-template <typename Iterator, typename Pred>
-void string_map<
-	CharType, ValueType, Policy
->::const_reverse_index::for_each_prefix(
-	Iterator first, Iterator last, Pred &&pred
-) const
-{
-	auto x_first(first);
-	auto rv(parent.find_impl(x_first, last));
-	if (!rv.first)
-		return;
-
-	auto a(parent.items.get_allocator());
-
-	if (rv.first->is_leaf()) {
-		auto l_ptr(rv.first->leaf_ptr());
-		auto s_len(l_ptr->suffix_length);
-
-		if (l_ptr->prefix_match(x_first, last)) {
-			prefix_string_type prefix(first, x_first, a);
-			prefix.append(
-				l_ptr->suffix(),
-				l_ptr->suffix() + s_len
-			);
-			pred(prefix, l_ptr->value);
-		}
-		return;
-	}
-
-	auto r_iter(r_trie.find(rv.second));
-	if (r_iter == r_trie.end())
-		return;
-
-	state_stack_type ss(state_allocator_adaptor(a, a));
-
-	ss.emplace_back(r_iter, r_iter->second.begin());
-	ss.back().prefix.assign(first, x_first);
-
-	for_each_impl(ss, std::forward<Pred>(pred));
-}
-
-template <typename CharType, typename ValueType, typename Policy>
-template <typename Pred>
-void string_map<
-	CharType, ValueType, Policy
->::const_reverse_index::for_each_impl(state_stack_type &ss, Pred &&pred) const
-{
-	while (true) {
-		auto &p(ss.back());
-		if (p.b_pos == p.r_pos->second.end()) {
-			if (ss.size() == 1)
-				return;
-
-			ss.pop_back();
-			continue;
-		}
-
-		if (p.b_pos->pair->is_leaf()) {
-			auto l_ptr(p.b_pos->pair->leaf_ptr());
-			auto s_len(l_ptr->suffix_length);
-
-			if (s_len) {
-				prefix_string_type prefix(p.prefix);
-				prefix.push_back(char_type(
-					p.b_pos->char_id - null_char
-				));
-				prefix.append(
-					l_ptr->suffix(),
-					l_ptr->suffix() + s_len
-				);
-				pred(prefix, l_ptr->value);
-			} else
-				pred(p.prefix, l_ptr->value);
-
-			std::advance(p.b_pos, 1);
-		} else {
-			auto r_iter(r_trie.find(p.b_pos->pos));
-
-			if (r_iter != r_trie.end()) {
-				ss.emplace_back(
-					r_iter, r_iter->second.begin()
-				);
-				auto &q(*(++ss.rbegin()));
-				ss.back().prefix = q.prefix;
-
-				if (q.b_pos->char_id >= null_char)
-					ss.back().prefix.push_back(char_type(
-						q.b_pos->char_id - null_char
-					));
-
-				std::advance(q.b_pos, 1);
-			} else
-				std::advance(p.b_pos, 1);
-		}
-	}
-}
-
-template <typename CharType, typename ValueType, typename Policy>
-auto string_map<
-	CharType, ValueType, Policy
->::make_index() const -> const_reverse_index
-{
-	auto rv(const_reverse_index(*this, items.get_allocator()));
-	items.for_each(
-		0, [&rv, this](size_type pos, pair_type const &p) -> bool {
-			auto base(
-				p.check > 1
-				? items[vec_offset(p.check)].base
-				: root
-			);
-			rv.r_trie[p.check].emplace_back(
-				&p, log_offset(pos), offset_to_char(pos, base)
-			);
-			return false;
-		}
-	);
-	return rv;
-}
-
-template <typename CharType, typename ValueType, typename Policy>
-auto string_map<
-	CharType, ValueType, Policy
->::make_index() -> reverse_index
-{
-	auto rv(reverse_index(*this, items.get_allocator()));
-	items.for_each(
-		0, [&rv, this](size_type pos, pair_type const &p) -> bool {
-			auto base(
-				p.check > 1
-				? items[vec_offset(p.check)].base
-				: root
-			);
-			rv.r_trie[p.check].emplace_back(
-				&p, log_offset(pos), offset_to_char(pos, base)
-			);
-			return false;
-		}
-	);
-	return rv;
-}
 
 }}
 #endif

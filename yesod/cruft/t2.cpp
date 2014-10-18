@@ -3,6 +3,7 @@
 #include <vector>
 #include <list>
 #include <iostream>
+#include <algorithm>
 
 #include <yesod/mpl/package.hpp>
 #include <yesod/mpl/package_range_c.hpp>
@@ -121,6 +122,26 @@ int &func_x()
 	return xx;
 }
 
+struct accum {
+	accum()
+	: a(0)
+	{}
+
+	accum(int a_)
+	: a(a_)
+	{}
+
+	accum(accum const &other) = delete;
+	accum &operator=(accum const &other) = delete;
+
+	int operator()(int p) const
+	{
+		return a * p;
+	}
+
+	int a;
+};
+
 void t3()
 {
 	constexpr static std::size_t count = 10;
@@ -147,12 +168,26 @@ void t3()
 	printf("xx %d\n", is_lvalue_iterator<iter_type>::value);
 }
 
+void t4()
+{
+	std::array<int, 5> xx = {{1, 2, 3, 4, 5}};
+	accum a(5);
+	std::for_each(
+		make_transform(xx.begin(), std::cref(a)),
+		make_transform(xx.end(), std::cref(a)),
+		[](int v) -> void {
+			printf("-- %d\n", v);
+		}
+	);
+}
+
 }}}
 
 int main()
 {
 	//ucpf::yesod::iterator::t1();
 	//ucpf::yesod::iterator::t2();
-	ucpf::yesod::iterator::t3();
+	//ucpf::yesod::iterator::t3();
+	ucpf::yesod::iterator::t4();
 	return 0;
 }
