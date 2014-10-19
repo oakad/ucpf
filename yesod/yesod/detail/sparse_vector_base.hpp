@@ -72,7 +72,8 @@ template <
 	typedef typename allocator_traits::const_pointer const_pointer;
 	typedef typename allocator_traits::size_type size_type;
 
-	sparse_vector(allocator_type const &a = allocator_type())
+	template <typename Alloc>
+	sparse_vector(Alloc const &a = Alloc())
 	: root(a), tup_height_alloc(0, a)
 	{}
 

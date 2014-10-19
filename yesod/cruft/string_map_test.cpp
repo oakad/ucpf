@@ -23,11 +23,11 @@ int main(int argc, char **argv)
 
 	//x_map.dump(std::cout);
 
-	auto r_idx(x_map.make_index());
+	//auto r_idx(x_map.make_index());
 
-	r_idx.for_each([](std::string const &key, int val) -> void {
-		printf("%s %d\n", key.c_str(), val);
-	});
+	//r_idx.for_each([](std::string const &key, int val) -> void {
+	//	printf("%s %d\n", key.c_str(), val);
+	//});
 /*
 	r_idx.for_each_prefix(
 		std::string("abcdefghijklmnopqrstu"),

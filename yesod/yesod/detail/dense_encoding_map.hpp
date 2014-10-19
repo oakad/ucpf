@@ -30,7 +30,7 @@ struct dense_encoding_map {
 		>::digits;
 	}
 
-	dense_encoding_map(allocator_type const &a = allocator_type())
+	dense_encoding_map(Alloc const &a = Alloc())
 	: tup_items_alloc(allocator_helper_type::alloc_n(a, 2 * size()), a)
 	{
 		reset();

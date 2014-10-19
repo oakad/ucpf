@@ -26,7 +26,7 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 	encoding_adapter<decltype(tup_breadth_map)> map(tup_breadth_map);
 	auto first(iterator::make_transform(first_, map));
 	auto last(iterator::make_transform(last_, map));
-	auto &a(items.get_allocator());
+	auto a(items.get_allocator());
 	auto value_deleter([a](value_pair *p) -> void {
 		value_pair::destroy(a, p);
 	});
@@ -35,27 +35,26 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 		value_pair, decltype(value_deleter)
 	> vp(nullptr, value_deleter);
 
-	uintptr_t l_pos(0);
-	auto p(items.ptr_at(0));
+	pair_loc p(items.ptr_at(0), 0);
 
 	while (first != last) {
 		auto n_index(index_offset(first));
-		auto q(p->pair_at(items, n_index));
+		auto q(p.first->pair_at(items, n_index));
 
 		if (!q.first || q.first->is_vacant()) {
 			vp.reset(value_pair::construct(
 				a, ++first, last, std::forward<Args>(args)...
 			));
-			reserve_vacant(l_pos, q, vp.get());
-			return std::make_pair(
+			reserve_vacant(p.second, q, vp.get());
+			return std::pair<reference, bool>(
 				vp.release()->value, true
 			);
-		} else if (q.first->parent() != l_pos) {
+		} else if (q.first->parent() != p.second) {
 			vp.reset(value_pair::construct(
 				a, ++first, last, std::forward<Args>(args)...
 			));
 			detangle(p, q, n_index, vp.get());
-			return std::make_pair(
+			return std::pair<reference, bool>(
 				vp.release()->value, true
 			);
 		} else if (q.first->is_leaf()) {
@@ -64,7 +63,7 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 
 			if (std::distance(first, last) == c_len) {
 				if (l_ptr->suffix_length == c_len)
-					return std::make_pair(
+					return std::pair<reference, bool>(
 						l_ptr->value, false
 					);
 
@@ -80,7 +79,7 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 				a, first, last, std::forward<Args>(args)...
 			));
 			unroll_suffix(q, c_len, n_index, vp.get());
-			return std::make_pair(
+			return std::pair<reference, bool>(
 				vp.release()->value, true
 			);
 		} else {
@@ -106,7 +105,7 @@ std::basic_ostream<
 	}
 
 	items.for_each(
-		1, [&os](size_type pos, pair_type const &p) -> bool {
+		1, [&os, this](size_type pos, pair_type const &p) -> bool {
 			os << pos << ": ";
 			if (p.is_vacant()) {
 				os << "vacant (next: " << p.base_offset();
@@ -162,251 +161,50 @@ std::basic_ostream<
 	return os;
 }
 
-#if 0
 template <typename CharType, typename ValueType, typename Policy>
-auto string_map<CharType, ValueType, Policy>::unroll_key(
-	pair_type *p, uintptr_t pos, size_type count, uintptr_t other
-) -> std::pair<pair_type *, uintptr_t>
+void string_map<CharType, ValueType, Policy>::reserve_vacant(
+	uintptr_t parent_pos, pair_loc child_loc, value_pair *v
+)
 {
-	size_type shrink(0);
-	auto deleter([&shrink, this](value_pair *v) -> void {
-		if (shrink)
-			v->shrink_suffix(items.get_allocator(), shrink);
-	});
-
-	std::unique_ptr<value_pair, decltype(deleter)> v_ptr(
-		p->leaf_ptr(), deleter
-	);
-
-	auto suffix(v_ptr->suffix());
-	auto k_char(terminator_char);
-	if (count < v_ptr->suffix_length)
-		k_char = suffix[count] + null_char;
-
-	uintptr_t next_pos(0);
-	while (count > shrink) {
-		next_pos = char_offset(1, suffix[shrink] + null_char);
-		auto xp(items.find_empty_above(vec_offset(next_pos)));
-		auto &q(items.emplace_at(
-			xp, pair_type::make(v_ptr.get(), pos)
-		));
-		p->base = adjust_encoded(1, xp - vec_offset(next_pos));
-		pos = log_offset(xp);
-		++shrink;
-		p = &q;
+	if (!child_loc.first) {
 	}
 
-	auto min_char(std::min(k_char, other));
-	auto max_char(std::max(k_char, other));
-	uintptr_t adj_pos(1);
-
-	while (true) {
-		next_pos = char_offset(adj_pos, min_char);
-		auto xp(items.find_empty_above(vec_offset(next_pos)));
-
-		adj_pos = adjust_encoded(adj_pos, xp - vec_offset(next_pos));
-
-		if (!items.ptr_at(
-			vec_offset(char_offset(adj_pos, max_char))
-		))
-			break;
-
-		adj_pos  = adjust_encoded(adj_pos, 1);
-	}
-
-	items.emplace_at(
-		vec_offset(char_offset(adj_pos, k_char)),
-		pair_type::make(v_ptr.get(), pos)
-	);
-	p->base = adj_pos;
-	++shrink;
-
-	return std::make_pair(
-		&items.emplace_at(
-			vec_offset(char_offset(adj_pos, other)),
-			pair_type::make(uintptr_t(0), uintptr_t(0))
-		), pos
-	);
+	
 }
 
 template <typename CharType, typename ValueType, typename Policy>
-auto string_map<CharType, ValueType, Policy>::split_subtree(
-	uintptr_t r_pos, uintptr_t l_pos, uintptr_t k_char
-)-> std::pair<pair_type *, uintptr_t>
+void string_map<CharType, ValueType, Policy>::detangle(
+	pair_loc parent_loc, pair_loc child_loc, uintptr_t c_index,
+	value_pair *v
+)
 {
-	index_entry_set r_set(items.get_allocator());
-	index_entry_set l_set(items.get_allocator());
-	uintptr_t adj_pos(l_pos > 1 ? items[vec_offset(l_pos)].base : root);
-
-	items.for_each(
-		std::min(
-			r_pos > 1 ? items[vec_offset(r_pos)].base : root,
-			adj_pos
-		), [&r_set, &l_set, r_pos, l_pos, this](
-			size_type pos, pair_type const &p
-		) -> bool {
-			if (p.check == r_pos)
-				r_set.push_back(std::make_tuple(
-					const_cast<pair_type *>(&p), pos,
-					pair_ptr_list(items.get_allocator())
-				));
-			else if (p.check == l_pos)
-				l_set.push_back(std::make_tuple(
-					const_cast<pair_type *>(&p), pos,
-					pair_ptr_list(items.get_allocator())
-				));
-
-			return false;
-		}	
-	);
-
-	if (r_set.size() < (l_set.size() + 1))
-		advance_edges(r_pos, r_set, 0);
-	else
-		adj_pos = advance_edges(l_pos, l_set, k_char);
-
-	return std::make_pair(
-		&items[vec_offset(char_offset(adj_pos, k_char))], l_pos
-	);
 }
 
 template <typename CharType, typename ValueType, typename Policy>
-auto string_map<CharType, ValueType, Policy>::advance_edges(
-	uintptr_t pos, index_entry_set &b_set, uintptr_t k_char
-) -> uintptr_t
+void string_map<CharType, ValueType, Policy>::unroll_suffix(
+	pair_loc loc, size_type count, uintptr_t other_index, value_pair *v
+)
 {
-	auto adj_orig(pos > 1 ? items[vec_offset(pos)].base : root);
-	auto adj(adj_orig);
-	bool fit(true);
-
-	do {
-		fit = true;
-		adj = adjust_encoded(adj, 1);
-		auto iter(b_set.begin());
-		auto n_pos(char_offset(
-			adj, offset_to_char(std::get<1>(*iter), adj_orig)
-		));
-		auto xp(vec_offset(n_pos));
-		auto p(items.ptr_at(xp));
-
-		if (p && (p->check != pos)) {
-			if (!items.for_each(
-				xp + 1, [&xp, pos](
-					size_type t_pos, pair_type const &t_p
-				) -> bool {
-					if ((t_pos - xp) > 1) {
-						++xp;
-						return true;
-					}
-
-					xp = t_pos;
-
-					return t_p.check == pos;
-				}
-			))
-				++xp;
-		}
-		adj = adjust_encoded(adj, xp - vec_offset(n_pos));
-
-		for (++iter; iter != b_set.end(); ++iter) {
-			n_pos = char_offset(adj, offset_to_char(
-				std::get<1>(*iter), adj_orig
-			));
-			p = items.ptr_at(vec_offset(n_pos));
-			if (p && (p->check != pos)) {
-				fit = false;
-				break;
-			}
-		}
-
-		if (k_char && fit) {
-			n_pos = char_offset(adj, k_char);
-			p = items.ptr_at(vec_offset(n_pos));
-			if (p && (p->check != pos))
-				fit = false;
-		}
-	} while (!fit);
-
-	uintptr_t min_base(0);
-	/* Touch all target cells to avoid exceptions down the line. */
-	for (auto iter(b_set.rbegin()); iter != b_set.rend(); ++iter) {
-		auto n_pos(char_offset(
-			adj, offset_to_char(std::get<1>(*iter), adj_orig)
-		));
-		auto p(items.ptr_at(vec_offset(n_pos)));
-		if (!p)
-			items.emplace_at(vec_offset(n_pos), pair_type::make(
-				uintptr_t(0), uintptr_t(0)
-			));
-
-		if (!min_base || (min_base > std::get<0>(*iter)->base))
-			min_base = std::get<0>(*iter)->base;
-	}
-
-	items.for_each(
-		min_base > 1 ? vec_offset(min_base) : 0,
-		[&b_set](size_type pos, pair_type &p) -> bool {
-			auto iter(std::lower_bound(
-				b_set.begin(), b_set.end(), p.check,
-				[](
-					index_entry_type const &idx,
-					uintptr_t q
-				) -> bool {
-					return q <= log_offset(
-						std::get<1>(idx)
-					);
-				}
-			));
-
-			if (
-				(iter != b_set.end())
-				&& (log_offset(std::get<1>(*iter)) == p.check)
-			)
-				std::get<2>(*iter).push_front(&p);
-
-			return true;
-		}
-	);
-
-	for (auto iter(b_set.rbegin()); iter != b_set.rend(); ++iter) {
-		auto n_pos(char_offset(
-			adj, offset_to_char(std::get<1>(*iter), adj_orig)
-		));
-
-		for (auto cp: std::get<2>(*iter))
-			cp->check = n_pos;
-
-		items.emplace_at(vec_offset(n_pos), *std::get<0>(*iter));
-		*std::get<0>(*iter) = pair_type::make(uintptr_t(0), 0);
-	}
-
-	if (pos > 1)
-		items[vec_offset(pos)].base = adj;
-	else
-		root = adj;
-
-	return adj;
 }
-#endif
 
 template <typename CharType, typename ValueType, typename Policy>
-template <typename Alloc, typename Iterator, typename... Args>
+template <typename Alloc, typename IndexIterator, typename... Args>
 auto string_map<CharType, ValueType, Policy>::value_pair::construct(
-	Alloc const &a, Iterator first, Iterator last, Args&&... args
+	Alloc const &a, IndexIterator first, IndexIterator last, Args&&... args
 ) -> value_pair *
 {
-	typedef allocator::array_helper<char_type, Alloc> ah_c;
+	typedef allocator::array_helper<index_char_type, Alloc> ah_c;
 	typedef allocator::array_helper<value_pair, Alloc> ah_p;
 
 	auto suffix_length(std::distance(first, last));
 
 	auto s_deleter(
-		[&a, suffix_length](char_type *p) -> void {
+		[&a, suffix_length](index_char_type *p) -> void {
 			ah_c::destroy(a, p, suffix_length, true);
 		}
 	);
 
-	std::unique_ptr<char_type[], decltype(s_deleter)> s_ptr(
+	std::unique_ptr<index_char_type[], decltype(s_deleter)> s_ptr(
 		nullptr, s_deleter
 	);
 
@@ -437,7 +235,7 @@ void string_map<CharType, ValueType, Policy>::value_pair::destroy(
 	Alloc const &a, value_pair *p
 )
 {
-	typedef allocator::array_helper<char_type, Alloc> ah_c;
+	typedef allocator::array_helper<index_char_type, Alloc> ah_c;
 	typedef allocator::array_helper<value_pair, Alloc> ah_p;
 
 	auto s(p->suffix());
@@ -445,7 +243,7 @@ void string_map<CharType, ValueType, Policy>::value_pair::destroy(
 	ah_c::destroy(a, s, p->suffix_length, false);
 
 	if (p->suffix_length > Policy::short_suffix_length)
-		ah_c::deallocate(
+		ah_c::free(
 			a, p->long_suffix.data,
 			p->suffix_length + p->long_suffix.offset
 		);
@@ -459,7 +257,7 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 	Alloc const &a, size_type count
 )
 {
-	typedef allocator::array_helper<char_type, Alloc> ah;
+	typedef allocator::array_helper<index_char_type, Alloc> ah;
 
 	int mode(suffix_length > Policy::short_suffix_length ? 2 : 0);
 

@@ -15,12 +15,7 @@
 #if !defined(UCPF_YESOD_DETAIL_STRING_MAP_BASE_JAN_06_2014_1145)
 #define UCPF_YESOD_DETAIL_STRING_MAP_BASE_JAN_06_2014_1145
 
-#include <vector>
-#include <forward_list>
-#include <unordered_map>
-#include <scoped_allocator>
-
-#include <yesod/flat_map.hpp>
+#include <yesod/iterator/transform.hpp>
 
 namespace ucpf { namespace yesod {
 
@@ -44,10 +39,15 @@ struct string_map {
 	typedef typename allocator_traits::pointer pointer;
 	typedef typename allocator_traits::const_pointer const_pointer;
 
-	string_map(allocator_type const &a = allocator_type())
-	: items(a), tup_breadth_map(0, Policy::encoding_map(a))
+	string_map()
+	: string_map(typename Policy::allocator_type())
+	{}
+
+	template <typename Alloc>
+	string_map(Alloc const &a = Alloc())
+	: items(a), tup_breadth_map(0, encoding_map_type(a))
 	{
-		items.emplace_at(0, pair_type::make(1, 1));
+		init();
 	}
 
 	~string_map()
@@ -57,20 +57,14 @@ struct string_map {
 
 	void clear()
 	{
-		auto &a(items.get_allocator());
-		items.for_each(
-			0, [a](
-				decltype(items)::size_type pos,
-				pair_type &p
-			) -> bool {
+		auto a(items.get_allocator());
+		items.for_each(0, [a](size_type pos, pair_type &p) -> bool {
 				if (p.is_leaf())
 					value_pair::destroy(a, p.leaf_ptr());
 
 				return false;
-			}
-		);
-		items.clear();
-		items.emplace_at(0, pair_type::make(1, 1));
+		});
+		init();
 	}
 
 	template <typename StringType>
@@ -104,7 +98,7 @@ struct string_map {
 		 */
 		if (!rv.first->is_leaf())
 			rv = rv.first->child_at(
-				items, rv.second, terminator_char
+				items, rv.second, terminator_index
 			);
 
 		if (rv.first->is_leaf()) {
@@ -150,7 +144,7 @@ struct string_map {
 private:
 	struct pair_type;
 	struct alignas(uintptr_t) value_pair;
-	typedef Policy::encoding_map encoding_map_type;
+	typedef typename Policy::encoding_map encoding_map_type;
 	typedef std::pair<pair_type *, uintptr_t> pair_loc;
 	typedef std::pair<pair_type const *, uintptr_t> c_pair_loc;
 	constexpr static uintptr_t terminator_index = 1;
@@ -229,38 +223,46 @@ private:
 
 	template <typename EncTuple>
 	struct encoding_adapter {
+		encoding_adapter()
+		: tup(nullptr)
+		{}
+
 		encoding_adapter(EncTuple &tup_)
-		: tup(tup_)
+		: tup(&tup_)
 		{}
 
 		index_char_type operator()(char_type c) const
 		{
-			auto id(std::get<1>(tup).index(c));
-			auto next_id(std::get<0>(tup));
+			auto id(std::get<1>(*tup).index(c));
+			auto next_id(std::get<0>(*tup));
 			if (id < next_id)
 				return id;
 			else {
-				std::get<1>(tup).set(c, next_id);
-				++std::get<0>(tup);
+				std::get<1>(*tup).set(c, next_id);
+				++std::get<0>(*tup);
 				return next_id;
 			}
 		}
 
-		EncTuple &tup;
+		EncTuple *tup;
 	};
 
 	template <typename EncTuple>
 	struct c_encoding_adapter {
+		c_encoding_adapter()
+		: tup(nullptr)
+		{}
+
 		c_encoding_adapter(EncTuple const &tup_)
-		: tup(tup_)
+		: tup(&tup_)
 		{}
 
 		index_char_type operator()(char_type c) const
 		{
-			return std::get<1>(tup).index(c);
+			return std::get<1>(*tup).index(c);
 		}
 
-		EncTuple const &tup;
+		EncTuple const *tup;
 	};
 
 	struct alignas(uintptr_t) value_pair {
@@ -365,6 +367,13 @@ private:
 		return std::get<1>(tup_breadth_map).value(index - base_index);
 	}
 
+	void init()
+	{
+		items.clear();
+		items.emplace_at(1, pair_type::make(3, 2));
+		items.emplace_at(0, pair_type::make(1, 3));
+	}
+
 	template <typename IndexIterator>
 	c_pair_loc find_impl(
 		IndexIterator &first, IndexIterator const &last
@@ -385,6 +394,20 @@ private:
 
 		return rv;
 	}
+
+	void reserve_vacant(
+		uintptr_t parent_pos, pair_loc child_loc, value_pair *v
+	);
+
+	void detangle(
+		pair_loc parent_loc, pair_loc child_loc, uintptr_t c_index,
+		value_pair *v
+	);
+
+	void unroll_suffix(
+		pair_loc loc, size_type count, uintptr_t other_index,
+		value_pair *v
+	);
 
 	typename Policy::storage_type::template rebind<
 		pair_type, typename Policy::storage_policy
