@@ -19,7 +19,7 @@ namespace ucpf { namespace yesod {
 
 template <typename CharType, typename ValueType, typename Policy>
 template <typename Iterator, typename... Args>
-auto string_map<CharType, ValueType, Policy>::emplace_at(
+auto string_map<CharType, ValueType, Policy>::emplace(
 	Iterator first_, Iterator last_, Args&&... args
 ) -> std::pair<reference, bool>
 {
@@ -45,7 +45,7 @@ auto string_map<CharType, ValueType, Policy>::emplace_at(
 			vp.reset(value_pair::construct(
 				a, ++first, last, std::forward<Args>(args)...
 			));
-			reserve_vacant(p.second, q, vp.get());
+			reserve_vacant(p.second, q.second, vp.get());
 			return std::pair<reference, bool>(
 				vp.release()->value, true
 			);
@@ -162,14 +162,29 @@ std::basic_ostream<
 }
 
 template <typename CharType, typename ValueType, typename Policy>
-void string_map<CharType, ValueType, Policy>::reserve_vacant(
-	uintptr_t parent_pos, pair_loc child_loc, value_pair *v
+uintptr_t string_map<CharType, ValueType, Policy>::reserve_vacant(
+	uintptr_t parent_pos, uintptr_t child_pos, value_pair *v
 )
 {
-	if (!child_loc.first) {
+	auto r(items.ptr_at(0));
+	auto p(items.ptr_at(r->parent()));
+	for (auto pos(r->parent()); pos < (child_pos + 2); ++pos) {
+		auto q(items.emplace(
+			pos + 1, pair_type::make_vacant(p->base_offset(), pos)
+		));
+		p->set_base_offset(pos + 1);
+		r->set_parent(pos + 1, false);
+		p = q;
 	}
 
-	
+	p = items.ptr_at(child_pos);
+	auto rv(p->base_offset());
+	auto pp(items.ptr_at(p->parent()));
+	auto pq(items.ptr_at(p->base_offset()));
+	pp->set_base_offset(p->base_offset());
+	pq->set_parent(p->parent(), false);
+	*p = pair_type::make_leaf(v, parent_pos);
+	return rv;
 }
 
 template <typename CharType, typename ValueType, typename Policy>
@@ -185,6 +200,10 @@ void string_map<CharType, ValueType, Policy>::unroll_suffix(
 	pair_loc loc, size_type count, uintptr_t other_index, value_pair *v
 )
 {
+	auto leaf_ptr(loc.first->leaf_ptr());
+	auto s_ptr(leaf_ptr->suffix());
+
+	
 }
 
 template <typename CharType, typename ValueType, typename Policy>

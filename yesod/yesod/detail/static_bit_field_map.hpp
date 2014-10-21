@@ -27,7 +27,7 @@ struct static_bit_field_map {
 	};
 
 	typedef typename std::conditional<
-		sizeof...(Fn),
+		(sizeof...(Fn) > 0),
 		yesod::mpl::package<num<Fn>...>,
 		yesod::mpl::package<num<BitCount>>
 	>::type f_pack;

@@ -61,7 +61,7 @@ template <
 			size_type pos(other.find_occupied(0));
 			pos < other.size(); pos = other.find_occupied(++pos)
 		)
-			emplace_at(
+			emplace(
 				a, pos,
 				std::move_if_noexcept(*other.ptr_at(pos))
 			);
@@ -134,7 +134,7 @@ template <
 	}
 
 	template <typename Alloc, typename... Args>
-	pointer emplace_at(
+	pointer emplace(
 		Alloc const &a, size_type pos, Args&&... args
 	)
 	{
@@ -145,7 +145,7 @@ template <
 			if (x_pos == items.size())
 				return nullptr;
 
-			auto rv(items.emplace_at(
+			auto rv(items.emplace(
 				a, x_pos, std::forward<Args>(args)...
 			));
 			if (rv)
@@ -153,7 +153,7 @@ template <
 
 			return rv;
 		} else {
-			auto rv(items.emplace_at(
+			auto rv(items.emplace(
 				a, id, std::forward<Args>(args)...
 			));
 			if (!rv)
@@ -290,7 +290,7 @@ template <
 			size_type pos(other.find_occupied(0));
 			pos < other.size(); pos = other.find_occupied(++pos)
 		)
-			emplace_at(
+			emplace(
 				a, pos,
 				std::move_if_noexcept(*other.ptr_at(pos))
 			);
@@ -345,11 +345,11 @@ template <
 	}
 
 	template <typename Alloc, typename... Args>
-	pointer emplace_at(
+	pointer emplace(
 		Alloc const &a, size_type pos, Args&&... args
 	)
 	{
-		return items.emplace_at(a, pos, std::forward<Args>(args)...);
+		return items.emplace(a, pos, std::forward<Args>(args)...);
 	}
 
 	template <typename Alloc>

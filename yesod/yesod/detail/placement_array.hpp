@@ -94,7 +94,7 @@ template <
 	}
 
 	template <typename Alloc, typename... Args>
-	pointer emplace_at(
+	pointer emplace(
 		Alloc const &a, size_type pos, Args&&... args
 	)
 	{

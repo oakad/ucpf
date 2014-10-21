@@ -9,6 +9,8 @@
 #include <yesod/mpl/package_range_c.hpp>
 #include <yesod/mpl/repeat.hpp>
 #include <yesod/mpl/size.hpp>
+#include <yesod/mpl/push_pop.hpp>
+#include <yesod/mpl/value_cast.hpp>
 #include <yesod/iterator/range.hpp>
 #include <yesod/iterator/joined_range.hpp>
 #include <yesod/iterator/transform.hpp>
@@ -168,8 +170,63 @@ void t3()
 	printf("xx %d\n", is_lvalue_iterator<iter_type>::value);
 }
 
+struct x_base {
+	typedef std::pair<x_base *(*)(), std::size_t> pair_type;
+};
+
+template <std::size_t P>
+struct x_der : x_base {
+	static x_base *make()
+	{
+		printf("making %zd\n", P);
+		return nullptr;
+	}
+
+	constexpr static pair_type value = {
+		&make, P
+	};
+};
+
+template <typename T, std::size_t N, std::size_t P, std::array<T, N> const &arr>
+struct package_cast {
+	static_assert(
+		(P == 0) || (arr[P] > arr[P - 1]),
+		"ordered"
+	);
+	typedef package_cast<T, N, P + 1, arr> next_type;
+	typedef typename mpl::push_front<
+		typename next_type::pack_type, x_der<arr[P]>
+	>::type pack_type;
+};
+
+template <typename T, std::size_t N, std::array<T, N> const &arr>
+struct package_cast<T, N, N, arr> {
+	typedef mpl::package<> pack_type;
+};
+
+struct bb {
+	constexpr static std::array<std::size_t, 3> aa = {{12, 43, 56}};
+};
+
+typedef package_cast<std::size_t, bb::aa.size(), 0, bb::aa> pc0;
+
+typedef mpl::value_cast<
+	x_base::pair_type,
+	typename pc0::pack_type
+> pc1;
+
 void t4()
 {
+	
+	printf("x1 %s\n", t::demangle<typename pc0::pack_type>().c_str());
+
+	printf("x2 %s\n", t::demangle<pc1>().c_str());
+
+	for (auto pp: pc1::value) {
+		pp.first();
+		printf("----- %zd\n", pp.second);
+	}
+
 	std::array<int, 5> xx = {{1, 2, 3, 4, 5}};
 	accum a(5);
 	std::for_each(

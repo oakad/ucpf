@@ -13,7 +13,7 @@ int main(int argc, char **argv)
 		if (c == '\n' || c == '\r') {
 			if (!s_in.empty()) {
 				printf("in %s\n", s_in.c_str());
-				x_map.emplace_at(s_in, ord);
+				x_map.emplace(s_in, ord);
 				++ord;
 				s_in.clear();
 			}

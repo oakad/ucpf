@@ -58,7 +58,7 @@ struct x_policy : sparse_vector_default_policy {
 	typedef pair_valid_pred value_valid_pred;
 };
 
-#define X_PLACE(t, v) t.emplace_at(v, pair_type::make(v, v))
+#define X_PLACE(t, v) t.emplace(v, pair_type::make(v, v))
 
 int main(int argc, char **argv)
 {

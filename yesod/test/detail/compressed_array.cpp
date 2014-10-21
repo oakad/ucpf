@@ -120,7 +120,7 @@ BOOST_AUTO_TEST_CASE(compressed_array_1)
 	for (std::size_t c(1); c < (set_count + 1); ++c) {
 		auto pos(dis(gen) & ((std::size_t(1) << base_order) - 1));
 		if (ref0.emplace(pos).second)
-			ca.emplace_at(std::allocator<void>(), pos, c);
+			ca.emplace(std::allocator<void>(), pos, c);
 	}
 
 	for (

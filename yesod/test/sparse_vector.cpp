@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(sparse_vector_0)
 				std::forward_as_tuple(pos),
 				std::forward_as_tuple(c, &s0)
 			).second)
-				v0.emplace_at(pos, c, &s1);
+				v0.emplace(pos, c, &s1);
 		}
 		//v0.dump(std::cout);
 		BOOST_CHECK_EQUAL_COLLECTIONS(
@@ -136,7 +136,7 @@ BOOST_AUTO_TEST_CASE(sparse_vector_1)
 
 	for (std::size_t c(0); c < count; ++c) {
 		auto pos(dis(gen) % max_value);
-		v0.emplace_at(pos, c, &s0);
+		v0.emplace(pos, c, &s0);
 	}
 
 	for (std::size_t c(0); c < test_count; ++c) {

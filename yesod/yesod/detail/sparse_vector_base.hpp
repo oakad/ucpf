@@ -72,6 +72,10 @@ template <
 	typedef typename allocator_traits::const_pointer const_pointer;
 	typedef typename allocator_traits::size_type size_type;
 
+	sparse_vector()
+	: root(allocator_type()), tup_height_alloc(0, allocator_type())
+	{}
+
 	template <typename Alloc>
 	sparse_vector(Alloc const &a = Alloc())
 	: root(a), tup_height_alloc(0, a)
@@ -188,40 +192,37 @@ template <
 	}
 
 	template <typename... Args>
-	pointer emplace_at(
-		size_type pos, Args&&... args
-	)
+	pointer emplace(size_type pos, Args&&... args)
 	{
+		auto p(alloc_data_node_at(pos));
+		auto q(p.data_ref());
 		auto d_pos(node_offset(pos, 1));
-		auto pp(alloc_data_node_at(pos));
-		auto qp(pp.first->reserve_at(d_pos));
+		auto qp(q->reserve_at(d_pos));
 
 		if (!qp.first) {
-			pp.first = static_cast<data_node_base *>(
-				pp.first->grow_node(
-					std::get<1>(tup_height_alloc),
-					pp.second
-				)
-			);
-			qp = pp.first->reserve_at(d_pos);
+			q = static_cast<data_node_base *>(q->grow_node(
+				std::get<1>(tup_height_alloc), p
+			));
+			qp = q->reserve_at(d_pos);
 		}
 
 		if (qp.second)
 			return qp.first;
 
-		auto release = [pp, d_pos](pointer v) -> void {
-			pp.first->release_at(d_pos);
+		auto release = [d_pos](data_node_base *q) -> void {
+			q->release_at(d_pos);
 		};
 
 		std::unique_ptr<
-			value_type, decltype(release)
-		> q(qp.first, release);
+			data_node_base, decltype(release)
+		> qq(q, release);
+
 		allocator::array_helper<value_type, allocator_type>::make_n(
 			std::get<1>(tup_height_alloc), qp.first, 1,
 			std::forward<Args>(args)...
 		);
 
-		q.release();
+		qq.release();
 		return qp.first;
 	}
 
@@ -230,6 +231,9 @@ template <
 
 	template <typename Pred>
 	bool for_each(size_type first, Pred &&pred);
+
+	template <typename Generator>
+	void fill(size_type first, size_type count, Generator &&gen);
 
 	size_type find_vacant(size_type first) const;
 
@@ -256,7 +260,7 @@ private:
 		virtual size_type find_vacant(size_type first) const = 0;
 		virtual bool erase(allocator_type const &a, size_type pos) = 0;
 		virtual node_base *grow_node(
-			allocator_type const &a, node_base **parent
+			allocator_type const &a, loc_pair parent
 		) = 0;
 		virtual node_base *shrink_node(
 			allocator_type const &a, loc_pair parent
@@ -286,16 +290,6 @@ private:
 		> reserve_at(size_type pos) = 0;
 	};
 
-	struct loc_pair {
-		ptr_node_base *ptr;
-		size_type pos;
-	};
-
-	struct c_loc_pair {
-		ptr_node_base const *ptr;
-		size_type pos;
-	};
-
 	struct data_node_base : node_base {
 		typedef value_type node_value_type;
 		typedef typename detail::sparse_vector_value_predicate<
@@ -313,6 +307,39 @@ private:
 		virtual std::pair<
 			node_value_type *, bool
 		> reserve_at(size_type pos) = 0;
+	};
+
+	struct loc_pair {
+		loc_pair(node_base *ptr_, size_type pos_)
+		: ptr(static_cast<ptr_node_base *>(ptr_)), pos(pos_)
+		{}
+
+		loc_pair() = default;
+
+		std::pair<node_base **, bool> reserve()
+		{
+			return ptr->reserve_at(pos);
+		}
+
+		void release()
+		{
+			ptr->release_at(pos);
+		}
+
+		data_node_base *data_ref()
+		{
+			return static_cast<data_node_base *>(
+				*ptr->ptr_at(pos)
+			);
+		}
+
+		ptr_node_base *ptr;
+		size_type pos;
+	};
+
+	struct c_loc_pair {
+		ptr_node_base const *ptr;
+		size_type pos;
 	};
 
 	template <
@@ -437,11 +464,11 @@ private:
 		}
 
 		virtual node_base *grow_node(
-			allocator_type const &a, node_base **parent
+			allocator_type const &a, loc_pair parent
 		)
 		{
 			if (std::is_same<next_node_type, self_type>::value)
-				return *parent;
+				return *parent.ptr->ptr_at(parent.pos);
 
 			typedef allocator::array_helper<
 				next_node_type, allocator_type
@@ -450,14 +477,16 @@ private:
 			auto deleter = [a](next_node_type *p) -> void {
 				p->destroy(a);
 			};
+
 			std::unique_ptr<
 				next_node_type, decltype(deleter)
 			> p(a_h::alloc_n(a, 1, a), deleter);
 
 			p->items.init_move(a, items);
-			*parent = p.release();
+			*(parent.ptr->ptr_at(parent.pos)) = p.get();
+			auto rv(p.release());
 			destroy(a);
-			return *parent;
+			return rv;
 		}
 
 		virtual node_base *shrink_node(
@@ -515,8 +544,9 @@ private:
 
 			p->items.init_move(a, self->items);
 			*(parent.ptr->ptr_at(parent.pos)) = p.get();
+			auto rv(p.release());
 			self->destroy(a);
-			return p.release();
+			return rv;
 		}
 
 		virtual std::pair<size_type, size_type> utilization() const
@@ -578,9 +608,7 @@ private:
 		) : 1;
 	}
 
-	std::pair<
-		data_node_base *, node_base **
-	> alloc_data_node_at(size_type pos);
+	loc_pair alloc_data_node_at(size_type pos);
 
 	constexpr static std::array<std::size_t, 1> root_node_order = {{0}};
 

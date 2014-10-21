@@ -1,5 +1,7 @@
 #include <yesod/detail/placement_array.hpp>
 
+#include <yesod/mpl/integral.hpp>
+#include <yesod/mpl/push_pop.hpp>
 #include <yesod/mpl/package.hpp>
 #include <yesod/mpl/package_range_c.hpp>
 
@@ -10,6 +12,8 @@ using ucpf::yesod::detail::placement_array;
 
 using ucpf::yesod::mpl::package;
 using ucpf::yesod::mpl::package_c;
+using ucpf::yesod::mpl::push_front;
+using ucpf::yesod::mpl::integral_constant;
 using ucpf::yesod::mpl::package_range_c;
 
 
@@ -84,7 +88,6 @@ struct node<T, Policy, 0, MaxOrdId> : node_base {
 };
 */
 
-
 int main()
 {
 	typedef node<
@@ -95,7 +98,6 @@ int main()
 	> x_node2;
 	printf("xx %zd\n", x_node1::real_order);
 	printf("xy %zd\n", x_node2::real_order);
-
 
 	typedef placement_array<int, 64> xa0;
 
@@ -137,9 +139,9 @@ int main()
 	xa2 xxa2;
 
 	xxa2.init(alc());
-	xxa2.emplace_at(alc(), 7, 7);
-	xxa2.emplace_at(alc(), 13, 13);
-	xxa2.emplace_at(alc(), 56, 56);
+	xxa2.emplace(alc(), 7, 7);
+	xxa2.emplace(alc(), 13, 13);
+	xxa2.emplace(alc(), 56, 56);
 
 	xxa2.for_each(0, [](size_t pos, vv const &v) -> bool {
 		printf("ff %d\n", v.v);

@@ -121,17 +121,63 @@ struct string_map {
 	}
 
 	template <typename StringType, typename... Args>
-	std::pair<reference, bool> emplace_at(StringType &&s, Args&&... args)
+	std::pair<reference, bool> emplace(StringType &&s, Args&&... args)
 	{
-		return emplace_at(
+		return emplace(
 			std::begin(s), std::end(s), std::forward<Args>(args)...
 		);
 	}
 
 	template <typename Iterator, typename... Args>
-	std::pair<reference, bool> emplace_at(
+	std::pair<reference, bool> emplace(
 		Iterator first_, Iterator last_, Args&&... args
 	);
+
+	template <typename StringType>
+	size_type erase(StringType &&s)
+	{
+		return erase(std::begin(s), std::end(s));
+	}
+
+	template <typename Iterator>
+	size_type erase(Iterator first_, Iterator last_);
+
+	template <typename StringType>
+	size_type erase_prefix(StringType &&s)
+	{
+		return erase_prefix(std::begin(s), std::end(s));
+	}
+
+	template <typename Iterator>
+	size_type erase_prefix(Iterator first_, Iterator last_);
+
+	template <typename Pred>
+	bool for_each(Pred &&pred);
+
+	template <typename Pred>
+	bool for_each(Pred &&pred) const;
+
+	template <typename StringType, typename Pred>
+	bool for_each(StringType &&s, Pred &&pred)
+	{
+		return for_each(
+			std::begin(s), std::end(s), std::forward<Pred>(pred)
+		);
+	}
+
+	template <typename StringType, typename Pred>
+	bool for_each(StringType &&s, Pred &&pred) const
+	{
+		return for_each(
+			std::begin(s), std::end(s), std::forward<Pred>(pred)
+		);
+	}
+
+	template <typename Iterator, typename Pred>
+	bool for_each(Iterator first_, Iterator last_, Pred &&pred);
+
+	template <typename Iterator, typename Pred>
+	bool for_each(Iterator first_, Iterator last_, Pred &&pred) const;
 
 	std::basic_ostream<
 		CharType, typename Policy::char_traits_type
@@ -205,15 +251,32 @@ private:
 			return reinterpret_cast<value_pair *>(base);
 		}
 
-		static pair_type make(uintptr_t base_, uintptr_t check_)
+		void set_base_offset(uintptr_t base_)
 		{
-			return pair_type{base_, check_};
+			base = (base_ << 1) | 1;
 		}
 
-		static pair_type make(value_pair *base_, uintptr_t check_)
+		void set_parent(uintptr_t parent, bool occupied)
+		{
+			check = (parent << 1) | (occupied ? 1 : 0);
+		}
+
+		static pair_type make_leaf(value_pair *leaf, uintptr_t parent)
 		{
 			return pair_type{
-				reinterpret_cast<uintptr_t>(base_), check_
+				reinterpret_cast<uintptr_t>(leaf),
+				(parent << 1) | 1
+			};
+		}
+		static pair_type make_vacant(uintptr_t next, uintptr_t prev)
+		{
+			return pair_type{(next << 1) | 1, prev << 1};
+		}
+
+		static pair_type make(uintptr_t base_, uintptr_t parent)
+		{
+			return pair_type{
+				(base_ << 1) | 1, (parent << 1) | 1
 			};
 		}
 
@@ -370,8 +433,8 @@ private:
 	void init()
 	{
 		items.clear();
-		items.emplace_at(1, pair_type::make(3, 2));
-		items.emplace_at(0, pair_type::make(1, 3));
+		items.emplace(1, pair_type::make_vacant(1, 1));
+		items.emplace(0, pair_type::make(0, 1));
 	}
 
 	template <typename IndexIterator>
@@ -395,8 +458,8 @@ private:
 		return rv;
 	}
 
-	void reserve_vacant(
-		uintptr_t parent_pos, pair_loc child_loc, value_pair *v
+	uintptr_t reserve_vacant(
+		uintptr_t parent_pos, uintptr_t child_pos, value_pair *v
 	);
 
 	void detangle(

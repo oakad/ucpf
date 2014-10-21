@@ -22,7 +22,7 @@ void sparse_vector<ValueType, Policy>::clear()
 		return;
 
 	loc_pair tree_loc[height];
-	tree_loc[0] = {&root, 0};
+	tree_loc[0] = loc_pair(&root, 0);
 	size_type h(0);
 
 	while (true) {
@@ -50,9 +50,7 @@ void sparse_vector<ValueType, Policy>::clear()
 			continue;
 		}
 
-		tree_loc[++h] = loc_pair{
-			static_cast<ptr_node_base *>(*pp.first), 0
-		};
+		tree_loc[++h] = loc_pair(*pp.first, 0);
 	}
 }
 
@@ -127,7 +125,7 @@ bool sparse_vector<ValueType, Policy>::for_each(
 		return false;
 
 	loc_pair tree_loc[height];
-	tree_loc[0] = loc_pair{&root, 0};
+	tree_loc[0] = loc_pair(&root, 0);
 	for (size_type h(1); h < height; ++h)
 		tree_loc[h].pos = node_offset(first, height - h + 1);
 
@@ -174,6 +172,14 @@ bool sparse_vector<ValueType, Policy>::for_each(
 			n_pos += tree_loc[h].pos;
 		}
 	}
+}
+
+template <typename ValueType, typename Policy>
+template <typename Generator>
+void sparse_vector<ValueType, Policy>::fill(
+	size_type first, size_type count, Generator &&gen
+)
+{
 }
 
 template <typename ValueType, typename Policy>
@@ -348,7 +354,7 @@ void sparse_vector<ValueType, Policy>::shrink_to_fit()
 		return;
 
 	loc_pair tree_loc[height];
-	tree_loc[0] = loc_pair{&root, 0};
+	tree_loc[0] = loc_pair(&root, 0);
 	size_type h(0);
 
 	while (true) {
@@ -370,9 +376,7 @@ void sparse_vector<ValueType, Policy>::shrink_to_fit()
 			q->shrink_node(a, tree_loc[h]);
 			++tree_loc[h].pos;
 		} else
-			tree_loc[++h] = loc_pair{
-				static_cast<ptr_node_base *>(*pp.first), 0
-			};
+			tree_loc[++h] = loc_pair(*pp.first, 0);
 	}
 
 	auto p(root.ptr_at(0));
@@ -443,7 +447,7 @@ auto sparse_vector<ValueType, Policy>::utilization() const
 template <typename ValueType, typename Policy>
 auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 	sparse_vector<ValueType, Policy>::size_type pos
-) -> std::pair<data_node_base *, node_base **>
+) -> loc_pair
 {
 	typedef allocator::array_helper<ptr_node_type, allocator_type> a_hp;
 	typedef allocator::array_helper<data_node_type, allocator_type> a_hd;
@@ -451,39 +455,40 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 	auto a(std::get<1>(tup_height_alloc));
 	auto &h(std::get<0>(tup_height_alloc));
 	auto p_h(height_at_pos(pos));
-	size_type d_pos(0);
 
-	auto release_p([&d_pos](ptr_node_base *p) -> void {
-		p->release_at(d_pos);
-	});
+	auto release = [](loc_pair *p) -> void {
+		p->release();
+	};
 
-	std::unique_ptr<ptr_node_base, decltype(release_p)> u_node_ptr(
-		nullptr, release_p
+	std::unique_ptr<loc_pair, decltype(release)> loc_guard(
+		nullptr, release
 	);
 
+	loc_pair rv(&root, 0);
 	if (!h) {
-		std::pair<data_node_base *, node_base **> rv(nullptr, nullptr);
-		u_node_ptr.reset(&root);
-		auto rr(root.reserve_at(0));
-		rv.first = a_hd::alloc_n(a, 1, a);
-		*rr.first = rv.first;
-		rv.second = rr.first;
-		u_node_ptr.release();
+		auto rr(rv.reserve());
+		loc_guard.reset(&rv);
+		*rr.first = a_hd::alloc_n(a, 1, a);
+		loc_guard.release();
 		h = 1;
 
 		if (p_h == h)
 			return rv;
 
-		auto p(a_hp::alloc_n(a, 1, a));
-		auto pp(p->reserve_at(node_offset(pos, h + 1)));
-		*pp.first = rv.first;
-		*rr.first = p;
-		rv.second = pp.first;
-		++h;
+		{
+			rv = loc_pair(
+				a_hp::alloc_n(a, 1, a),
+				node_offset(pos, h + 1)
+			);
+			auto pp(rv.reserve());
+			*pp.first = *rr.first;
+			*rr.first = rv.ptr;
+			++h;
+		}
 
 		while (p_h > h) {
-			p = a_hp::alloc_n(a, 1, a);
-			pp = p->reserve_at(node_offset(pos, h + 1));
+			auto p(a_hp::alloc_n(a, 1, a));
+			auto pp(p->reserve_at(node_offset(pos, h + 1)));
 			*pp.first = *rr.first;
 			*rr.first = p;
 			++h;
@@ -492,51 +497,50 @@ auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
 		return rv;
 	}
 
-	auto qq(root.reserve_at(0));
+	auto qq(rv.reserve());
 	while (p_h > h) {
-		auto p(a_hp::alloc_n(a, 1, a));
-		auto pp(p->reserve_at(0));
+		rv.ptr = a_hp::alloc_n(a, 1, a);
+		auto pp(rv.reserve());
 		*pp.first = *qq.first;
-		*qq.first = p;
+		*qq.first = rv.ptr;
 		++h;
 	}
 
 	if (h > p_h)
 		p_h = h;
 
-	auto p(qq.first);
-	auto q(*p);
 	if (p_h == 1)
-		return std::make_pair(static_cast<data_node_base *>(q), p);
+		return rv;
 
+	loc_pair parent(&root, 0);
 	while (true) {
-		d_pos = node_offset(pos, p_h);
-		qq = static_cast<ptr_node_base *>(q)->reserve_at(d_pos);
+		rv = loc_pair(*qq.first, node_offset(pos, p_h));
+		qq = rv.reserve();
+
 		if (qq.first) {
-			p = qq.first;
 			if (p_h == 2)
 				break;
 
 			if (!qq.second) {
-				u_node_ptr.reset(
-					static_cast<ptr_node_base *>(q)
-				);
-				*p = a_hp::alloc_n(a, 1, a);
-				u_node_ptr.release();
+				loc_guard.reset(&rv);
+				*qq.first = a_hp::alloc_n(a, 1, a);
+				loc_guard.release();
 			}
 
-			q = *p;
+			parent = rv;
 			--p_h;
 		} else
-			q = static_cast<ptr_node_base *>(q)->grow_node(a, p);
+			rv.ptr = static_cast<ptr_node_base *>(
+				rv.ptr->grow_node(a, parent)
+			);
 	}
 
 	if (!qq.second) {
-		u_node_ptr.reset(static_cast<ptr_node_base *>(q));
-		*p = a_hd::alloc_n(a, 1, a);
-		u_node_ptr.release();
+		loc_guard.reset(&rv);
+		*qq.first = a_hd::alloc_n(a, 1, a);
+		loc_guard.release();
 	}
-	return std::make_pair(static_cast<data_node_base *>(*p), p);
+	return rv;
 }
 
 }}

@@ -34,12 +34,12 @@ BOOST_AUTO_TEST_CASE(string_map_0)
 {
 	string_map<char, test::s> m0;
 
-	m0.emplace_at("bachelor", 111);
-	m0.emplace_at("jar", 222);
-	m0.emplace_at("badge", 333);
+	m0.emplace("bachelor", 111);
+	m0.emplace("jar", 222);
+	m0.emplace("badge", 333);
 	m0.dump(std::cout);
 
-	m0.emplace_at("baby", 444);
+	m0.emplace("baby", 444);
 	printf("----\n");
 	m0.dump(std::cout);
 
@@ -63,10 +63,10 @@ BOOST_AUTO_TEST_CASE(string_map_0)
 BOOST_AUTO_TEST_CASE(string_map_1)
 {
 	string_map<char, int> m0;
-	m0.emplace_at(std::string("abcd"), 1);
-	m0.emplace_at(std::string("abcdefghijkl"), 2);
-	m0.emplace_at(std::string("abcdefghijklmnopqrst"), 3);
-	m0.emplace_at(std::string("abcdefghijklmnopqrstuvwxyz"), 4);
+	m0.emplace(std::string("abcd"), 1);
+	m0.emplace(std::string("abcdefghijkl"), 2);
+	m0.emplace(std::string("abcdefghijklmnopqrst"), 3);
+	m0.emplace(std::string("abcdefghijklmnopqrstuvwxyz"), 4);
 
 	auto p(m0.find(std::string("abcd")));
 	BOOST_CHECK_EQUAL(*p, 1);
