@@ -1,5 +1,5 @@
 CC=g++
-CXXFLAGS+=-std=gnu++1y -I.. -I../yesod
+CXXFLAGS+=-std=gnu++1y -fabi-version=8 -I.. -I../yesod
 
 sparse_vector_test: sparse_vector_test.cpp
 	$(CC) $(CXXFLAGS) -g -o $@ $^

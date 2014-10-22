@@ -38,6 +38,17 @@ template <
 	}
 
 	template <typename Alloc>
+	void init_at(Alloc const &a, size_type pos)
+	{
+		if (!items.test(pos)) {
+			typedef allocator::array_helper<value_type, Alloc> a_h;
+
+			a_h::make_n(a, unsafe_ptr_at(pos), 1);
+			items.set(pos);
+		}
+	}
+
+	template <typename Alloc>
 	void destroy(Alloc const &a)
 	{
 		typedef allocator::array_helper<value_type, Alloc> a_h;

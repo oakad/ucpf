@@ -277,6 +277,12 @@ template <
 		items.init(a);
 	}
 
+	template <typename Alloc>
+	void init_at(Alloc const &a, size_type pos)
+	{
+		items.init_at(a, pos);
+	}
+
 	template <typename Alloc, std::size_t OtherOrder>
 	void init_move(
 		Alloc const &a, compressed_array<

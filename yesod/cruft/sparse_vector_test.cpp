@@ -1,6 +1,7 @@
 #include <yesod/sparse_vector.hpp>
 #include <iostream>
 #include <test/test_demangle.hpp>
+#include <random>
 
 using ucpf::yesod::bitset;
 using ucpf::yesod::sparse_vector;
@@ -64,10 +65,28 @@ int main(int argc, char **argv)
 {
 	sparse_vector<pair_type, x_policy> trie;
 
-	//trie.dump(std::cout);
+	static std::random_device src;
+	std::mt19937 gen(src());
+	std::uniform_int_distribution<std::size_t> dis;
+	constexpr static std::size_t max_value = 1000000;
+	constexpr static std::size_t count = 40;
 
+	for (std::size_t c(0); c < count; ++c) {
+		auto pos(dis(gen) % max_value);
+		printf("aa %zd\n", pos);
+		trie.emplace(pos, pair_type::make(c, pos));
+	}
+
+	printf("==============\n");
+	trie.dump(std::cout);
+	printf("==============\n");
+
+	trie.for_each_pos(30, 50, [](std::size_t pos, pair_type &p) -> void {
+		p.base = pos;
+		p.check = pos;
+	});
 	auto const &x_trie(trie);
-/*
+
 	x_trie.for_each(
 		77, [](
 			typename decltype(trie)::size_type pos, pair_type const &r
@@ -76,7 +95,7 @@ int main(int argc, char **argv)
 			return false;
 		}
 	);
-*/
+
 	std::size_t base = 10000;
 
 	for (auto c(1); c < 10; ++c)

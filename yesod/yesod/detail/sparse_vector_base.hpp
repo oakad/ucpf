@@ -201,7 +201,7 @@ template <
 
 		if (!qp.first) {
 			q = static_cast<data_node_base *>(q->grow_node(
-				std::get<1>(tup_height_alloc), p
+				std::get<1>(tup_height_alloc), p, false
 			));
 			qp = q->reserve_at(d_pos);
 		}
@@ -232,8 +232,8 @@ template <
 	template <typename Pred>
 	bool for_each(size_type first, Pred &&pred);
 
-	template <typename Generator>
-	void fill(size_type first, size_type count, Generator &&gen);
+	template <typename Pred>
+	void for_each_pos(size_type first, size_type last, Pred &&pred);
 
 	size_type find_vacant(size_type first) const;
 
@@ -260,7 +260,7 @@ private:
 		virtual size_type find_vacant(size_type first) const = 0;
 		virtual bool erase(allocator_type const &a, size_type pos) = 0;
 		virtual node_base *grow_node(
-			allocator_type const &a, loc_pair parent
+			allocator_type const &a, loc_pair parent, bool maximize
 		) = 0;
 		virtual node_base *shrink_node(
 			allocator_type const &a, loc_pair parent
@@ -276,6 +276,10 @@ private:
 				return v != nullptr;
 			}
 		};
+
+		static ptr_node_base *make(
+			allocator_type const &a, bool maximize
+		);
 
 		virtual node_value_type *ptr_at(size_type pos) = 0;
 		virtual node_value_type const *ptr_at(size_type pos) const = 0;
@@ -295,6 +299,10 @@ private:
 		typedef typename detail::sparse_vector_value_predicate<
 			Policy, detail::has_value_valid_pred<Policy>::value
 		>::type value_valid_pred;
+
+		static data_node_base *make(
+			allocator_type const &a, bool maximize
+		);
 
 		virtual node_value_type *ptr_at(size_type pos) = 0;
 		virtual node_value_type const *ptr_at(size_type pos) const = 0;
@@ -464,28 +472,43 @@ private:
 		}
 
 		virtual node_base *grow_node(
-			allocator_type const &a, loc_pair parent
+			allocator_type const &a, loc_pair parent, bool maximize
 		)
 		{
 			if (std::is_same<next_node_type, self_type>::value)
 				return *parent.ptr->ptr_at(parent.pos);
 
+			if (maximize)
+				return resize_node<node<
+					base_type, MaxOrdId - 1, MaxOrdId, arr
+				>>(a, parent, this);
+			else
+				return resize_node<next_node_type>(
+					a, parent, this
+				);
+		}
+
+		template <typename OtherNodeType>
+		static node_base *resize_node(
+			allocator_type const &a, loc_pair parent, node *self
+		)
+		{
 			typedef allocator::array_helper<
-				next_node_type, allocator_type
+				OtherNodeType, allocator_type
 			> a_h;
 
-			auto deleter = [a](next_node_type *p) -> void {
+			auto deleter = [a](OtherNodeType *p) -> void {
 				p->destroy(a);
 			};
 
 			std::unique_ptr<
-				next_node_type, decltype(deleter)
+				OtherNodeType, decltype(deleter)
 			> p(a_h::alloc_n(a, 1, a), deleter);
 
-			p->items.init_move(a, items);
+			p->items.init_move(a, self->items);
 			*(parent.ptr->ptr_at(parent.pos)) = p.get();
 			auto rv(p.release());
-			destroy(a);
+			self->destroy(a);
 			return rv;
 		}
 
@@ -506,15 +529,15 @@ private:
 			if (sz > prev_node_type::storage_size())
 				return this;
 
-			return shrink_node_impl<self_type, prev_node_type>(
+			return shrink_node_impl<prev_node_type>(
 				a, parent, this, sz
 			);
 		}
 
-		template <typename CurNodeType, typename OtherNodeType>
+		template <typename OtherNodeType>
 		static node_base *shrink_node_impl(
 			allocator_type const &a, loc_pair parent,
-			CurNodeType *self, size_type sz
+			node *self, size_type sz
 		)
 		{
 			typedef typename OtherNodeType::prev_node_type
@@ -527,26 +550,10 @@ private:
 				&& (sz <= pp_node_type::storage_size())
 			)
 				return shrink_node_impl<
-					CurNodeType, pp_node_type
+					pp_node_type
 				>(a, parent, self, sz);
 
-			typedef allocator::array_helper<
-				OtherNodeType, allocator_type
-			> a_h;
-
-			auto deleter = [a](OtherNodeType *p) -> void {
-				p->destroy(a);
-			};
-
-			std::unique_ptr<
-				OtherNodeType, decltype(deleter)
-			> p(a_h::alloc_n(a, 1, a), deleter);
-
-			p->items.init_move(a, self->items);
-			*(parent.ptr->ptr_at(parent.pos)) = p.get();
-			auto rv(p.release());
-			self->destroy(a);
-			return rv;
+			return resize_node<OtherNodeType>(a, parent, self);
 		}
 
 		virtual std::pair<size_type, size_type> utilization() const
@@ -571,16 +578,26 @@ private:
 	typedef node<
 		ptr_node_base, 0, Policy::ptr_node_order.size(),
 		Policy::ptr_node_order
-	> ptr_node_type;
+	> min_ptr_node_type;
+
+	typedef node<
+		ptr_node_base, Policy::ptr_node_order.size() - 1,
+		Policy::ptr_node_order.size(), Policy::ptr_node_order
+	> max_ptr_node_type;
 
 	typedef node<
 		data_node_base, 0, Policy::data_node_order.size(),
 		Policy::data_node_order
-	> data_node_type;
+	> min_data_node_type;
+
+	typedef node<
+		data_node_base, Policy::data_node_order.size() - 1,
+		Policy::data_node_order.size(), Policy::data_node_order
+	> max_data_node_type;
 
 	typedef typename detail::static_bit_field_map<
-		sizeof(size_type) * 8, data_node_type::apparent_order,
-		ptr_node_type::apparent_order
+		sizeof(size_type) * 8, max_data_node_type::apparent_order,
+		max_ptr_node_type::apparent_order
 	>::repeat_last::value_type pos_field_map;
 
 	constexpr static size_type node_size_shift(size_type h)
@@ -602,9 +619,9 @@ private:
 
 	constexpr static size_type height_at_pos(size_type pos)
 	{
-		return (pos >= data_node_type::apparent_size) ? (
-			(yesod::fls(pos) - data_node_type::apparent_order)
-			/ ptr_node_type::apparent_order + 2
+		return (pos >= max_data_node_type::apparent_size) ? (
+			(yesod::fls(pos) - max_data_node_type::apparent_order)
+			/ max_ptr_node_type::apparent_order + 2
 		) : 1;
 	}
 
