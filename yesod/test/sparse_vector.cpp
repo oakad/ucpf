@@ -108,10 +108,7 @@ BOOST_AUTO_TEST_CASE(sparse_vector_0)
 			BOOST_CHECK_EQUAL(p.second.value, v0[p.first].value);
 
 		auto not_all(v0.for_each(
-			0, [&m1](
-				std::size_t pos,
-				typename decltype(v0)::reference v
-			) -> bool {
+			0, [&m1](auto pos, auto &v) -> bool {
 				m1.insert(std::make_pair(pos, v));
 				return false;
 			}
@@ -154,6 +151,53 @@ BOOST_AUTO_TEST_CASE(sparse_vector_1)
 				v0.ptr_at(pos),
 				typename decltype(v0)::pointer(nullptr)
 			);
+	}
+}
+
+BOOST_AUTO_TEST_CASE(sparse_vector_2)
+{
+	static std::random_device src;
+	std::mt19937 gen(src());
+	std::uniform_int_distribution<std::size_t> dis;
+	constexpr static std::size_t max_value = 1000000;
+	constexpr static std::size_t max_range = 100;
+	constexpr static std::size_t test_count = 30;//10000;
+
+	std::unordered_set<std::size_t> s0;
+	typedef test::s<decltype(s0)> s_type;
+	sparse_vector<s_type> v0;
+
+	for (std::size_t c(0); c < test_count; ++c) {
+		auto pos(dis(gen) % max_value);
+		auto count(dis(gen) % max_range);
+		if (!count)
+			continue;
+
+		v0.for_each_pos(
+			pos, pos + count,
+			[&s0, &v0](auto x_pos, auto &v) -> void {
+				v = std::move(s_type(x_pos, &s0));
+			}
+		);
+
+		printf("run %zd, first %zd, last %zd\n", c, pos, pos + count);
+		decltype(pos) last_pos(pos);
+		decltype(count) last_count(0);
+		v0.for_each(
+			pos + 1, [pos, count, &last_pos, &last_count](
+				auto x_pos, auto const &v
+			) -> bool {
+				if (x_pos >= (pos + count))
+					return true;
+
+				BOOST_CHECK_EQUAL(last_pos, x_pos - 1);
+				BOOST_CHECK_EQUAL(x_pos, v.value);
+				last_pos = x_pos;
+				++last_count;
+				return false;
+			}
+		);
+		BOOST_CHECK_EQUAL(count, last_count + 1);
 	}
 }
 

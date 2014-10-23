@@ -193,7 +193,6 @@ void sparse_vector<ValueType, Policy>::for_each_pos(
 	size_type m_height(height - height_at_pos(count));
 	size_type h(0);
 	size_type d_pos(node_offset(first, 1));
-	size_type n_pos(0);
 
 	auto release_p = [](loc_pair *p) -> void {
 		p->release();
@@ -212,8 +211,6 @@ void sparse_vector<ValueType, Policy>::for_each_pos(
 	> loc_guard_d(nullptr, release_d);
 
 	while (true) {
-		auto max(h > m_height);
-
 		auto pp(tree_loc[h].reserve());
 		if (!pp.first) {
 			tree_loc[h].ptr = static_cast<ptr_node_base *>(
@@ -235,7 +232,7 @@ void sparse_vector<ValueType, Policy>::for_each_pos(
 				);
 
 			auto qq(static_cast<max_data_node_type *>(*pp.first));
-			for (; count; --count) {
+			for (; d_pos < node_size(1); ++d_pos) {
 				auto dp(qq->reserve_at(d_pos));
 				if (!dp.second) {
 					loc_guard_d.reset(qq);
@@ -244,10 +241,10 @@ void sparse_vector<ValueType, Policy>::for_each_pos(
 				}
 
 				pred(last - count, *dp.first);
-				++d_pos;
+				--count;
+				if (!count)
+					return;
 			}
-			if (!count)
-				return;
 
 			d_pos = 0;
 			++tree_loc[h].pos;
@@ -260,7 +257,9 @@ void sparse_vector<ValueType, Policy>::for_each_pos(
 				loc_guard.release();
 			}
 
-			tree_loc[++h] = loc_pair(*pp.first, 0);
+			tree_loc[++h].ptr = static_cast<ptr_node_base *>(
+				*pp.first
+			);
 			continue;
 		}
 

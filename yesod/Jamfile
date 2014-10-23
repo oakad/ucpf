@@ -1,4 +1,4 @@
 
-project yesod  : requirements <cxxflags>-std=c++1y <threading>multi
+project yesod  : requirements <cxxflags>-std=gnu++14 <threading>multi
                : default-build release ;
 
