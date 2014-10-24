@@ -146,7 +146,7 @@ int main(int argc, char **argv)
 	printf("==============\n");
 	auto const &x_trie(trie);
 	x_trie.for_each(661539, [](auto pos, auto &p) -> bool {
-		printf("xx %zd - %zd\n", pos, p.base);
+		printf("xx %zd - %zd (%zx - %zx)\n", pos, p.base, pos, p.base);
 		return pos == 661588;
 	});
 #if 0

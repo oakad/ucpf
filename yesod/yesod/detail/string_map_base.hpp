@@ -425,6 +425,11 @@ private:
 		return base_index + *iter;
 	}
 
+	static uintptr_t index_offset(index_char_type c)
+	{
+		return base_index + c;
+	}
+
 	char_type offset_char(uintptr_t index) const
 	{
 		return std::get<1>(tup_breadth_map).value(index - base_index);
@@ -457,6 +462,10 @@ private:
 
 		return rv;
 	}
+
+	void grow_storage(uintptr_t pos);
+
+	uintptr_t find_vacant(uintptr_t first);
 
 	uintptr_t reserve_vacant(
 		uintptr_t parent_pos, uintptr_t child_pos, value_pair *v

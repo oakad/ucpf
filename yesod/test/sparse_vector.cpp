@@ -160,8 +160,8 @@ BOOST_AUTO_TEST_CASE(sparse_vector_2)
 	std::mt19937 gen(src());
 	std::uniform_int_distribution<std::size_t> dis;
 	constexpr static std::size_t max_value = 1000000;
-	constexpr static std::size_t max_range = 100;
-	constexpr static std::size_t test_count = 30;//10000;
+	constexpr static std::size_t max_range = 10000;
+	constexpr static std::size_t test_count = 1000;
 
 	std::unordered_set<std::size_t> s0;
 	typedef test::s<decltype(s0)> s_type;
@@ -180,21 +180,17 @@ BOOST_AUTO_TEST_CASE(sparse_vector_2)
 			}
 		);
 
-		printf("run %zd, first %zd, last %zd\n", c, pos, pos + count);
 		decltype(pos) last_pos(pos);
 		decltype(count) last_count(0);
 		v0.for_each(
 			pos + 1, [pos, count, &last_pos, &last_count](
 				auto x_pos, auto const &v
 			) -> bool {
-				if (x_pos >= (pos + count))
-					return true;
-
 				BOOST_CHECK_EQUAL(last_pos, x_pos - 1);
 				BOOST_CHECK_EQUAL(x_pos, v.value);
 				last_pos = x_pos;
 				++last_count;
-				return false;
+				return x_pos == (pos + count - 1);
 			}
 		);
 		BOOST_CHECK_EQUAL(count, last_count + 1);

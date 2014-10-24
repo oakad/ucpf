@@ -83,6 +83,11 @@ bool sparse_vector<ValueType, Policy>::for_each(
 			tree_loc[h].pos = 0;
 			n_pos >>= node_size_shift(height - h + 1);
 			++tree_loc[--h].pos;
+			auto mask((
+				size_type(1) << node_size_shift(height - h + 1)
+			) - 1);
+			n_pos &= ~mask;
+			n_pos |= tree_loc[h].pos & mask;
 			continue;
 		} else
 			n_pos += pp.second - tree_loc[h].pos;
@@ -103,7 +108,11 @@ bool sparse_vector<ValueType, Policy>::for_each(
 
 			d_pos = 0;
 			++tree_loc[h].pos;
-			++n_pos;
+			auto mask((
+				size_type(1) << node_size_shift(height - h + 1)
+			) - 1);
+			n_pos &= ~mask;
+			n_pos |= tree_loc[h].pos & mask;
 		} else {
 			tree_loc[++h].ptr = static_cast<
 				ptr_node_base const *
@@ -143,6 +152,11 @@ bool sparse_vector<ValueType, Policy>::for_each(
 			tree_loc[h].pos = 0;
 			n_pos >>= node_size_shift(height - h + 1);
 			++tree_loc[--h].pos;
+			auto mask((
+				size_type(1) << node_size_shift(height - h + 1)
+			) - 1);
+			n_pos &= ~mask;
+			n_pos |= tree_loc[h].pos & mask;
 			continue;
 		} else
 			n_pos += pp.second - tree_loc[h].pos;
@@ -163,7 +177,11 @@ bool sparse_vector<ValueType, Policy>::for_each(
 
 			d_pos = 0;
 			++tree_loc[h].pos;
-			++n_pos;
+			auto mask((
+				size_type(1) << node_size_shift(height - h + 1)
+			) - 1);
+			n_pos &= ~mask;
+			n_pos |= tree_loc[h].pos & mask;
 		} else {
 			tree_loc[++h].ptr = static_cast<
 				ptr_node_base *

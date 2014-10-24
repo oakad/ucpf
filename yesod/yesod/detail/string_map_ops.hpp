@@ -42,6 +42,9 @@ auto string_map<CharType, ValueType, Policy>::emplace(
 		auto q(p.first->pair_at(items, n_index));
 
 		if (!q.first || q.first->is_vacant()) {
+			if (!q.first)
+				grow_storage(q.second);
+
 			vp.reset(value_pair::construct(
 				a, ++first, last, std::forward<Args>(args)...
 			));
@@ -162,28 +165,77 @@ std::basic_ostream<
 }
 
 template <typename CharType, typename ValueType, typename Policy>
+void string_map<CharType, ValueType, Policy>::grow_storage(uintptr_t pos)
+(
+	auto r(items.ptr_at(0));
+	auto p(items.ptr_at(r->parent()));
+	auto q(item.ptr_at(p->base_offset()));
+
+	items.for_each_pos(
+		r->parent() + 1, child_pos + 2,
+		[&r, &p, &q](auto pos, auto &item) -> void {
+			item = std::move(pair_type::make_vacant(
+				p->base_offset(), q->parent()
+			));
+			p->set_base_offset(pos);
+			q->set_parent(pos);
+			r->set_parent(pos, false);
+			p = &item;
+		}
+	);
+)
+
+template <typename CharType, typename ValueType, typename Policy>
+auto string_map<
+	CharType, ValueType, Policy
+>::find_vacant(uintptr_t first) -> uintptr_t
+{
+	auto r(items.ptr_at(0));
+	auto p_pos(r->parent());
+
+	if (first >= p_pos) {
+		grow_storage(first);
+		return first;
+	}
+
+	if (items.ptr_at(first)->is_vacant())
+		return first;
+
+	auto p(items.ptr_at(p_pos));
+	auto q_pos(p->base_offset());
+	while (true) {
+		if (q_pos > first) {
+			p_pos = q_pos;
+			break;
+		}
+
+		if (p_pos < first) {
+			p_pos = items.ptr_at(p_pos)->base_offset();
+			break;
+		}
+
+		q_pos = items.ptr_at(q_pos)->base_offset();
+		p_pos = items.ptr_at(p_pos)->parent();
+	}
+
+	if (p_pos == r->parent())
+		grow_storage(p_pos);
+
+	return p_pos;
+}
+
+template <typename CharType, typename ValueType, typename Policy>
 uintptr_t string_map<CharType, ValueType, Policy>::reserve_vacant(
 	uintptr_t parent_pos, uintptr_t child_pos, value_pair *v
 )
 {
-	auto r(items.ptr_at(0));
-	auto p(items.ptr_at(r->parent()));
-	for (auto pos(r->parent()); pos < (child_pos + 2); ++pos) {
-		auto q(items.emplace(
-			pos + 1, pair_type::make_vacant(p->base_offset(), pos)
-		));
-		p->set_base_offset(pos + 1);
-		r->set_parent(pos + 1, false);
-		p = q;
-	}
-
 	p = items.ptr_at(child_pos);
 	auto rv(p->base_offset());
 	auto pp(items.ptr_at(p->parent()));
 	auto pq(items.ptr_at(p->base_offset()));
 	pp->set_base_offset(p->base_offset());
 	pq->set_parent(p->parent(), false);
-	*p = pair_type::make_leaf(v, parent_pos);
+	*p = std::move(pair_type::make_leaf(v, parent_pos));
 	return rv;
 }
 
@@ -200,10 +252,29 @@ void string_map<CharType, ValueType, Policy>::unroll_suffix(
 	pair_loc loc, size_type count, uintptr_t other_index, value_pair *v
 )
 {
-	auto leaf_ptr(loc.first->leaf_ptr());
-	auto s_ptr(leaf_ptr->suffix());
+	auto a(items.get_allocator());
+	size_type shrink_count(0);
+	auto shrink = [&shrink_count, &a](value_pair *v) -> void {
+		v->shrink_suffix(a, shrink_count);
+	};
 
-	
+	std::unique_ptr<value_pair, decltype(shrink)> leaf_ptr(
+		loc.first->leaf_ptr(), shrink
+	);
+	auto s_ptr(leaf_ptr->suffix());
+	auto r(items.ptr_at(0));
+
+	for (; shrink_count < count; ++shrink_count) {
+		auto pos(index_offset(s_ptr[shrink_count]));
+		auto n_pos(find_vacant(pos));
+		reserve_vacant(loc.second, n_pos, leaf_ptr.get());
+		loc.first->set_base_offset(n_pos - pos);
+		loc = pair_loc(items.ptr_at(n_pos), n_pos);
+	}
+
+	auto c_index(terminator_index);
+	if (leaf_ptr->suffix_length > count)
+		c_index = index_offset(s_ptr[count]);
 }
 
 template <typename CharType, typename ValueType, typename Policy>
