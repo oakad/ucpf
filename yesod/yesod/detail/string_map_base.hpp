@@ -58,12 +58,15 @@ struct string_map {
 	void clear()
 	{
 		auto a(items.get_allocator());
-		items.for_each(0, [a](size_type pos, pair_type &p) -> bool {
+		auto last(items.ptr_at(0)->parent());
+		items.for_each_pos(
+			0, last, [a](size_type pos, pair_type &p) -> bool {
 				if (p.is_leaf())
 					value_pair::destroy(a, p.leaf_ptr());
 
 				return false;
-		});
+			}
+		);
 		init();
 	}
 
@@ -467,13 +470,22 @@ private:
 
 	uintptr_t find_vacant(uintptr_t first);
 
+	uintptr_t find_vacant_set(
+		uintptr_t first, uintptr_t const *index_set,
+		size_type index_count
+	);
+
 	uintptr_t reserve_vacant(
 		uintptr_t parent_pos, uintptr_t child_pos, value_pair *v
 	);
 
-	void detangle(
-		pair_loc parent_loc, pair_loc child_loc, uintptr_t c_index,
-		value_pair *v
+	void move_pair(
+		uintptr_t src_taken_pos, uintptr_t dst_vacant_pos,
+		uintptr_t src_vacant_hint
+	);
+
+	void relocate(
+		pair_loc loc, uintptr_t c_index, value_pair *v
 	);
 
 	void unroll_suffix(

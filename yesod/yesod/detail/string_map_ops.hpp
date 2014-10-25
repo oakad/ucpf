@@ -56,7 +56,7 @@ auto string_map<CharType, ValueType, Policy>::emplace(
 			vp.reset(value_pair::construct(
 				a, ++first, last, std::forward<Args>(args)...
 			));
-			detangle(p, q, n_index, vp.get());
+			relocate(p, n_index, vp.get());
 			return std::pair<reference, bool>(
 				vp.release()->value, true
 			);
@@ -240,11 +240,56 @@ uintptr_t string_map<CharType, ValueType, Policy>::reserve_vacant(
 }
 
 template <typename CharType, typename ValueType, typename Policy>
-void string_map<CharType, ValueType, Policy>::detangle(
-	pair_loc parent_loc, pair_loc child_loc, uintptr_t c_index,
-	value_pair *v
+void string_map<CharType, ValueType, Policy>::relocate(
+	pair_loc loc, uintptr_t c_index, value_pair *v
 )
 {
+	std::vector<
+		uintptr_t, allocator_type
+	> index_set(items.get_allocator());
+	auto base_offset(loc.first->base_offset());
+	for (auto c(terminator_index); c < c_index; ++c) {
+		auto p(items.ptr_at(base_offset + c));
+		if (p->parent() == loc.second)
+			index_set.push_back(c);
+	}
+
+	index_set.push_back(c_index);
+	auto c_index_pos(index_set.size() - 1);
+	auto last_index(index_offset(std::get<0>(tup_breadth_map)));
+	for (auto c(c_index + 1); c < last_index; ++c) {
+		auto p(items.ptr_at(base_offset + c));
+		if (p->parent() == loc.second)
+			index_set.push_back(c);
+	}
+
+	auto n_pos(find_vacant_set(
+		index_set[0], &index_set[1], index.size() - 1
+	));
+	auto new_base_offset(n_pos - index_set[0]);
+	uintptr_t vacant_pos_hint(0);
+
+	for (size_type c(0); c < c_index_pos; ++c) {
+		move_pair(
+			base_offset + index_set[c],
+			new_base_offset + index_set[c],
+			vacant_pos_hint
+		);
+		vacant_pos_hint = base_offset + index_set[c];
+	}
+
+	reserve_vacant(loc.second, new_base_offset + c_index, v);
+
+	for (size_type c(c_index_pos + 1); c < index_set.size(); ++c) {
+		move_pair(
+			base_offset + index_set[c],
+			new_base_offset + index_set[c],
+			vacant_pos_hint
+		);
+		vacant_pos_hint = base_offset + index_set[c];
+	}
+
+	loc.first->set_base_offset(new_base_offset);
 }
 
 template <typename CharType, typename ValueType, typename Policy>
@@ -275,6 +320,21 @@ void string_map<CharType, ValueType, Policy>::unroll_suffix(
 	auto c_index(terminator_index);
 	if (leaf_ptr->suffix_length > count)
 		c_index = index_offset(s_ptr[count]);
+
+	bool ord(other_index > c_index);
+	auto n_pos(
+		ord
+		? find_vacant_set(c_index, &other_index, 1)
+		: find_vacant_set(other_index, &c_index, 1)
+	);
+	auto base_offset(ord ? (n_pos - c_index) : (n_pos - other_index));
+
+	reserve_vacant(loc.second, base_offset + c_index, leaf_ptr.get());
+	loc.first->set_base_offset(base_offset);
+	if (c_index > terminator_index)
+		++shrink_count;
+
+	reserve_vacant(loc.second, base_offset + other_index, v);
 }
 
 template <typename CharType, typename ValueType, typename Policy>
