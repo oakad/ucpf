@@ -9,6 +9,15 @@ int main(int argc, char **argv)
 	string_map<char, int> x_map;
 	int ord(0);
 
+	x_map.emplace("bachelor", 111);
+	x_map.emplace("jar", 222);
+	x_map.emplace("badge", 333);
+	x_map.dump(std::cout);
+
+	x_map.emplace("baby", 444);
+	printf("----\n");
+	x_map.dump(std::cout);
+/*
 	for (auto c(getchar()); c != EOF; c = getchar()) {
 		if (c == '\n' || c == '\r') {
 			if (!s_in.empty()) {
@@ -20,7 +29,7 @@ int main(int argc, char **argv)
 		} else
 			s_in.push_back(c);
 	}
-
+*/
 	//x_map.dump(std::cout);
 
 	//auto r_idx(x_map.make_index());

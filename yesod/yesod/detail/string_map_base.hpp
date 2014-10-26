@@ -422,12 +422,6 @@ private:
 		{}
 	};
 
-	template <typename IndexIterator>
-	static uintptr_t index_offset(IndexIterator iter)
-	{
-		return base_index + *iter;
-	}
-
 	static uintptr_t index_offset(index_char_type c)
 	{
 		return base_index + c;

@@ -134,7 +134,7 @@ template <
 	const_pointer ptr_at(size_type pos) const
 	{
 		auto h(std::get<0>(tup_height_alloc));
-		ptr_node_base *p(&root);
+		ptr_node_base const *p(&root);
 		size_type d_pos(0);
 
 		while (h > 1) {

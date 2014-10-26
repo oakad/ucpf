@@ -15,6 +15,8 @@
 #if !defined(UCPF_YESOD_DETAIL_STRING_MAP_OPS_JAN_06_2014_1145)
 #define UCPF_YESOD_DETAIL_STRING_MAP_OPS_JAN_06_2014_1145
 
+#include <vector>
+
 namespace ucpf { namespace yesod {
 
 template <typename CharType, typename ValueType, typename Policy>
@@ -38,7 +40,7 @@ auto string_map<CharType, ValueType, Policy>::emplace(
 	pair_loc p(items.ptr_at(0), 0);
 
 	while (first != last) {
-		auto n_index(index_offset(first));
+		auto n_index(index_offset(*first));
 		auto q(p.first->pair_at(items, n_index));
 
 		if (!q.first || q.first->is_vacant()) {
@@ -74,7 +76,7 @@ auto string_map<CharType, ValueType, Policy>::emplace(
 				n_index = terminator_index;
 			} else {
 				std::advance(first, c_len);
-				n_index = index_offset(first);
+				n_index = index_offset(*first);
 				++first;
 			}
 
@@ -120,7 +122,7 @@ std::basic_ostream<
 				os << ", leaf: " << l_ptr << ") ";
 
 				auto q(items.ptr_at(p.parent()));
-				auto n_off(pos - q->base_offset);
+				auto n_off(pos - q->base_offset());
 				if (n_off < base_index)
 					os << "'<eok>' [";
 				else {
@@ -147,7 +149,7 @@ std::basic_ostream<
 				os << ", offset: " << p.base_offset() << ") ";
 
 				auto q(items.ptr_at(p.parent()));
-				auto n_off(pos - q->base_offset);
+				auto n_off(pos - q->base_offset());
 				if (n_off < base_index)
 					os << "'<eok>'\n";
 				else {
@@ -166,24 +168,24 @@ std::basic_ostream<
 
 template <typename CharType, typename ValueType, typename Policy>
 void string_map<CharType, ValueType, Policy>::grow_storage(uintptr_t pos)
-(
+{
 	auto r(items.ptr_at(0));
 	auto p(items.ptr_at(r->parent()));
-	auto q(item.ptr_at(p->base_offset()));
+	auto q(items.ptr_at(p->base_offset()));
 
 	items.for_each_pos(
-		r->parent() + 1, child_pos + 2,
-		[&r, &p, &q](auto pos, auto &item) -> void {
-			item = std::move(pair_type::make_vacant(
+		r->parent() + 1, pos + 2,
+		[&r, &p, &q](auto pos_, auto &item) -> void {
+			item = pair_type::make_vacant(
 				p->base_offset(), q->parent()
-			));
-			p->set_base_offset(pos);
-			q->set_parent(pos);
-			r->set_parent(pos, false);
+			);
+			p->set_base_offset(pos_);
+			q->set_parent(pos_, false);
+			r->set_parent(pos_, true);
 			p = &item;
 		}
 	);
-)
+}
 
 template <typename CharType, typename ValueType, typename Policy>
 auto string_map<
@@ -223,20 +225,64 @@ auto string_map<
 
 	return p_pos;
 }
-
+/*
+template <typename CharType, typename ValueType, typename Policy>
+uintptr_t string_map<CharType, ValueType, Policy>::find_vacant_set(
+	uintptr_t first, uintptr_t const *index_set, size_type index_count
+)
+{
+}
+*/
 template <typename CharType, typename ValueType, typename Policy>
 uintptr_t string_map<CharType, ValueType, Policy>::reserve_vacant(
 	uintptr_t parent_pos, uintptr_t child_pos, value_pair *v
 )
 {
-	p = items.ptr_at(child_pos);
+	auto p(items.ptr_at(child_pos));
 	auto rv(p->base_offset());
 	auto pp(items.ptr_at(p->parent()));
 	auto pq(items.ptr_at(p->base_offset()));
 	pp->set_base_offset(p->base_offset());
 	pq->set_parent(p->parent(), false);
-	*p = std::move(pair_type::make_leaf(v, parent_pos));
+	*p = pair_type::make_leaf(v, parent_pos);
 	return rv;
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+void string_map<CharType, ValueType, Policy>::move_pair(
+	uintptr_t src_taken_pos, uintptr_t dst_vacant_pos,
+	uintptr_t src_vacant_hint
+)
+{
+	auto &src_pair(*items.ptr_at(src_taken_pos));
+	auto &dst_pair(*items.ptr_at(dst_vacant_pos));
+
+	items.ptr_at(dst_pair.parent())->set_base_offset(
+		dst_pair.base_offset()
+	);
+	items.ptr_at(dst_pair.base_offset())->set_parent(
+		dst_pair.parent(), false
+	);
+
+	dst_pair = src_pair;
+
+	auto prev_pos(items.ptr_at(0)->parent());
+	auto next_pos(items.ptr_at(prev_pos)->base_offset());
+
+	if (next_pos < src_taken_pos) {
+		next_pos = src_vacant_hint;
+		while (src_taken_pos < next_pos)
+			next_pos = items.ptr_at(next_pos)->parent();
+
+		while (src_taken_pos > next_pos)
+			next_pos = items.ptr_at(next_pos)->base_offset();
+
+		prev_pos = items.ptr_at(next_pos)->parent();
+	}
+
+	src_pair = pair_type::make_vacant(next_pos, prev_pos);
+	items.ptr_at(prev_pos)->set_base_offset(src_taken_pos);
+	items.ptr_at(next_pos)->set_parent(src_taken_pos, false);
 }
 
 template <typename CharType, typename ValueType, typename Policy>
@@ -264,7 +310,7 @@ void string_map<CharType, ValueType, Policy>::relocate(
 	}
 
 	auto n_pos(find_vacant_set(
-		index_set[0], &index_set[1], index.size() - 1
+		index_set[0], &index_set[1], index_set.size() - 1
 	));
 	auto new_base_offset(n_pos - index_set[0]);
 	uintptr_t vacant_pos_hint(0);
