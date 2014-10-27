@@ -44,7 +44,7 @@ auto string_map<CharType, ValueType, Policy>::emplace(
 		auto q(p.first->pair_at(items, n_index));
 
 		if (!q.first || q.first->is_vacant()) {
-			if (!q.first)
+			if (items.ptr_at(0)->parent() <= q.second)
 				grow_storage(q.second);
 
 			vp.reset(value_pair::construct(
@@ -63,6 +63,7 @@ auto string_map<CharType, ValueType, Policy>::emplace(
 				vp.release()->value, true
 			);
 		} else if (q.first->is_leaf()) {
+			++first;
 			auto l_ptr(q.first->leaf_ptr());
 			auto c_len(l_ptr->common_length(first, last));
 
@@ -109,8 +110,21 @@ std::basic_ostream<
 		os << "freelist: " << p->parent() << '\n';
 	}
 
+	auto print_char = [](auto &os, auto c) {
+		if (std::isprint(c))
+			os << c;
+		else {
+			char hc[] = {
+				'\\', 'x', char((c >> 4) & 0xf), char(c & 0xf), 0
+			};
+			hc[2] += hc[2] > 9 ? 87 : 48;
+			hc[3] += hc[3] > 9 ? 87 : 48;
+			os << hc;
+		}
+	};
+
 	items.for_each(
-		1, [&os, this](size_type pos, pair_type const &p) -> bool {
+		1, [&os, &print_char, this](size_type pos, pair_type const &p) -> bool {
 			os << pos << ": ";
 			if (p.is_vacant()) {
 				os << "vacant (next: " << p.base_offset();
@@ -126,8 +140,10 @@ std::basic_ostream<
 				if (n_off < base_index)
 					os << "'<eok>' [";
 				else {
+					os << '\'';
 					auto n_char(offset_char(n_off));
-					os << '\'' <<  n_char << "' (";
+					print_char(os, n_char);
+					os << "' (";
 					os << static_cast<uintptr_t>(n_char);
 					os << ") [";
 				}
@@ -139,9 +155,9 @@ std::basic_ostream<
 					c < l_ptr->suffix_length;
 					++c
 				)
-					os << std::get<1>(
+					print_char(os, std::get<1>(
 						tup_breadth_map
-					).value(suffix[c]);
+					).value(suffix[c]));
 
 				os << "\"] -> " << l_ptr->value << '\n';
 			} else {
@@ -154,7 +170,9 @@ std::basic_ostream<
 					os << "'<eok>'\n";
 				else {
 					auto n_char(offset_char(n_off));
-					os << '\'' <<  n_char << "' (";
+					os << '\'';
+					print_char(os, n_char);
+					os << "' (";
 					os << static_cast<uintptr_t>(n_char);
 					os << ")\n";
 				}
@@ -225,14 +243,45 @@ auto string_map<
 
 	return p_pos;
 }
-/*
+
 template <typename CharType, typename ValueType, typename Policy>
 uintptr_t string_map<CharType, ValueType, Policy>::find_vacant_set(
 	uintptr_t first, uintptr_t const *index_set, size_type index_count
 )
 {
+	auto s_pos(find_vacant(first));
+
+	while (true) {
+		auto base_diff(s_pos - first);
+		auto max_pos(items.ptr_at(0)->parent());
+		bool found(true);
+
+		for (size_type c(0); c < index_count; ++c) {
+			auto n_pos(index_set[c] + base_diff);
+			if (n_pos >= max_pos) {
+				grow_storage(
+					index_set[index_count - 1] + base_diff
+				);
+				return s_pos;
+			}
+
+			found = items.ptr_at(n_pos)->is_vacant();
+			if (!found)
+				break;
+		}
+
+		if (found)
+			return s_pos;
+
+		s_pos = items.ptr_at(s_pos)->base_offset();
+		if (s_pos == max_pos) {
+			base_diff = s_pos - first;
+			grow_storage(index_set[index_count - 1] + base_diff);
+			return s_pos;
+		}
+	}
 }
-*/
+
 template <typename CharType, typename ValueType, typename Policy>
 uintptr_t string_map<CharType, ValueType, Policy>::reserve_vacant(
 	uintptr_t parent_pos, uintptr_t child_pos, value_pair *v
@@ -313,7 +362,7 @@ void string_map<CharType, ValueType, Policy>::relocate(
 		index_set[0], &index_set[1], index_set.size() - 1
 	));
 	auto new_base_offset(n_pos - index_set[0]);
-	uintptr_t vacant_pos_hint(0);
+	uintptr_t vacant_pos_hint(items.ptr_at(0)->parent());
 
 	for (size_type c(0); c < c_index_pos; ++c) {
 		move_pair(

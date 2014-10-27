@@ -250,6 +250,9 @@ template <
 
 private:
 	struct loc_pair;
+	constexpr static bool allow_data_node_compression
+	= !std::is_pod<value_type>::value
+	  || detail::has_value_valid_pred<Policy>::value;
 
 	struct node_base {
 		virtual ~node_base()
@@ -355,7 +358,9 @@ private:
 		std::array<std::size_t, MaxOrdId> const &arr
 	> struct node : NodeBase {
 		typedef NodeBase base_type;
-		typedef node<base_type, OrdId, MaxOrdId, arr> self_type;
+		typedef node<
+			base_type, OrdId, MaxOrdId, arr
+		> self_type;
 
 		constexpr static size_type prev_ord_id
 		= OrdId ? OrdId - 1 : OrdId;
@@ -576,24 +581,31 @@ private:
 	};
 
 	typedef node<
-		ptr_node_base, 0, Policy::ptr_node_order.size(),
-		Policy::ptr_node_order
-	> min_ptr_node_type;
-
-	typedef node<
 		ptr_node_base, Policy::ptr_node_order.size() - 1,
 		Policy::ptr_node_order.size(), Policy::ptr_node_order
 	> max_ptr_node_type;
 
 	typedef node<
-		data_node_base, 0, Policy::data_node_order.size(),
-		Policy::data_node_order
-	> min_data_node_type;
+		ptr_node_base, 0, Policy::ptr_node_order.size(),
+		Policy::ptr_node_order
+	> min_ptr_node_type;
 
-	typedef node<
-		data_node_base, Policy::data_node_order.size() - 1,
-		Policy::data_node_order.size(), Policy::data_node_order
-	> max_data_node_type;
+	constexpr static std::array<std::size_t, 1> max_data_node_order
+	= {{Policy::data_node_order.back()}};
+
+	typedef typename std::conditional<
+		allow_data_node_compression, node<
+			data_node_base, Policy::data_node_order.size() - 1,
+			Policy::data_node_order.size(), Policy::data_node_order
+		>, node<data_node_base, 0, 1, max_data_node_order>
+	>::type max_data_node_type;
+
+	typedef typename std::conditional<
+		allow_data_node_compression, node<
+			data_node_base, 0, Policy::data_node_order.size(),
+			Policy::data_node_order
+		>, node<data_node_base, 0, 1, max_data_node_order>
+	>::type min_data_node_type;
 
 	typedef typename detail::static_bit_field_map<
 		sizeof(size_type) * 8, max_data_node_type::apparent_order,

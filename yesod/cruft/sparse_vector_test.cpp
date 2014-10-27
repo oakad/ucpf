@@ -11,6 +11,7 @@ using ucpf::yesod::detail::compressed_array;
 using ucpf::yesod::test::demangle;
 
 struct pair_type {
+/*
 	virtual ~pair_type()
 	{
 	}
@@ -22,13 +23,13 @@ struct pair_type {
 	pair_type(uintptr_t base_, uintptr_t check_)
 	: base(base_), check(check_)
 	{}
-
+*/
 	uintptr_t base;
 	uintptr_t check;
 
 	static pair_type make(uintptr_t base_, uintptr_t check_)
 	{
-		return pair_type(base_, check_);
+		return pair_type{base_, check_};
 	}
 };
 
@@ -74,6 +75,7 @@ struct x_policy : sparse_vector_default_policy {
 };
 
 #define X_PLACE(t, v) t.emplace(v, pair_type::make(v, v))
+#define Y_PLACE(t, v) *t.emplace(v) = pair_type::make(v, v)
 
 int main(int argc, char **argv)
 {
@@ -92,10 +94,10 @@ int main(int argc, char **argv)
 	}
 */
 
-	//X_PLACE(trie, 100052);
-	//X_PLACE(trie, 100053);
-	//X_PLACE(trie, 100054);
-
+	Y_PLACE(trie, 52);
+	Y_PLACE(trie, 53);
+	Y_PLACE(trie, 54);
+#if 0
 	trie.for_each_pos(
 		925631, 925667, [](auto pos, auto &p) -> void {
 			p = std::move(pair_type{pos, 0});
@@ -141,6 +143,7 @@ int main(int argc, char **argv)
 			p = std::move(pair_type{pos, 8});
 		}
 	);
+#endif
 	printf("==============\n");
 	trie.dump(std::cout);
 	printf("==============\n");

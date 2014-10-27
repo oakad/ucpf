@@ -45,7 +45,7 @@ struct string_map {
 
 	template <typename Alloc>
 	string_map(Alloc const &a = Alloc())
-	: items(a), tup_breadth_map(0, encoding_map_type(a))
+	: items(a), tup_breadth_map(0, std::move(encoding_map_type(a)))
 	{
 		init();
 	}
@@ -435,8 +435,8 @@ private:
 	void init()
 	{
 		items.clear();
-		items.emplace(1, pair_type::make_vacant(1, 1));
-		items.emplace(0, pair_type::make(0, 1));
+		*items.emplace(1) = pair_type::make_vacant(1, 1);
+		*items.emplace(0) = pair_type::make(0, 1);
 	}
 
 	template <typename IndexIterator>
@@ -448,13 +448,13 @@ private:
 
 		while (first != last) {
 			rv = rv.first->child_at(
-				items, rv.second, index_offset(first)
+				items, rv.second, index_offset(*first)
 			);
+
+			++first;
 
 			if (!rv.first || rv.first->is_leaf())
 				break;
-
-			++first;
 		}
 
 		return rv;

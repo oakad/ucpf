@@ -36,6 +36,18 @@ struct dense_encoding_map {
 		reset();
 	}
 
+	dense_encoding_map(dense_encoding_map const &) = delete;
+	dense_encoding_map &operator=(dense_encoding_map const &) = delete;
+
+	dense_encoding_map(dense_encoding_map &&other)
+	: tup_items_alloc(nullptr, std::get<1>(other.tup_items_alloc))
+	{
+		std::swap(
+			std::get<0>(tup_items_alloc),
+			std::get<0>(other.tup_items_alloc)
+		);
+	}
+
 	~dense_encoding_map()
 	{
 		allocator_helper_type::destroy(
@@ -80,6 +92,29 @@ struct dense_encoding_map {
 		return static_cast<value_type>(
 			std::get<0>(tup_items_alloc)[id * 2 + 1]
 		);
+	}
+
+	std::ostream &dump(std::ostream &os) const
+	{
+		std::size_t i_cnt(0);
+		for (std::size_t c(0); c < size(); ++c) {
+			std::size_t idx(std::get<0>(tup_items_alloc)[c * 2]);
+			std::size_t val(
+				std::get<0>(tup_items_alloc)[c * 2 + 1]
+			);
+			if ((c == idx) && (c == val)) {
+				++i_cnt;
+				continue;
+			}
+
+			if (i_cnt) {
+				os << "identity (" << i_cnt << " positions)\n";
+				i_cnt = 0;
+			}
+			os << c << ": " << idx << ", " << val << '\n';
+		}
+		if (i_cnt)
+			os << "identity (" << i_cnt << " positions)\n";
 	}
 
 	std::tuple<index_type *, allocator_type> tup_items_alloc;

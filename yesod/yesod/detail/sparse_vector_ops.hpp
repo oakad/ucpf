@@ -61,7 +61,7 @@ bool sparse_vector<ValueType, Policy>::for_each(
 ) const
 {
 	auto const height(std::get<0>(tup_height_alloc));
-	if (!height)
+	if (height < height_at_pos(first))
 		return false;
 
 	c_loc_pair tree_loc[height];
@@ -130,7 +130,7 @@ bool sparse_vector<ValueType, Policy>::for_each(
 )
 {
 	auto const height(std::get<0>(tup_height_alloc));
-	if (!height)
+	if (height < height_at_pos(first))
 		return false;
 
 	loc_pair tree_loc[height];
