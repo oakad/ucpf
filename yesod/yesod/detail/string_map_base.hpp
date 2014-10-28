@@ -15,6 +15,7 @@
 #if !defined(UCPF_YESOD_DETAIL_STRING_MAP_BASE_JAN_06_2014_1145)
 #define UCPF_YESOD_DETAIL_STRING_MAP_BASE_JAN_06_2014_1145
 
+#include <vector>
 #include <yesod/iterator/transform.hpp>
 
 namespace ucpf { namespace yesod {
@@ -155,10 +156,24 @@ struct string_map {
 	size_type erase_prefix(Iterator first_, Iterator last_);
 
 	template <typename Pred>
-	bool for_each(Pred &&pred);
+	bool for_each(Pred &&pred)
+	{
+		key_string_type prefix(items.get_allocator());
+		return for_each_impl<value_type &>(
+			c_pair_loc(items.ptr_at(0), 0), prefix,
+			std::forward<Pred>(pred)
+		);
+	}
 
 	template <typename Pred>
-	bool for_each(Pred &&pred) const;
+	bool for_each(Pred &&pred) const
+	{
+		key_string_type prefix(items.get_allocator());
+		return for_each_impl<value_type const &>(
+			c_pair_loc(items.ptr_at(0), 0), prefix,
+			std::forward<Pred>(pred)
+		);
+	}
 
 	template <typename StringType, typename Pred>
 	bool for_each(StringType &&s, Pred &&pred)
@@ -177,10 +192,20 @@ struct string_map {
 	}
 
 	template <typename Iterator, typename Pred>
-	bool for_each(Iterator first_, Iterator last_, Pred &&pred);
+	bool for_each(Iterator first_, Iterator last_, Pred &&pred)
+	{
+		return for_each_prefix<value_type &>(
+			first_, last_, std::forward<Pred>(pred)
+		);
+	}
 
 	template <typename Iterator, typename Pred>
-	bool for_each(Iterator first_, Iterator last_, Pred &&pred) const;
+	bool for_each(Iterator first_, Iterator last_, Pred &&pred) const
+	{
+		return for_each_prefix<value_type const &>(
+			first_, last_, std::forward<Pred>(pred)
+		);
+	}
 
 	std::basic_ostream<
 		CharType, typename Policy::char_traits_type
@@ -196,8 +221,36 @@ private:
 	typedef typename Policy::encoding_map encoding_map_type;
 	typedef std::pair<pair_type *, uintptr_t> pair_loc;
 	typedef std::pair<pair_type const *, uintptr_t> c_pair_loc;
+	typedef std::vector<char_type, allocator_type> key_string_type;
 	constexpr static uintptr_t terminator_index = 1;
 	constexpr static uintptr_t base_index = 2;
+
+	struct iter_loc {
+		iter_loc(c_pair_loc const &loc)
+		: base(loc.first->base_offset()), pos(loc.second),
+		  index(terminator_index)
+		{}
+
+		template <typename StorageType>
+		c_pair_loc next_child(StorageType &items, uintptr_t breadth)
+		{
+			while (true) {
+				auto n_pos(base + index);
+				if (index >= breadth)
+					return c_pair_loc(nullptr, n_pos);
+
+				auto p(items.ptr_at(n_pos));
+				if (!p || (p->parent() == pos))
+					return c_pair_loc(p, n_pos);
+
+				++index;
+			}
+		}
+
+		uintptr_t base;
+		uintptr_t pos;
+		uintptr_t index;
+	};
 
 	struct pair_type {
 		bool is_leaf() const
@@ -326,6 +379,24 @@ private:
 		index_char_type operator()(char_type c) const
 		{
 			return std::get<1>(*tup).index(c);
+		}
+
+		EncTuple const *tup;
+	};
+
+	template <typename EncTuple>
+	struct c_decoding_adapter {
+		c_decoding_adapter()
+		: tup(nullptr)
+		{}
+
+		c_decoding_adapter(EncTuple const &tup_)
+		: tup(&tup_)
+		{}
+
+		char_type operator()(index_char_type c) const
+		{
+			return std::get<1>(*tup).value(c);
 		}
 
 		EncTuple const *tup;
@@ -460,6 +531,16 @@ private:
 		return rv;
 	}
 
+	template <typename ValueRefType, typename Pred>
+	bool for_each_impl(
+		c_pair_loc first, key_string_type &prefix, Pred &&pred
+	) const;
+
+	template <typename ValueRefType, typename Iterator, typename Pred>
+	bool for_each_prefix(
+		Iterator first_, Iterator last_, Pred &&pred
+	) const;
+
 	void grow_storage(uintptr_t pos);
 
 	uintptr_t find_vacant(uintptr_t first);
@@ -472,6 +553,8 @@ private:
 	uintptr_t reserve_vacant(
 		uintptr_t parent_pos, uintptr_t child_pos, value_pair *v
 	);
+
+	void release_pair(uintptr_t taken_pos);
 
 	void move_pair(
 		uintptr_t src_taken_pos, uintptr_t dst_vacant_pos,

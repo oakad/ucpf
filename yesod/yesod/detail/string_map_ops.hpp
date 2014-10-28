@@ -15,8 +15,6 @@
 #if !defined(UCPF_YESOD_DETAIL_STRING_MAP_OPS_JAN_06_2014_1145)
 #define UCPF_YESOD_DETAIL_STRING_MAP_OPS_JAN_06_2014_1145
 
-#include <vector>
-
 namespace ucpf { namespace yesod {
 
 template <typename CharType, typename ValueType, typename Policy>
@@ -93,6 +91,22 @@ auto string_map<CharType, ValueType, Policy>::emplace(
 			p = q;
 		}
 	}
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+template <typename Iterator>
+auto string_map<CharType, ValueType, Policy>::erase(
+	Iterator first_, Iterator last_
+) -> size_type
+{
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+template <typename Iterator>
+auto string_map<CharType, ValueType, Policy>::erase_prefix(
+	Iterator first_, Iterator last_
+) -> size_type
+{
 }
 
 template <typename CharType, typename ValueType, typename Policy>
@@ -185,6 +199,116 @@ std::basic_ostream<
 }
 
 template <typename CharType, typename ValueType, typename Policy>
+template <typename ValueRefType, typename Pred>
+bool string_map<CharType, ValueType, Policy>::for_each_impl(
+	c_pair_loc first, key_string_type &prefix, Pred &&pred
+) const
+{
+	std::vector<iter_loc, allocator_type> tree_loc(
+		{iter_loc(first)}, items.get_allocator()
+	);
+	auto const breadth(std::get<0>(tup_breadth_map));
+	c_decoding_adapter<decltype(tup_breadth_map)> map(tup_breadth_map);
+
+	while (true) {
+		auto p(tree_loc.back().next_child(items, breadth));
+		auto c_index(tree_loc.back().index);
+
+		if (!p.first) {
+			tree_loc.pop_back();
+			if (tree_loc.empty())
+				return false;
+
+			prefix.pop_back();
+			++tree_loc.back().index;
+			continue;
+		}
+
+		if (p.first->is_leaf()) {
+			if (c_index > terminator_index)
+				prefix.push_back(offset_char(c_index));
+
+			auto l_ptr(p.first->leaf_ptr());
+			auto sfx(l_ptr->suffix());
+			auto first(iterator::make_transform(sfx, map));
+			auto last(iterator::make_transform(
+				sfx + l_ptr->suffix_length, map
+			));
+			auto sfx_iter(prefix.insert(
+				prefix.end(), first, last
+			));
+
+			if (pred(
+				&prefix.front(), &prefix.back() + 1,
+				const_cast<ValueRefType>(l_ptr->value)
+			))
+				return true;
+
+			if (c_index > terminator_index)
+				--sfx_iter;
+
+			prefix.erase(sfx_iter, prefix.end());
+			++tree_loc.back().index;
+			continue;
+		}
+
+		prefix.push_back(offset_char(c_index));
+		tree_loc.emplace_back(p);
+	}
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+template <typename ValueRefType, typename Iterator, typename Pred>
+bool string_map<CharType, ValueType, Policy>::for_each_prefix(
+	Iterator first_, Iterator last_, Pred &&pred
+) const
+{
+	c_encoding_adapter<decltype(tup_breadth_map)> e_map(tup_breadth_map);
+	c_decoding_adapter<decltype(tup_breadth_map)> d_map(tup_breadth_map);
+	auto first(iterator::make_transform(first_, e_map));
+	auto last(iterator::make_transform(last_, e_map));
+	key_string_type prefix(items.get_allocator());
+
+	c_pair_loc prefix_pos(items.ptr_at(0), 0);
+
+	while (first != last) {
+		prefix_pos = prefix_pos.first->child_at(
+			items, prefix_pos.second, index_offset(*first)
+		);
+
+		if (!prefix_pos.first)
+			return false;
+
+		prefix.push_back(*first.base());
+		++first;
+
+		if (prefix_pos.first->is_leaf()) {
+			auto l_ptr(prefix_pos.first->leaf_ptr());
+			if (l_ptr->common_length(
+				first, last
+			) < std::distance(first, last))
+				return false;
+
+			auto sfx(l_ptr->suffix());
+			auto s_first(iterator::make_transform(sfx, d_map));
+			auto s_last(iterator::make_transform(
+				sfx + l_ptr->suffix_length, d_map
+			));
+			prefix.insert(prefix.end(), s_first, s_last);
+
+			return pred(
+				&prefix.front(), &prefix.back() + 1,
+				const_cast<ValueRefType>(l_ptr->value)
+			);
+		}
+	}
+
+	return for_each_impl<ValueRefType>(
+		prefix_pos, prefix, std::forward<Pred>(pred)
+	);
+}
+
+template <typename CharType, typename ValueType, typename Policy>
 void string_map<CharType, ValueType, Policy>::grow_storage(uintptr_t pos)
 {
 	auto r(items.ptr_at(0));
@@ -206,9 +330,9 @@ void string_map<CharType, ValueType, Policy>::grow_storage(uintptr_t pos)
 }
 
 template <typename CharType, typename ValueType, typename Policy>
-auto string_map<
-	CharType, ValueType, Policy
->::find_vacant(uintptr_t first) -> uintptr_t
+auto string_map<CharType, ValueType, Policy>::find_vacant(
+	uintptr_t first
+) -> uintptr_t
 {
 	auto r(items.ptr_at(0));
 	auto p_pos(r->parent());
@@ -295,6 +419,19 @@ uintptr_t string_map<CharType, ValueType, Policy>::reserve_vacant(
 	pq->set_parent(p->parent(), false);
 	*p = pair_type::make_leaf(v, parent_pos);
 	return rv;
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+void string_map<CharType, ValueType, Policy>::release_pair(
+	uintptr_t taken_pos
+)
+{
+	auto p_pos(find_vacant(taken_pos));
+	auto q_pos(items.ptr_at(p_pos)->parent());
+
+	*items.ptr_at(taken_pos) = pair_type::make_vacant(p_pos, q_pos);
+	items.ptr_at(p_pos)->set_parent(taken_pos);
+	items.ptr_at(q_pos)->set_base_offset(taken_pos);
 }
 
 template <typename CharType, typename ValueType, typename Policy>

@@ -10,19 +10,33 @@ int main(int argc, char **argv)
 	int ord(0);
 
 	printf("--1-----\n");
-	x_map.emplace("bachelor", 111);
-	x_map.emplace("jar", 222);
-	x_map.emplace("badge", 333);
+	x_map.emplace(std::string("bachelor"), 111);
+	x_map.emplace(std::string("jar"), 222);
+	x_map.emplace(std::string("badge"), 333);
 	printf("--2-----\n");
 	x_map.dump(std::cout);
-	x_map.emplace("baby", 444);
+	x_map.emplace(std::string("baby"), 444);
 	printf("--3-----\n");
 	x_map.dump(std::cout);
+	x_map.emplace(std::string("bache"), 555);
+	printf("--4-----\n");
+	x_map.dump(std::cout);
 
-	printf("1: %d\n", *x_map.find("bachelor"));
-	printf("2: %d\n", *x_map.find("jar"));
-	printf("3: %d\n", *x_map.find("badge"));
-	printf("4: %d\n", *x_map.find("baby"));
+	printf("1: %d\n", *x_map.find(std::string("bachelor")));
+	printf("2: %d\n", *x_map.find(std::string("jar")));
+	printf("3: %d\n", *x_map.find(std::string("badge")));
+	printf("4: %d\n", *x_map.find(std::string("baby")));
+	printf("5: %d\n", *x_map.find(std::string("bache")));
+
+	x_map.for_each(
+		std::string("bachel"),
+		[](char *first, char *last, int val) -> bool {
+			std::string key(first, last);
+			printf("x_key %s, val %d\n", key.c_str(), val);
+			return false;
+		}
+	);
+
 /*
 	
 	x_map.dump(std::cout);

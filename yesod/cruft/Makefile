@@ -1,13 +1,13 @@
 CC=g++
 CXXFLAGS+=-std=gnu++14 -I.. -I../yesod
 
+string_map_test: string_map_test.cpp
+	$(CC) $(CXXFLAGS) -g -o $@ $^
+
 sparse_vector_test: sparse_vector_test.cpp
 	$(CC) $(CXXFLAGS) -g -o $@ $^
 
 p_array_test: p_array_test.cpp
-	$(CC) $(CXXFLAGS) -g -o $@ $^
-
-string_map_test: string_map_test.cpp
 	$(CC) $(CXXFLAGS) -g -o $@ $^
 
 t2: t2.cpp
