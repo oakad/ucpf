@@ -40,6 +40,27 @@ struct string_map {
 	typedef typename allocator_traits::pointer pointer;
 	typedef typename allocator_traits::const_pointer const_pointer;
 
+	struct locus {
+		explicit operator bool() const
+		{
+			return offset < ~uintptr_t(0);
+		}
+
+	private:
+		friend struct string_map;
+
+		locus()
+		: offset(~uintptr_t(0)), leaf_pos(0)
+		{}
+
+		locus(uintptr_t offset_, uintptr_t leaf_pos_)
+		: offset(offset_), leaf_pos(leaf_pos_)
+		{}
+
+		uintptr_t offset;
+		uintptr_t leaf_pos;
+	};
+
 	string_map()
 	: string_map(typename Policy::allocator_type())
 	{}
@@ -84,45 +105,66 @@ struct string_map {
 	}
 
 	template <typename Iterator>
-	const_pointer find(Iterator first_, Iterator last_) const
+	const_pointer find(Iterator first, Iterator last) const
 	{
-		c_encoding_adapter<
-			decltype(tup_breadth_map)
-		> map(tup_breadth_map);
-
-		auto first(iterator::make_transform(first_, map));
-		auto last(iterator::make_transform(last_, map));
-
-		auto rv(find_impl(first, last));
-		if (!rv.first)
-			return nullptr;
-
-		/* Check for virtual key terminator (will appear if
-		 * one key is a substring of another).
-		 */
-		if (!rv.first->is_leaf())
-			rv = rv.first->child_at(
-				items, rv.second, terminator_index
-			);
-
-		if (rv.first->is_leaf()) {
-			auto vp(rv.first->leaf_ptr());
-			if (vp->match(first, last))
-				return &vp->value;
-		}
-
-		return nullptr;
+		return find_rel(locus(0, 0), first, last);
 	}
 
 	template <typename Iterator>
 	pointer find(Iterator first, Iterator last)
 	{
+		return find_rel(locus(0, 0), first, last);
+	}
+
+	template <typename StringType>
+	pointer find_rel(locus base, StringType &&s)
+	{
+		return find_rel(base, std::begin(s), std::end(s));
+	}
+
+	template <typename StringType>
+	const_pointer find_rel(locus base, StringType &&s) const
+	{
+		return find_rel(base, std::begin(s), std::end(s));
+	}
+
+	template <typename Iterator>
+	pointer find_rel(locus base, Iterator first_, Iterator last_)
+	{
 		auto rv(
-			const_cast<string_map const *>(this)->find(first, last)
+			const_cast<string_map const *>(this)->find_rel(
+				base, first_, last_
+			)
 		);
 
 		return const_cast<pointer>(rv);
 	}
+
+	template <typename Iterator>
+	const_pointer find_rel(
+		locus base, Iterator first_, Iterator last_
+	) const;
+
+	template <typename StringType>
+	locus locate(StringType &&s) const
+	{
+		return locate(std::begin(s), std::end(s));
+	}
+
+	template <typename Iterator>
+	locus locate(Iterator first_, Iterator last_) const
+	{
+		return locate_rel(locus{0, 0}, first_, last_);
+	}
+
+	template <typename StringType>
+	locus locate_rel(locus base, StringType &&s) const
+	{
+		return locate_rel(base, std::begin(s), std::end(s));
+	}
+
+	template <typename Iterator>
+	locus locate_rel(locus base, Iterator first_, Iterator last_) const;
 
 	template <typename StringType, typename... Args>
 	std::pair<reference, bool> emplace(StringType &&s, Args&&... args)
@@ -435,10 +477,11 @@ private:
 
 		template <typename IndexIterator>
 		size_type common_length(
-			IndexIterator first, IndexIterator last
+			IndexIterator first, IndexIterator last,
+			uintptr_t offset = 0
 		) const
 		{
-			size_type pos(0);
+			size_type pos(offset);
 			auto s_ptr(suffix());
 
 			while ((pos < suffix_length) && (first != last)) {
@@ -449,16 +492,6 @@ private:
 				++pos;
 			}
 			return pos;
-		}
-
-		template <typename IndexIterator>
-		bool prefix_match(
-			IndexIterator first, IndexIterator last
-		) const
-		{
-			return std::distance(first, last) == common_key_length(
-				first, last
-			);
 		}
 
 		template <typename IndexIterator>
@@ -512,10 +545,11 @@ private:
 
 	template <typename IndexIterator>
 	c_pair_loc find_impl(
-		IndexIterator &first, IndexIterator const &last
+		IndexIterator &first, IndexIterator const &last,
+		uintptr_t base = 0
 	) const
 	{
-		c_pair_loc rv(items.ptr_at(0), 0);
+		c_pair_loc rv(items.ptr_at(base), base);
 
 		while (first != last) {
 			rv = rv.first->child_at(
@@ -555,6 +589,8 @@ private:
 	);
 
 	void release_pair(uintptr_t taken_pos);
+
+	void release_ancestors(uintptr_t taken_pos);
 
 	void move_pair(
 		uintptr_t src_taken_pos, uintptr_t dst_vacant_pos,

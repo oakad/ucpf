@@ -18,6 +18,87 @@
 namespace ucpf { namespace yesod {
 
 template <typename CharType, typename ValueType, typename Policy>
+template <typename Iterator>
+auto string_map<CharType, ValueType, Policy>::find_rel(
+	locus base, Iterator first_, Iterator last_
+) const -> const_pointer
+{
+	c_encoding_adapter<decltype(tup_breadth_map)> map(tup_breadth_map);
+	auto first(iterator::make_transform(first_, map));
+	auto last(iterator::make_transform(last_, map));
+
+	auto p(items.ptr_at(base.offset));
+	if (p->is_leaf()) {
+		auto l_ptr(p->leaf_ptr());
+		auto d(std::distance(first, last));
+
+		if (
+			(l_ptr->common_length(first, last, base.leaf_pos) == d)
+			&& ((base.leaf_pos + d) == l_ptr->suffix_length)
+		)
+			return &l_ptr->value;
+		else
+			return nullptr;
+	}
+
+	auto q(find_impl(first, last, base.offset));
+	if (!q.first)
+		return nullptr;
+
+	if (!q.first->is_leaf()) {
+		q = q.first->child_at(
+			items, q.second, terminator_index
+		);
+		if (!q.first)
+			return nullptr;
+	}
+
+	auto l_ptr(q.first->leaf_ptr());
+	if (l_ptr->match(first, last))
+		return &l_ptr->value;
+
+	return nullptr;
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+template <typename Iterator>
+auto string_map<CharType, ValueType, Policy>::locate_rel(
+	locus base, Iterator first_, Iterator last_
+) const -> locus
+{
+	c_encoding_adapter<decltype(tup_breadth_map)> map(tup_breadth_map);
+	auto first(iterator::make_transform(first_, map));
+	auto last(iterator::make_transform(last_, map));
+
+	auto p(items.ptr_at(base.offset));
+	if (p->is_leaf()) {
+		auto l_ptr(p->leaf_ptr());
+		auto d(std::distance(first, last));
+
+		if (l_ptr->common_length(first, last, base.leaf_pos) == d)
+			return locus(base.offset, base.leaf_pos + d);
+		else
+			return locus();
+	}
+
+	auto q(find_impl(first, last, base.offset));
+	if (!q.first)
+		return locus();
+
+	auto d(std::distance(first, last));
+	if (!d)
+		return locus(q.second, 0);
+
+	if (q.first->is_leaf()) {
+		auto l_ptr(q->leaf_ptr());
+		if (l_ptr->common_length(first, last, 0) == d)
+			return locus{q.second, d};
+	}
+
+	return locus();
+}
+
+template <typename CharType, typename ValueType, typename Policy>
 template <typename Iterator, typename... Args>
 auto string_map<CharType, ValueType, Policy>::emplace(
 	Iterator first_, Iterator last_, Args&&... args
@@ -99,6 +180,30 @@ auto string_map<CharType, ValueType, Policy>::erase(
 	Iterator first_, Iterator last_
 ) -> size_type
 {
+	c_encoding_adapter<decltype(tup_breadth_map)> map(tup_breadth_map);
+	auto first(iterator::make_transform(first_, map));
+	auto last(iterator::make_transform(last_, map));
+
+	auto p(find_impl(first, last));
+	if (!p.first)
+		return 0;
+
+	if (!p.first->is_leaf()) {
+		p = p->child_at(items, p.second, terminator_index);
+		if (!p.first)
+			return 0;
+	}
+
+	auto l_ptr(p.first->leaf_ptr());
+	if (!l_ptr->match(first, last))
+		return 0;
+
+	auto p_pos(p.first->parent());
+	value_pair::destroy(items.get_allocator(), l_ptr);
+	release_pair(p.second);
+	release_ancestors(p_pos);
+
+	return 1;
 }
 
 template <typename CharType, typename ValueType, typename Policy>
@@ -107,6 +212,62 @@ auto string_map<CharType, ValueType, Policy>::erase_prefix(
 	Iterator first_, Iterator last_
 ) -> size_type
 {
+	c_encoding_adapter<decltype(tup_breadth_map)> map(tup_breadth_map);
+	auto first(iterator::make_transform(first_, map));
+	auto last(iterator::make_transform(last_, map));
+	auto a(items.get_allocator());
+	auto const breadth(index_offset(std::get<0>(tup_breadth_map)));
+	auto p(find_impl(first, last));
+	if (!p.first)
+		return 0;
+
+	if ((first != last) || p.first->is_leaf()) {
+		if (!p.first->is_leaf())
+			return 0;
+
+		auto l_ptr(p.first->leaf_ptr());
+		if (l_ptr->common_length(first, last) < std::distance(
+			first, last
+		))
+			return 0;
+
+		auto p_pos(p.first->parent());
+		value_pair::destroy(a, l_ptr);
+		release_pair(p.second);
+		release_ancestors(p_pos);
+		return 1;
+	}
+
+	auto p_pos(p.first->parent());
+	std::vector<iter_loc, allocator_type> tree_loc({iter_loc(p)}, a);
+	size_type rv(0);
+
+	while (true) {
+		auto q(tree_loc.back().next_child(items, breadth));
+
+		if (!q.first) {
+			release_pair(tree_loc.back().pos);
+			tree_loc.pop_back();
+			if (tree_loc.empty())
+				break;
+
+			++tree_loc.back().index;
+			continue;
+		}
+
+		if (q.first->is_leaf()) {
+			value_pair::destroy(a, q.first->leaf_ptr());
+			release_pair(q.second);
+			++rv;
+			++tree_loc.back().index;
+			continue;
+		}
+
+		tree_loc.emplace_back(q);
+	}
+
+	release_ancestors(p_pos);
+	return rv;
 }
 
 template <typename CharType, typename ValueType, typename Policy>
@@ -207,7 +368,7 @@ bool string_map<CharType, ValueType, Policy>::for_each_impl(
 	std::vector<iter_loc, allocator_type> tree_loc(
 		{iter_loc(first)}, items.get_allocator()
 	);
-	auto const breadth(std::get<0>(tup_breadth_map));
+	auto const breadth(index_offset(std::get<0>(tup_breadth_map)));
 	c_decoding_adapter<decltype(tup_breadth_map)> map(tup_breadth_map);
 
 	while (true) {
@@ -432,6 +593,44 @@ void string_map<CharType, ValueType, Policy>::release_pair(
 	*items.ptr_at(taken_pos) = pair_type::make_vacant(p_pos, q_pos);
 	items.ptr_at(p_pos)->set_parent(taken_pos);
 	items.ptr_at(q_pos)->set_base_offset(taken_pos);
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+void string_map<CharType, ValueType, Policy>::release_ancestors(
+	uintptr_t taken_pos
+)
+{
+	while (taken_pos) {
+		auto p(items.ptr_at(taken_pos));
+		auto last_index(
+			p->base_offset()
+			+ index_offset(std::get<0>(tup_breadth_map))
+		);
+		uintptr_t found_index(last_index);
+
+		items.for_each(
+			p->base_offset() + terminator_index,
+			[&found_index, taken_pos](
+				size_type pos, pair_type const &pp
+			) -> bool {
+				if (pos >= found_index)
+					return true;
+
+				if (pp->parent() == taken_pos) {
+					found_index = pos;
+					return true;
+				} else
+					return false;
+			}
+		);
+
+		if (found_index < last_index)
+			break;
+
+		auto n_pos(p->parent());
+		release_pair(taken_pos);
+		taken_pos = n_pos;
+	}
 }
 
 template <typename CharType, typename ValueType, typename Policy>
