@@ -9,7 +9,20 @@
 #define BOOST_TEST_MODULE yesod
 #include <boost/test/included/unit_test.hpp>
 
+#include <map>
 #include <yesod/string_map.hpp>
+#include <yesod/coder/xxhash.hpp>
+#include <yesod/iterator/range.hpp>
+
+namespace std {
+
+ostream &operator<<(ostream &os, pair<uint32_t, string> const &v)
+{
+	os << '|' << v.second << "|(" << v.first << ')';
+	return os;
+}
+
+}
 
 namespace ucpf { namespace yesod {
 namespace test {
@@ -30,6 +43,18 @@ std::ostream &operator<<(std::ostream &os, s const &v)
 
 }
 
+namespace iterator {
+
+std::ostream &operator<<(std::ostream &os, range<char *> const &r)
+{
+	for (auto c: r)
+		os << c;
+
+	return os;
+}
+
+}
+
 BOOST_AUTO_TEST_CASE(string_map_0)
 {
 	string_map<char, test::s> m0;
@@ -37,11 +62,7 @@ BOOST_AUTO_TEST_CASE(string_map_0)
 	m0.emplace("bachelor", 111);
 	m0.emplace("jar", 222);
 	m0.emplace("badge", 333);
-	m0.dump(std::cout);
-
 	m0.emplace("baby", 444);
-	printf("----\n");
-	m0.dump(std::cout);
 
 	auto r0(m0.find("bachelor"));
 	BOOST_CHECK(r0 != nullptr);
@@ -80,36 +101,77 @@ BOOST_AUTO_TEST_CASE(string_map_1)
 	using boost::test_tools::output_test_stream;
         output_test_stream out("ref/string_map/for_each.00.out", true);
 
-	auto r_idx(m0.make_index());
-
-	r_idx.for_each([&out](std::string const &key, int val) -> void {
+	m0.for_each([&out](char *first, char *last, int val) -> bool {
+		auto key(iterator::make_range(first, last));
 		out << "x1 |" << key << "| " << val << '\n';
+		return false;
 	});
 	BOOST_CHECK(out.match_pattern());
 
-	r_idx.for_each_prefix(
+	m0.for_each(
 		std::string("abcdefghijklmnopqrstu"),
-		[&out](std::string const &key, int val) -> void {
+		[&out](char *first, char *last, int val) -> bool {
+			auto key(iterator::make_range(first, last));
 			out << "x2 |" << key << "| " << val << '\n';
+			return false;
 		}
 	);
 	BOOST_CHECK(out.match_pattern());
 
-	r_idx.for_each_prefix(
+	m0.for_each(
 		std::string("abcdefghijkl"),
-		[&out](std::string const &key, int val) -> void {
+		[&out](char *first, char *last, int val) -> bool {
+			auto key(iterator::make_range(first, last));
 			out << "x3 |" << key << "| " << val << '\n';
+			return false;
 		}
 	);
 	BOOST_CHECK(out.match_pattern());
 
-	r_idx.for_each_prefix(
+	m0.for_each(
 		std::string("abc"),
-		[&out](std::string const &key, int val) -> void {
+		[&out](char *first, char *last, int val) -> bool {
+			auto key(iterator::make_range(first, last));
 			out << "x4 |" << key << "| " << val << '\n';
+			return false;
 		}
 	);
 	BOOST_CHECK(out.match_pattern());
+}
+
+BOOST_AUTO_TEST_CASE(string_map_2)
+{
+	std::ifstream f_in("ref/string_map/names.00.in");
+	string_map<char, uint32_t> m0;
+	std::map<uint32_t, std::string> ref0;
+	std::string s_in;
+	coder::xxhash<> h;
+
+	while (std::getline(f_in, s_in)) {
+		h.update(s_in.c_str(), s_in.size());
+		auto d(h.digest());
+		m0.emplace(s_in, d);
+		ref0.emplace(d, s_in);
+		h.reset(0);
+		s_in.clear();
+	}
+	f_in.close();
+
+	std::map<uint32_t, std::string> ref1;
+	m0.for_each([&ref1, &h](char *first, char *last, uint32_t v) -> bool {
+		std::string s_out(first, last);
+		h.update(first, last);
+		auto d(h.digest());
+		BOOST_CHECK_EQUAL(d, v);
+		ref1.emplace(d, s_out);
+		h.reset(0);
+		return false;
+	});
+
+	BOOST_CHECK_EQUAL(ref0.size(), ref1.size());
+	BOOST_CHECK_EQUAL_COLLECTIONS(
+		ref0.begin(), ref0.end(), ref1.begin(), ref1.end()
+	);
 }
 
 }}

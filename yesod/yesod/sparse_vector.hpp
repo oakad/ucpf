@@ -19,9 +19,8 @@ struct sparse_vector_default_policy {
 		std::size_t, 3
 	> ptr_node_order = {{2, 3, 4}};
 	constexpr static std::array<
-		std::size_t, 3
-	> data_node_order = {{2, 3, 4}};
-	/* optional value_valid_pred type */
+		std::size_t, 2
+	> data_node_order = {{5, 10}};
 };
 
 template <>

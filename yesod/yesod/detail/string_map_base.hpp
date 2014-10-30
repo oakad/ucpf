@@ -269,29 +269,50 @@ private:
 
 	struct iter_loc {
 		iter_loc(c_pair_loc const &loc)
-		: base(loc.first->base_offset()), pos(loc.second),
-		  index(terminator_index)
+		: index(terminator_index), base(loc.first->base_offset()),
+		  pos((loc.second << 1) | 1)
+		{}
+
+		iter_loc(pair_loc const &loc)
+		: index(terminator_index), base(loc.first->base_offset()),
+		  pos((loc.second << 1) | 1)
+		{}
+
+		iter_loc(uintptr_t base_offset, uintptr_t pos_)
+		: index(terminator_index), base(base_offset),
+		  pos((pos_ << 1) | 1)
 		{}
 
 		template <typename StorageType>
-		c_pair_loc next_child(StorageType &items, uintptr_t breadth)
+		auto next_child(StorageType &items, uintptr_t breadth)
 		{
+			typedef typename std::conditional<
+				std::is_const<StorageType>::value,
+				c_pair_loc, pair_loc
+			>::type result_type;
+
 			while (true) {
 				auto n_pos(base + index);
 				if (index >= breadth)
-					return c_pair_loc(nullptr, n_pos);
+					return result_type(nullptr, n_pos);
 
 				auto p(items.ptr_at(n_pos));
-				if (!p || (p->parent() == pos))
-					return c_pair_loc(p, n_pos);
+				if (p && (p->check == pos))
+					return result_type(p, n_pos);
 
 				++index;
 			}
 		}
 
+		uintptr_t position() const
+		{
+			return pos >> 1;
+		}
+
+		uintptr_t index;
+	private:
 		uintptr_t base;
 		uintptr_t pos;
-		uintptr_t index;
 	};
 
 	struct pair_type {
@@ -321,6 +342,21 @@ private:
 		) const
 		{
 			c_pair_loc rv(nullptr, (base >> 1) + char_index);
+
+			auto p(items.ptr_at(rv.second));
+			if (p && ((p->check >> 1) == pos))
+				rv.first = p;
+
+			return rv;
+		}
+
+		template <typename StorageType>
+		pair_loc child_at(
+			StorageType &items, uintptr_t pos,
+			uintptr_t char_index
+		) const
+		{
+			pair_loc rv(nullptr, (base >> 1) + char_index);
 
 			auto p(items.ptr_at(rv.second));
 			if (p && ((p->check >> 1) == pos))
@@ -478,7 +514,7 @@ private:
 		template <typename IndexIterator>
 		size_type common_length(
 			IndexIterator first, IndexIterator last,
-			uintptr_t offset = 0
+			uintptr_t offset
 		) const
 		{
 			size_type pos(offset);
@@ -497,9 +533,12 @@ private:
 		template <typename IndexIterator>
 		bool match(IndexIterator first, IndexIterator last) const
 		{
-			return (
-				suffix_length == std::distance(first, last)
-			) && (suffix_length == common_length(first, last));
+			if (suffix_length != size_type(
+				std::distance(first, last)
+			))
+				return false;
+			
+			return std::equal(first, last, suffix());
 		}
 
 		size_type suffix_length;
@@ -545,8 +584,7 @@ private:
 
 	template <typename IndexIterator>
 	c_pair_loc find_impl(
-		IndexIterator &first, IndexIterator const &last,
-		uintptr_t base = 0
+		IndexIterator &first, IndexIterator const &last, uintptr_t base
 	) const
 	{
 		c_pair_loc rv(items.ptr_at(base), base);
@@ -565,9 +603,30 @@ private:
 		return rv;
 	}
 
-	template <typename ValueRefType, typename Pred>
+	template <typename IndexIterator>
+	pair_loc find_impl(
+		IndexIterator &first, IndexIterator const &last, uintptr_t base
+	)
+	{
+		pair_loc rv(items.ptr_at(base), base);
+
+		while (first != last) {
+			rv = rv.first->child_at(
+				items, rv.second, index_offset(*first)
+			);
+
+			++first;
+
+			if (!rv.first || rv.first->is_leaf())
+				break;
+		}
+
+		return rv;
+	}
+
+	template <typename ValueRefType, typename PairType, typename Pred>
 	bool for_each_impl(
-		c_pair_loc first, key_string_type &prefix, Pred &&pred
+		PairType first, key_string_type &prefix, Pred &&pred
 	) const;
 
 	template <typename ValueRefType, typename Iterator, typename Pred>

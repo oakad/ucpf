@@ -2,7 +2,7 @@ CC=g++
 CXXFLAGS+=-std=gnu++14 -I.. -I../yesod
 
 string_map_test: string_map_test.cpp
-	$(CC) $(CXXFLAGS) -g -o $@ $^
+	$(CC) $(CXXFLAGS) -g -O3 -o $@ $^
 
 sparse_vector_test: sparse_vector_test.cpp
 	$(CC) $(CXXFLAGS) -g -o $@ $^

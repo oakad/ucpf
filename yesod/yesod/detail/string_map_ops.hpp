@@ -30,7 +30,7 @@ auto string_map<CharType, ValueType, Policy>::find_rel(
 	auto p(items.ptr_at(base.offset));
 	if (p->is_leaf()) {
 		auto l_ptr(p->leaf_ptr());
-		auto d(std::distance(first, last));
+		size_type d(std::distance(first, last));
 
 		if (
 			(l_ptr->common_length(first, last, base.leaf_pos) == d)
@@ -144,9 +144,9 @@ auto string_map<CharType, ValueType, Policy>::emplace(
 		} else if (q.first->is_leaf()) {
 			++first;
 			auto l_ptr(q.first->leaf_ptr());
-			auto c_len(l_ptr->common_length(first, last));
+			auto c_len(l_ptr->common_length(first, last, 0));
 
-			if (std::distance(first, last) == c_len) {
+			if (size_type(std::distance(first, last)) == c_len) {
 				if (l_ptr->suffix_length == c_len)
 					return std::pair<reference, bool>(
 						l_ptr->value, false
@@ -172,6 +172,31 @@ auto string_map<CharType, ValueType, Policy>::emplace(
 			p = q;
 		}
 	}
+
+	auto q(p.first->pair_at(items, terminator_index));
+	if (!q.first || q.first->is_vacant()) {
+		if (items.ptr_at(0)->parent() <= q.second)
+			grow_storage(q.second);
+
+		vp.reset(value_pair::construct(
+			a, last, last, std::forward<Args>(args)...
+		));
+		reserve_vacant(p.second, q.second, vp.get());
+		return std::pair<reference, bool>(
+			vp.release()->value, true
+		);
+	} else if (q.first->parent() != p.second) {
+		vp.reset(value_pair::construct(
+			a, last, last, std::forward<Args>(args)...
+		));
+		relocate(p, terminator_index, vp.get());
+		return std::pair<reference, bool>(
+			vp.release()->value, true
+		);
+	} else
+		return std::pair<reference, bool>(
+			q.first->leaf_ptr()->value, false
+		);
 }
 
 template <typename CharType, typename ValueType, typename Policy>
@@ -184,12 +209,12 @@ auto string_map<CharType, ValueType, Policy>::erase(
 	auto first(iterator::make_transform(first_, map));
 	auto last(iterator::make_transform(last_, map));
 
-	auto p(find_impl(first, last));
+	auto p(find_impl(first, last, 0));
 	if (!p.first)
 		return 0;
 
 	if (!p.first->is_leaf()) {
-		p = p->child_at(items, p.second, terminator_index);
+		p = p.first->child_at(items, p.second, terminator_index);
 		if (!p.first)
 			return 0;
 	}
@@ -217,7 +242,7 @@ auto string_map<CharType, ValueType, Policy>::erase_prefix(
 	auto last(iterator::make_transform(last_, map));
 	auto a(items.get_allocator());
 	auto const breadth(index_offset(std::get<0>(tup_breadth_map)));
-	auto p(find_impl(first, last));
+	auto p(find_impl(first, last, 0));
 	if (!p.first)
 		return 0;
 
@@ -226,7 +251,7 @@ auto string_map<CharType, ValueType, Policy>::erase_prefix(
 			return 0;
 
 		auto l_ptr(p.first->leaf_ptr());
-		if (l_ptr->common_length(first, last) < std::distance(
+		if (l_ptr->common_length(first, last, 0) < std::distance(
 			first, last
 		))
 			return 0;
@@ -246,7 +271,7 @@ auto string_map<CharType, ValueType, Policy>::erase_prefix(
 		auto q(tree_loc.back().next_child(items, breadth));
 
 		if (!q.first) {
-			release_pair(tree_loc.back().pos);
+			release_pair(tree_loc.back().position());
 			tree_loc.pop_back();
 			if (tree_loc.empty())
 				break;
@@ -320,7 +345,7 @@ std::basic_ostream<
 					print_char(os, n_char);
 					os << "' (";
 					os << static_cast<uintptr_t>(n_char);
-					os << ") [";
+					os << " | " << n_off << ") [";
 				}
 
 				os << '"';
@@ -349,7 +374,7 @@ std::basic_ostream<
 					print_char(os, n_char);
 					os << "' (";
 					os << static_cast<uintptr_t>(n_char);
-					os << ")\n";
+					os << " | " << n_off << ")\n";
 				}
 			}
 			return false;
@@ -360,9 +385,9 @@ std::basic_ostream<
 }
 
 template <typename CharType, typename ValueType, typename Policy>
-template <typename ValueRefType, typename Pred>
+template <typename ValueRefType, typename PairType, typename Pred>
 bool string_map<CharType, ValueType, Policy>::for_each_impl(
-	c_pair_loc first, key_string_type &prefix, Pred &&pred
+	PairType first, key_string_type &prefix, Pred &&pred
 ) const
 {
 	std::vector<iter_loc, allocator_type> tree_loc(
@@ -446,8 +471,8 @@ bool string_map<CharType, ValueType, Policy>::for_each_prefix(
 		if (prefix_pos.first->is_leaf()) {
 			auto l_ptr(prefix_pos.first->leaf_ptr());
 			if (l_ptr->common_length(
-				first, last
-			) < std::distance(first, last))
+				first, last, 0
+			) < size_type(std::distance(first, last)))
 				return false;
 
 			auto sfx(l_ptr->suffix());
@@ -591,7 +616,7 @@ void string_map<CharType, ValueType, Policy>::release_pair(
 	auto q_pos(items.ptr_at(p_pos)->parent());
 
 	*items.ptr_at(taken_pos) = pair_type::make_vacant(p_pos, q_pos);
-	items.ptr_at(p_pos)->set_parent(taken_pos);
+	items.ptr_at(p_pos)->set_parent(taken_pos, false);
 	items.ptr_at(q_pos)->set_base_offset(taken_pos);
 }
 
@@ -616,7 +641,7 @@ void string_map<CharType, ValueType, Policy>::release_ancestors(
 				if (pos >= found_index)
 					return true;
 
-				if (pp->parent() == taken_pos) {
+				if (pp.parent() == taken_pos) {
 					found_index = pos;
 					return true;
 				} else
@@ -639,17 +664,28 @@ void string_map<CharType, ValueType, Policy>::move_pair(
 	uintptr_t src_vacant_hint
 )
 {
-	auto &src_pair(*items.ptr_at(src_taken_pos));
-	auto &dst_pair(*items.ptr_at(dst_vacant_pos));
+	auto const breadth(index_offset(std::get<0>(tup_breadth_map)));
+	auto src_pair(items.ptr_at(src_taken_pos));
+	auto dst_pair(items.ptr_at(dst_vacant_pos));
 
-	items.ptr_at(dst_pair.parent())->set_base_offset(
-		dst_pair.base_offset()
+	iter_loc tree_loc(src_pair->base_offset(), src_taken_pos);
+	while (true) {
+		auto p(tree_loc.next_child(items, breadth));
+		if (!p.first)
+			break;
+
+		p.first->set_parent(dst_vacant_pos, true);
+		++tree_loc.index;
+	}
+
+	items.ptr_at(dst_pair->parent())->set_base_offset(
+		dst_pair->base_offset()
 	);
-	items.ptr_at(dst_pair.base_offset())->set_parent(
-		dst_pair.parent(), false
+	items.ptr_at(dst_pair->base_offset())->set_parent(
+		dst_pair->parent(), false
 	);
 
-	dst_pair = src_pair;
+	*dst_pair = *src_pair;
 
 	auto prev_pos(items.ptr_at(0)->parent());
 	auto next_pos(items.ptr_at(prev_pos)->base_offset());
@@ -665,7 +701,7 @@ void string_map<CharType, ValueType, Policy>::move_pair(
 		prev_pos = items.ptr_at(next_pos)->parent();
 	}
 
-	src_pair = pair_type::make_vacant(next_pos, prev_pos);
+	*src_pair = pair_type::make_vacant(next_pos, prev_pos);
 	items.ptr_at(prev_pos)->set_base_offset(src_taken_pos);
 	items.ptr_at(next_pos)->set_parent(src_taken_pos, false);
 }
@@ -678,25 +714,34 @@ void string_map<CharType, ValueType, Policy>::relocate(
 	std::vector<
 		uintptr_t, allocator_type
 	> index_set(items.get_allocator());
-	auto base_offset(loc.first->base_offset());
-	for (auto c(terminator_index); c < c_index; ++c) {
-		auto p(items.ptr_at(base_offset + c));
-		if (p->parent() == loc.second)
-			index_set.push_back(c);
+	iter_loc tree_loc(loc);
+	auto const breadth(index_offset(std::get<0>(tup_breadth_map)));
+
+	while (true) {
+		auto p(tree_loc.next_child(items, c_index));
+		if (!p.first)
+			break;
+
+		index_set.push_back(tree_loc.index);
+		++tree_loc.index;
 	}
 
 	index_set.push_back(c_index);
 	auto c_index_pos(index_set.size() - 1);
-	auto last_index(index_offset(std::get<0>(tup_breadth_map)));
-	for (auto c(c_index + 1); c < last_index; ++c) {
-		auto p(items.ptr_at(base_offset + c));
-		if (p->parent() == loc.second)
-			index_set.push_back(c);
+
+	while (true) {
+		auto p(tree_loc.next_child(items, breadth));
+		if (!p.first)
+			break;
+
+		index_set.push_back(tree_loc.index);
+		++tree_loc.index;
 	}
 
 	auto n_pos(find_vacant_set(
 		index_set[0], &index_set[1], index_set.size() - 1
 	));
+	auto base_offset(loc.first->base_offset());
 	auto new_base_offset(n_pos - index_set[0]);
 	uintptr_t vacant_pos_hint(items.ptr_at(0)->parent());
 
@@ -738,7 +783,6 @@ void string_map<CharType, ValueType, Policy>::unroll_suffix(
 		loc.first->leaf_ptr(), shrink
 	);
 	auto s_ptr(leaf_ptr->suffix());
-	auto r(items.ptr_at(0));
 
 	for (; shrink_count < count; ++shrink_count) {
 		auto pos(index_offset(s_ptr[shrink_count]));
@@ -777,7 +821,7 @@ auto string_map<CharType, ValueType, Policy>::value_pair::construct(
 	typedef allocator::array_helper<index_char_type, Alloc> ah_c;
 	typedef allocator::array_helper<value_pair, Alloc> ah_p;
 
-	auto suffix_length(std::distance(first, last));
+	size_type suffix_length(std::distance(first, last));
 
 	auto s_deleter(
 		[&a, suffix_length](index_char_type *p) -> void {

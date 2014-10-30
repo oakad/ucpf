@@ -115,6 +115,8 @@ struct dense_encoding_map {
 		}
 		if (i_cnt)
 			os << "identity (" << i_cnt << " positions)\n";
+
+		return os;
 	}
 
 	std::tuple<index_type *, allocator_type> tup_items_alloc;
