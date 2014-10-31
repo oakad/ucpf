@@ -5,8 +5,8 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_YESOD_SPARSE_VECTOR_JAN_06_2014_1320)
-#define UCPF_YESOD_SPARSE_VECTOR_JAN_06_2014_1320
+#if !defined(UCPF_YESOD_SPARSE_VECTOR_20140106T1320)
+#define UCPF_YESOD_SPARSE_VECTOR_20140106T1320
 
 #include <yesod/detail/sparse_vector_base.hpp>
 #include <yesod/detail/sparse_vector_ops.hpp>

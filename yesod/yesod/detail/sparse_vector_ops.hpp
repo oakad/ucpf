@@ -57,7 +57,7 @@ void sparse_vector<ValueType, Policy>::clear()
 template <typename ValueType, typename Policy>
 template <typename Pred>
 bool sparse_vector<ValueType, Policy>::for_each(
-	size_type first, Pred &&pred
+	uintptr_t first, Pred &&pred
 ) const
 {
 	auto const height(std::get<0>(tup_height_alloc));
@@ -71,7 +71,7 @@ bool sparse_vector<ValueType, Policy>::for_each(
 
 	size_type h(0);
 	size_type d_pos(node_offset(first, 1));
-	size_type n_pos(0);
+	uintptr_t n_pos(0);
 
 	while (true) {
 		auto pp(tree_loc[h].ptr->find_occupied(tree_loc[h].pos));
@@ -84,7 +84,7 @@ bool sparse_vector<ValueType, Policy>::for_each(
 			n_pos >>= node_size_shift(height - h + 1);
 			++tree_loc[--h].pos;
 			auto mask((
-				size_type(1) << node_size_shift(height - h + 1)
+				uintptr_t(1) << node_size_shift(height - h + 1)
 			) - 1);
 			n_pos &= ~mask;
 			n_pos |= tree_loc[h].pos & mask;
@@ -109,7 +109,7 @@ bool sparse_vector<ValueType, Policy>::for_each(
 			d_pos = 0;
 			++tree_loc[h].pos;
 			auto mask((
-				size_type(1) << node_size_shift(height - h + 1)
+				uintptr_t(1) << node_size_shift(height - h + 1)
 			) - 1);
 			n_pos &= ~mask;
 			n_pos |= tree_loc[h].pos & mask;
@@ -126,7 +126,7 @@ bool sparse_vector<ValueType, Policy>::for_each(
 template <typename ValueType, typename Policy>
 template <typename Pred>
 bool sparse_vector<ValueType, Policy>::for_each(
-	size_type first, Pred &&pred
+	uintptr_t first, Pred &&pred
 )
 {
 	auto const height(std::get<0>(tup_height_alloc));
@@ -140,7 +140,7 @@ bool sparse_vector<ValueType, Policy>::for_each(
 
 	size_type h(0);
 	size_type d_pos(node_offset(first, 1));
-	size_type n_pos(0);
+	uintptr_t n_pos(0);
 
 	while (true) {
 		auto pp(tree_loc[h].ptr->find_occupied(tree_loc[h].pos));
@@ -153,7 +153,7 @@ bool sparse_vector<ValueType, Policy>::for_each(
 			n_pos >>= node_size_shift(height - h + 1);
 			++tree_loc[--h].pos;
 			auto mask((
-				size_type(1) << node_size_shift(height - h + 1)
+				uintptr_t(1) << node_size_shift(height - h + 1)
 			) - 1);
 			n_pos &= ~mask;
 			n_pos |= tree_loc[h].pos & mask;
@@ -178,7 +178,7 @@ bool sparse_vector<ValueType, Policy>::for_each(
 			d_pos = 0;
 			++tree_loc[h].pos;
 			auto mask((
-				size_type(1) << node_size_shift(height - h + 1)
+				uintptr_t(1) << node_size_shift(height - h + 1)
 			) - 1);
 			n_pos &= ~mask;
 			n_pos |= tree_loc[h].pos & mask;
@@ -195,7 +195,7 @@ bool sparse_vector<ValueType, Policy>::for_each(
 template <typename ValueType, typename Policy>
 template <typename Pred>
 void sparse_vector<ValueType, Policy>::for_each_pos(
-	size_type first, size_type last, Pred &&pred
+	uintptr_t first, uintptr_t last, Pred &&pred
 )
 {
 	alloc_data_node_at(last - 1);
@@ -294,8 +294,8 @@ void sparse_vector<ValueType, Policy>::for_each_pos(
 
 template <typename ValueType, typename Policy>
 auto sparse_vector<ValueType, Policy>::find_vacant(
-	size_type first
-) const -> size_type
+	uintptr_t first
+) const -> uintptr_t
 {
 	auto const height(std::get<0>(tup_height_alloc));
 	if (!height)
@@ -315,7 +315,7 @@ auto sparse_vector<ValueType, Policy>::find_vacant(
 	}
 
 	size_type h(height - 1);
-	size_type n_pos(first >> node_size_shift(1));
+	uintptr_t n_pos(first >> node_size_shift(1));
 	size_type d_pos;
 
 	{
@@ -595,9 +595,9 @@ auto sparse_vector<ValueType, Policy>::data_node_base::make(
 }
 
 template <typename ValueType, typename Policy>
-auto sparse_vector<ValueType, Policy>::alloc_data_node_at(
-	sparse_vector<ValueType, Policy>::size_type pos
-) -> loc_pair
+auto sparse_vector<
+	ValueType, Policy
+>::alloc_data_node_at(uintptr_t pos) -> loc_pair
 {
 	auto a(std::get<1>(tup_height_alloc));
 	auto &h(std::get<0>(tup_height_alloc));

@@ -8,7 +8,7 @@
 #if !defined(UCPF_YESOD_STRING_MAP_JAN_06_2014_1145)
 #define UCPF_YESOD_STRING_MAP_JAN_06_2014_1145
 
-#include <yesod/sparse_vector.hpp>
+#include <yesod/pod_sparse_vector.hpp>
 #include <yesod/detail/dense_encoding_map.hpp>
 #include <yesod/detail/string_map_base.hpp>
 #include <yesod/detail/string_map_ops.hpp>
@@ -23,8 +23,8 @@ struct string_map_default_policy {
 		CharType, allocator_type
 	> encoding_map;
 	typedef typename encoding_map::index_type index_char_type;
-	typedef sparse_vector<> storage_type;
-	typedef sparse_vector_default_policy storage_policy;
+	typedef pod_sparse_vector<> storage_type;
+	typedef pod_sparse_vector_default_policy storage_policy;
 	constexpr static size_t short_suffix_length = 16;
 };
 

@@ -201,7 +201,7 @@ struct string_map {
 	bool for_each(Pred &&pred)
 	{
 		key_string_type prefix(items.get_allocator());
-		return for_each_impl<value_type &>(
+		return for_each_impl<reference>(
 			c_pair_loc(items.ptr_at(0), 0), prefix,
 			std::forward<Pred>(pred)
 		);
@@ -211,7 +211,7 @@ struct string_map {
 	bool for_each(Pred &&pred) const
 	{
 		key_string_type prefix(items.get_allocator());
-		return for_each_impl<value_type const &>(
+		return for_each_impl<const_reference>(
 			c_pair_loc(items.ptr_at(0), 0), prefix,
 			std::forward<Pred>(pred)
 		);
@@ -236,7 +236,7 @@ struct string_map {
 	template <typename Iterator, typename Pred>
 	bool for_each(Iterator first_, Iterator last_, Pred &&pred)
 	{
-		return for_each_prefix<value_type &>(
+		return for_each_prefix<reference>(
 			first_, last_, std::forward<Pred>(pred)
 		);
 	}
@@ -244,7 +244,7 @@ struct string_map {
 	template <typename Iterator, typename Pred>
 	bool for_each(Iterator first_, Iterator last_, Pred &&pred) const
 	{
-		return for_each_prefix<value_type const &>(
+		return for_each_prefix<const_reference>(
 			first_, last_, std::forward<Pred>(pred)
 		);
 	}
@@ -395,19 +395,26 @@ private:
 			check = (parent << 1) | (occupied ? 1 : 0);
 		}
 
-		static pair_type make_leaf(value_pair *leaf, uintptr_t parent)
+		constexpr static pair_type make_leaf(
+			value_pair *leaf, uintptr_t parent
+		)
 		{
 			return pair_type{
 				reinterpret_cast<uintptr_t>(leaf),
 				(parent << 1) | 1
 			};
 		}
-		static pair_type make_vacant(uintptr_t next, uintptr_t prev)
+
+		constexpr static pair_type make_vacant(
+			uintptr_t next, uintptr_t prev
+		)
 		{
 			return pair_type{(next << 1) | 1, prev << 1};
 		}
 
-		static pair_type make(uintptr_t base_, uintptr_t parent)
+		constexpr static pair_type make(
+			uintptr_t base_, uintptr_t parent
+		)
 		{
 			return pair_type{
 				(base_ << 1) | 1, (parent << 1) | 1
@@ -577,9 +584,17 @@ private:
 
 	void init()
 	{
+		constexpr pair_type empty_map[2] = {
+			pair_type::make(0, 1),
+			pair_type::make_vacant(1, 1)
+		};
+
 		items.clear();
-		*items.emplace(1) = pair_type::make_vacant(1, 1);
-		*items.emplace(0) = pair_type::make(0, 1);
+		items.for_each_pos(
+			0, 2, [empty_map](auto pos, auto &item) -> void {
+				item = empty_map[pos];
+			}
+		);
 	}
 
 	template <typename IndexIterator>
