@@ -9,8 +9,10 @@
 #define UCPF_YESOD_POD_SPARSE_VECTOR_BASE_20141031T1700
 
 #include <memory>
+#include <ostream>
 #include <yesod/bitops.hpp>
 #include <yesod/detail/static_bit_field_map.hpp>
+#include <yesod/detail/tree_print_decorator.hpp>
 
 namespace ucpf { namespace yesod {
 namespace detail {
@@ -127,8 +129,21 @@ struct pod_sparse_vector<ValueType, Policy> {
 		return std::get<1>(tup_height_alloc_init);
 	}
 
+	std::ostream &dump(std::ostream &os) const;
+
 private:
 	struct node_base {};
+	struct ptr_node;
+
+	struct loc_pair {
+		node_base *ptr;
+		size_type pos;
+	};
+
+	struct c_loc_pair {
+		node_base const *ptr;
+		size_type pos;
+	};
 
 	struct ptr_node : node_base {
 		typedef typename std::allocator_traits<
@@ -153,16 +168,12 @@ private:
 			return rv;
 		}
 
-		static void destroy(allocator_type const &a_, node_base *p)
+		static void destroy(allocator_type const &a_, ptr_node *p)
 		{
-			if (!p)
-				return;
-
 			node_allocator_type a(a_);
-			auto pp(static_cast<ptr_node *>(p));
 
-			node_allocator_traits::destroy(a, pp);
-			node_allocator_traits::deallocate(a, pp, 1);
+			node_allocator_traits::destroy(a, p);
+			node_allocator_traits::deallocate(a, p, 1);
 		}
 
 		node_base *at(size_type pos)
@@ -178,6 +189,30 @@ private:
 		void set(size_type pos, node_base *p)
 		{
 			items[pos] = p;
+		}
+
+		c_loc_pair find_occupied(size_type first) const
+		{
+			while (first < size()) {
+				if (items[first])
+					return c_loc_pair{
+						items[first], first
+					};
+				++first;
+			}
+			return c_loc_pair{nullptr, first};
+		}
+
+		loc_pair find_occupied(size_type first)
+		{
+			while (first < size()) {
+				if (items[first])
+					return loc_pair{
+						items[first], first
+					};
+				++first;
+			}
+			return loc_pair{nullptr, first};
 		}
 
 		node_base *items[size()];
@@ -226,9 +261,6 @@ private:
 
 		static void destroy(allocator_type const &a_, node_base *p)
 		{
-			if (!p)
-				return;
-
 			node_allocator_type a(a_);
 			auto dp(static_cast<data_node *>(p));
 
@@ -248,9 +280,6 @@ private:
 
 		value_type items[size()];
 	};
-
-	typedef std::pair<ptr_node *, size_type> loc_pair;
-	typedef std::pair<ptr_node const *, size_type> c_loc_pair;
 
 	typedef typename detail::static_bit_field_map<
 		sizeof(uintptr_t) * 8, Policy::data_node_order,
@@ -307,38 +336,36 @@ void pod_sparse_vector<ValueType, Policy>::clear(void)
 	size_type h(0);
 
 	loc_pair tree_loc[height];
-	tree_loc[0] = std::make_pair(root, 0);
+	tree_loc[0] = loc_pair{root, 0};
 	while (true) {
-		if (tree_loc[h].second >= ptr_node::size()) {
-			ptr_node::destroy(a, tree_loc[h].first);
-			if (!h)
-				return;
+		auto p(static_cast<ptr_node *>(tree_loc[h].ptr));
+		auto pp(p->find_occupied(tree_loc[h].pos));
 
-			++tree_loc[--h].second;
+		if (!pp.ptr) {
+			ptr_node::destroy(a, p);
+			if (!h)
+				break;
+
+			++tree_loc[--h].pos;
 			continue;
 		}
+
+		tree_loc[h].pos = pp.pos;
 
 		if ((h + 1) == height) {
-			while (tree_loc[h].second < ptr_node::size()) {
-				auto d_ptr(static_cast<data_node *>(
-					tree_loc[h].first->at(
-						tree_loc[h].second
-					)
-				));
-				data_node::destroy(a, d_ptr);
-				++tree_loc[h].second;
-			}
-			continue;
+			data_node::destroy(
+				a, static_cast<data_node *>(pp.ptr)
+			);
+			++tree_loc[h].pos;
+		} else {
+			++tree_loc[h].pos;
+			tree_loc[++h] = loc_pair{pp.ptr, 0};
 		}
-
-		auto p(static_cast<ptr_node *>(
-			tree_loc[h].first->at(tree_loc[h].second)
-		));
-		if (p) {
-			tree_loc[++h] = std::make_pair(p, 0);
-		} else
-			++tree_loc[h].second;
 	}
+
+	std::get<0>(tup_height_alloc_init) = 0;
+	root = nullptr;
+	data = std::make_pair(nullptr, 0);
 }
 
 template <typename ValueType, typename Policy>
@@ -390,52 +417,135 @@ void pod_sparse_vector<ValueType, Policy>::for_each_pos(
 	size_type h;
 
 	loc_pair tree_loc[height];
-	tree_loc[0] = std::make_pair(root, node_offset(first, height - h));
+	tree_loc[0] = loc_pair{root, node_offset(first, height)};
 	for (h = 1; h < height; ++h)
-		tree_loc[h] = std::make_pair(
+		tree_loc[h] = loc_pair{
 			nullptr, node_offset(first, height - h)
-		);
+		};
 	h = 0;
 
 	while (true) {
-		if (tree_loc[h].second >= ptr_node::size()) {
+		auto p(static_cast<ptr_node *>(tree_loc[h].ptr));
+		auto pos(tree_loc[h].pos);
+
+		if (pos >= ptr_node::size()) {
 			if (!h)
 				return;
 
-			tree_loc[h].second = 0;
-			++tree_loc[--h].second;
+			tree_loc[h].pos = 0;
+			++tree_loc[--h].pos;
 			continue;
 		}
 
 		if ((h + 1) == height) {
-			auto q(static_cast<data_node *>(
-				tree_loc[h].first->at(tree_loc[h].second)
-			));
-			if (!q) {
-				q = data_node::construct(a, init);
-				tree_loc[h].first->set(tree_loc[h].second, q);
+			auto d_ptr(static_cast<data_node *>(p->at(pos)));
+			if (!d_ptr) {
+				d_ptr = data_node::construct(a, init);
+				p->set(pos, d_ptr);
 			}
 
 			while (d_pos < data_node::size()) {
-				pred(first, *q->ptr_at(d_pos++));
+				pred(first, *d_ptr->ptr_at(d_pos++));
 				++first;
 				if (first == last)
 					return;
 			}
 			d_pos = 0;
-			++tree_loc[h].second;
+			++tree_loc[h].pos;
 			continue;
 		}
 
-		auto p(static_cast<ptr_node *>(
-			tree_loc[h].first->at(tree_loc[h].second)
-		));
-		if (!p) {
-			p = ptr_node::construct(a);
-			tree_loc[h].first->set(tree_loc[h].second, p);
+		auto q(static_cast<ptr_node *>(p->at(pos)));
+		if (!q) {
+			q = ptr_node::construct(a);
+			p->set(pos, q);
 		}
 
-		tree_loc[++h].first = p;
+		tree_loc[++h].ptr = q;
+	}
+}
+
+template <typename ValueType, typename Policy>
+std::ostream &pod_sparse_vector<ValueType, Policy>::dump(
+	std::ostream &os
+) const
+{
+	struct printer_type {
+		printer_type(std::ostream &os_)
+		: os(os_)
+		{}
+
+		void operator()(char const *str)
+		{
+			os << str;
+		}
+
+		std::ostream &os;
+	} printer(os);
+
+	detail::tree_print_decorator<
+		printer_type, allocator_type
+	> decorator(printer, std::get<1>(tup_height_alloc_init));
+
+	auto print_data = [&os, &decorator](data_node const *p) -> void {
+		for (size_type c(0); c < (data_node::size() - 1); ++c) {
+			decorator.next_child();
+			os << '[' << c << "] ";
+			os << *p->ptr_at(c) << '\n';
+		}
+		decorator.last_child();
+		os << '[' << (data_node::size() - 1) << "] ";
+		os << *p->ptr_at(data_node::size() - 1) << '\n';
+	};
+
+	os << '<' << this << ">\n";
+	auto const height(std::get<0>(tup_height_alloc_init));
+	if (!height) {
+		if (data.first) {
+			decorator.push_level();
+			os << "[^" << data.second << "] <" << data.first
+			   << ">\n";
+			print_data(data.first);
+		}
+		return os;
+	}
+
+	c_loc_pair tree_loc[height];
+	tree_loc[0] = c_loc_pair{root, 0};
+	size_type h(0);
+	decorator.last_child();
+	os << '[' << 0 << "] <" << root << ">\n";
+	decorator.push_level();
+
+	while (true) {
+		auto p(static_cast<ptr_node const *>(tree_loc[h].ptr));
+		auto pp(p->find_occupied(tree_loc[h].pos));
+		if (!pp.ptr) {
+			if (!h)
+				return os;
+
+			--h;
+			decorator.pop_level();
+			continue;
+		}
+
+		auto pq(p->find_occupied(pp.pos + 1));
+		tree_loc[h].pos = pq.pos;
+		if (pq.ptr)
+			decorator.next_child();
+		else
+			decorator.last_child();
+
+		os << '[' << pp.pos << "] <" << pp.ptr << ">\n";
+
+		if ((h + 1) == height) {
+			decorator.push_level();
+			print_data(static_cast<data_node const*>(pp.ptr));
+			decorator.pop_level();
+		} else {
+			decorator.push_level();
+			tree_loc[++h] = c_loc_pair{pp.ptr, 0};
+		}
 	}
 }
 
@@ -463,58 +573,53 @@ bool pod_sparse_vector<ValueType, Policy>::for_each_impl(
 	size_type h;
 	uintptr_t n_pos(0);
 
-	loc_pair tree_loc[height];
-	tree_loc[0] = std::make_pair(root, node_offset(first, height - h));
+	c_loc_pair tree_loc[height];
+	tree_loc[0] = c_loc_pair{root, node_offset(first, height)};
 	for (h = 1; h < height; ++h)
-		tree_loc[h] = std::make_pair(
+		tree_loc[h] = c_loc_pair{
 			nullptr, node_offset(first, height - h)
-		);
+		};
 	h = 0;
 
 	while (true) {
-		if (tree_loc[h].second >= ptr_node::size()) {
+		auto p(static_cast<ptr_node const *>(tree_loc[h].ptr));
+		auto pp(p->find_occupied(tree_loc[h].pos));
+
+		if (!pp.ptr) {
 			if (!h)
 				return false;
 
-			tree_loc[h].second = 0;
+			tree_loc[h].pos = 0;
 			n_pos >>= node_size_shift(height - h);
-			++tree_loc[--h].second;
-			auto mask(node_size(height - h) - 1);
-			n_pos &= ~mask;
-			n_pos |= tree_loc[h].second & mask;
+			++tree_loc[--h].pos;
 			continue;
 		}
 
+		tree_loc[h].pos = pp.pos;
+		auto mask(node_size(height - h) - 1);
+		n_pos &= ~mask;
+		n_pos |= tree_loc[h].pos;
+
 		if ((h + 1) == height) {
-			auto q(static_cast<data_node *>(
-				tree_loc[h].first->at(tree_loc[h].second)
-			));
+			auto d_ptr(static_cast<data_node const *>(pp.ptr));
 			auto base_pos(n_pos << node_size_shift(0));
 			while (d_pos < data_node::size()) {
 				if (pred(
-					base_pos + d_pos, *q->ptr_at(d_pos++)
+					base_pos + d_pos,
+					const_cast<ValueRefType>(
+						*d_ptr->ptr_at(d_pos)
+					)
 				))
 					return true;
+
+				++d_pos;
 			}
 			d_pos = 0;
-			++tree_loc[h].second;
-			auto mask(node_size(height - h) - 1);
-			n_pos &= ~mask;
-			n_pos |= tree_loc[h].second & mask;
+			++tree_loc[h].pos;
 			continue;
-		}
-
-		auto p(static_cast<ptr_node *>(
-			tree_loc[h].first->at(tree_loc[h].second)
-		));
-		if (p) {
-			tree_loc[++h].first = p;
-			n_pos <<= node_size_shift(height - h);
 		} else {
-			++tree_loc[h].second;
-			auto mask(node_size(height - h) - 1);
-			n_pos &= ~mask;
-			n_pos |= tree_loc[h].second & mask;
+			tree_loc[++h].ptr = pp.ptr;
+			n_pos <<= node_size_shift(height - h);
 		}
 	}
 }
@@ -581,23 +686,27 @@ auto pod_sparse_vector<ValueType, Policy>::alloc_data_node_at(
 			auto q(static_cast<data_node *>(
 				p->at(node_offset(pos, h - p_h))
 			));
+
 			if (!q) {
 				q = data_node::construct(a, init);
 				p->set(node_offset(pos, h - p_h), q);
 			}
-				data = std::make_pair(
-					q, pos >> node_size_shift(0)
-				);
-				return q;
+
+			data = std::make_pair(
+				q, pos >> node_size_shift(0)
+			);
+			return q;
 		} else {
 			auto q(static_cast<ptr_node *>(
 				p->at(node_offset(pos, h - p_h))
 			));
+
 			if (!q) {
 				q = ptr_node::construct(a);
 				p->set(node_offset(pos, h - p_h), q);
 			}
 			p = q;
+			++p_h;
 		}
 	}
 }

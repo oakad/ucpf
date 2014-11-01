@@ -74,21 +74,12 @@ struct string_map {
 
 	~string_map()
 	{
-		clear();
+		clear_impl();
 	}
 
 	void clear()
 	{
-		auto a(items.get_allocator());
-		auto last(items.ptr_at(0)->parent());
-		items.for_each_pos(
-			0, last, [a](size_type pos, pair_type &p) -> bool {
-				if (p.is_leaf())
-					value_pair::destroy(a, p.leaf_ptr());
-
-				return false;
-			}
-		);
+		clear_impl();
 		init();
 	}
 
@@ -249,13 +240,11 @@ struct string_map {
 		);
 	}
 
-	std::basic_ostream<
-		CharType, typename Policy::char_traits_type
-	> &dump(
-		std::basic_ostream<
-			CharType, typename Policy::char_traits_type
-		> &os
-	) const;
+	std::ostream &dump(std::ostream &os) const;
+	std::ostream &dump_internal(std::ostream &os) const
+	{
+		return items.dump(os);
+	}
 
 private:
 	struct pair_type;
@@ -316,6 +305,23 @@ private:
 	};
 
 	struct pair_type {
+		friend std::ostream &operator<<(
+			std::ostream &os, pair_type const &p
+		)
+		{
+			if (p.is_vacant()) {
+				os << "vacant next: " << p.base_offset();
+				os << ", prev: " << p.parent();
+			} else if (p.is_leaf()) {
+				os << "leaf ptr: " << p.leaf_ptr();
+				os << ", parent: " << p.parent();
+			} else {
+				os << "link base: " << p.base_offset();
+				os << ", parent: " << p.parent();
+			}
+			return os;
+		}
+
 		bool is_leaf() const
 		{
 			return !(base & 1);
@@ -593,6 +599,20 @@ private:
 		items.for_each_pos(
 			0, 2, [empty_map](auto pos, auto &item) -> void {
 				item = empty_map[pos];
+			}
+		);
+	}
+
+	void clear_impl()
+	{
+		auto a(items.get_allocator());
+		auto last(items.ptr_at(0)->parent());
+		items.for_each_pos(
+			0, last, [a](size_type pos, pair_type &p) -> bool {
+				if (p.is_leaf())
+					value_pair::destroy(a, p.leaf_ptr());
+
+				return false;
 			}
 		);
 	}

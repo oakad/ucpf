@@ -296,12 +296,8 @@ auto string_map<CharType, ValueType, Policy>::erase_prefix(
 }
 
 template <typename CharType, typename ValueType, typename Policy>
-std::basic_ostream<
-	CharType, typename Policy::char_traits_type
-> &string_map<CharType, ValueType, Policy>::dump(
-	std::basic_ostream<
-		CharType, typename Policy::char_traits_type
-	> &os
+std::ostream &string_map<CharType, ValueType, Policy>::dump(
+	std::ostream &os
 ) const
 {
 	{

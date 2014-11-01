@@ -14,6 +14,7 @@ run dynamic_bitset.cpp : : test_case ;
 run flat_map.cpp : : test_case ;
 run float.cpp : : test_case ;
 run is_sequence.cpp : : test_case ;
+run pod_sparse_vector.cpp : : test_case ;
 run rope.cpp : : test_case ;
 run shared_mutex.cpp : : test_case ;
 run sparse_vector.cpp : : test_case ;

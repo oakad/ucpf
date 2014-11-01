@@ -30,6 +30,8 @@ int main(int argc, char **argv)
 			return false;
 		}
 	);
+	printf("----------\n");
+	x_map.dump_internal(std::cout);
 #endif
 #if 1
 	while (std::getline(std::cin, s_in)) {

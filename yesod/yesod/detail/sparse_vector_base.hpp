@@ -150,7 +150,7 @@ struct sparse_vector<ValueType, Policy> {
 		if (!q)
 			return nullptr;
 
-		return static_cast<data_node_base *>(*q)->ptr_at(
+		return static_cast<data_node_base const *>(*q)->ptr_at(
 			node_offset(pos, 1)
 		);
 	}
@@ -226,10 +226,20 @@ struct sparse_vector<ValueType, Policy> {
 	}
 
 	template <typename Pred>
-	bool for_each(uintptr_t first, Pred &&pred) const;
+	bool for_each(uintptr_t first, Pred &&pred) const
+	{
+		return for_each_impl<const_reference>(
+			first, std::forward<Pred>(pred)
+		);
+	}
 
 	template <typename Pred>
-	bool for_each(uintptr_t first, Pred &&pred);
+	bool for_each(uintptr_t first, Pred &&pred)
+	{
+		return for_each_impl<reference>(
+			first, std::forward<Pred>(pred)
+		);
+	}
 
 	template <typename Pred>
 	void for_each_pos(uintptr_t first, uintptr_t last, Pred &&pred);
@@ -635,6 +645,9 @@ private:
 			/ max_ptr_node_type::apparent_order + 2
 		) : 1;
 	}
+
+	template <typename ValueRefType, typename Pred>
+	bool for_each_impl(uintptr_t first, Pred &&pred) const;
 
 	loc_pair alloc_data_node_at(uintptr_t pos);
 
