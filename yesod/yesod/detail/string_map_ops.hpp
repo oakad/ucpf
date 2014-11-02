@@ -319,12 +319,20 @@ std::ostream &string_map<CharType, ValueType, Policy>::dump(
 		}
 	};
 
+	size_type vacant_count(0);
+	size_type leaf_count(0);
+	size_type edge_count(0);
+
 	items.for_each(
-		1, [&os, &print_char, this](size_type pos, pair_type const &p) -> bool {
+		1, [
+			&os, &print_char, &vacant_count, &leaf_count,
+			&edge_count, this
+		](size_type pos, pair_type const &p) -> bool {
 			os << pos << ": ";
 			if (p.is_vacant()) {
 				os << "vacant (next: " << p.base_offset();
 				os << ", prev: " << p.parent() << ")\n";
+				++vacant_count;
 			} else if (p.is_leaf()) {
 				auto l_ptr(p.leaf_ptr());
 
@@ -356,6 +364,7 @@ std::ostream &string_map<CharType, ValueType, Policy>::dump(
 					).value(suffix[c]));
 
 				os << "\"] -> " << l_ptr->value << '\n';
+				++leaf_count;
 			} else {
 				os << "(parent: " << p.parent();
 				os << ", offset: " << p.base_offset() << ") ";
@@ -372,11 +381,15 @@ std::ostream &string_map<CharType, ValueType, Policy>::dump(
 					os << static_cast<uintptr_t>(n_char);
 					os << " | " << n_off << ")\n";
 				}
+				++edge_count;
 			}
 			return false;
 		}
 	);
 
+	os << "Pair count: vacant - " << vacant_count;
+	os << ", leaf - " << leaf_count;
+	os << ", edge - " << edge_count << '\n';
 	return os;
 }
 

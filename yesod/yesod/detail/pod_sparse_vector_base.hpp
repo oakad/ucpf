@@ -131,6 +131,9 @@ struct pod_sparse_vector<ValueType, Policy> {
 
 	std::ostream &dump(std::ostream &os) const;
 
+	template <typename Pred>
+	std::pair<size_type, size_type> utilization(Pred &&pred) const;
+
 private:
 	struct node_base {};
 	struct ptr_node;
@@ -547,6 +550,64 @@ std::ostream &pod_sparse_vector<ValueType, Policy>::dump(
 			tree_loc[++h] = c_loc_pair{pp.ptr, 0};
 		}
 	}
+}
+
+template <typename ValueType, typename Policy>
+template <typename Pred>
+auto pod_sparse_vector<ValueType, Policy>::utilization(Pred &&pred) const
+-> std::pair<size_type, size_type>
+{
+	auto const height(std::get<0>(tup_height_alloc_init));
+	std::pair<size_type, size_type> rv(0, 0);
+
+	if (!height) {
+		if (data.first) {
+			rv.first += sizeof(data_node);
+			for (size_type c(0); c < data_node::size(); ++c) {
+				if (pred(*data.first->ptr_at(c)))
+					rv.second += sizeof(value_type);
+			}
+		}
+		return rv;
+	}
+
+	c_loc_pair tree_loc[height];
+	tree_loc[0] = c_loc_pair{root, 0};
+	size_type h(0);
+	rv.first += sizeof(ptr_node);
+
+	while (true) {
+		auto pp(static_cast<ptr_node const *>(
+			tree_loc[h].ptr
+		)->find_occupied(tree_loc[h].pos));
+
+		if (!pp.ptr) {
+			if (!h)
+				break;
+
+			rv.first += sizeof(ptr_node);
+			tree_loc[h].pos = 0;
+			++tree_loc[--h].pos;
+			continue;
+		}
+
+		tree_loc[h].pos = pp.pos;
+
+		if ((h + 1) == height) {
+			auto q(static_cast<data_node const *>(pp.ptr));
+
+			rv.first += sizeof(data_node);
+			for (size_type c(0); c < data_node::size(); ++c) {
+				if (pred(*q->ptr_at(c)))
+					rv.second += sizeof(value_type);
+			}
+
+			++tree_loc[h].pos;
+		} else
+			tree_loc[++h] = c_loc_pair{pp.ptr, 0};
+	}
+
+	return rv;
 }
 
 template <typename ValueType, typename Policy>

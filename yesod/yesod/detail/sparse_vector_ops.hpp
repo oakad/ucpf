@@ -375,7 +375,6 @@ template <typename ValueType, typename Policy>
 auto sparse_vector<ValueType, Policy>::utilization() const
 -> std::pair<size_type, size_type>
 {
-		auto a(std::get<1>(tup_height_alloc));
 	auto const height(std::get<0>(tup_height_alloc));
 
 	std::pair<size_type, size_type> rv(0, 0);

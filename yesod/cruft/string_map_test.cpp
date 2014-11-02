@@ -42,7 +42,7 @@ int main(int argc, char **argv)
 
 	//x_map.dump(std::cout);
 
-	x_map.erase_prefix(std::string("/src/tutorial"));
+	//x_map.erase_prefix(std::string("/src/tutorial"));
 
 	//printf("=========\n");
 	x_map.for_each([](char *first, char *last, int val) -> bool {
@@ -58,6 +58,7 @@ int main(int argc, char **argv)
 		}
 	);
 */
+	x_map.dump(std::cerr);
 #endif
 
 	return 0;

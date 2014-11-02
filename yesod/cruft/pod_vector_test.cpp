@@ -57,6 +57,7 @@ int main(int argc, char **argv)
 			s0.emplace(pos);
 		}
 	);
+
 	printf("==============\n");
 	trie.dump(std::cout);
 	printf("==============\n");
@@ -70,5 +71,13 @@ int main(int argc, char **argv)
 		return false;
 	});
 
+	auto ut(trie.utilization([](auto &p) -> bool {
+		return p.base != 0;
+	}));
+
+	printf(
+		"ut all %zd, used %zd, rat %f\n",
+		ut.first, ut.second, double(ut.second)/ut.first
+	);
 	return 0;
 }

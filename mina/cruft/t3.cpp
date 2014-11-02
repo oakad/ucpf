@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 #include <mina/np_packager.hpp>
-#include <mina/dumping_store.hpp>
+#include <mina/text_store.hpp>
 
 struct config {
 	template <typename Packager>

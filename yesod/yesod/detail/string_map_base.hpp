@@ -243,7 +243,14 @@ struct string_map {
 	std::ostream &dump(std::ostream &os) const;
 	std::ostream &dump_internal(std::ostream &os) const
 	{
-		return items.dump(os);
+		items.dump(os);
+		auto ut(items.utilization([](auto &p) -> bool {
+			return p.base || p.check;
+		}));
+		os << "Storage used: " << ut.first << " bytes, useful: ";
+		os << ut.second << ", overhead ";
+		os << ((double(ut.first) / ut.second) - 1) * 100 << "%\n";
+		return os;
 	}
 
 private:

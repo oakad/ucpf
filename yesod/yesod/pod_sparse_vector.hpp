@@ -14,8 +14,8 @@ namespace ucpf { namespace yesod {
 
 struct pod_sparse_vector_default_policy {
 	typedef std::allocator<void> allocator_type;
-	constexpr static std::size_t ptr_node_order = 4;
-	constexpr static std::size_t data_node_order = 4;
+	constexpr static std::size_t ptr_node_order = 6;
+	constexpr static std::size_t data_node_order = 8;
 };
 
 template <>

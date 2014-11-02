@@ -43,16 +43,6 @@ struct np_packager {
 	template <typename ...Args>
 	bool restore(name_pack_type &&names, Args &&...args)
 	{
-		if (store.start_scan()) {
-			unpack = false;
-			inspect(
-				names.begin(),
-				std::forward<name_pack_type>(names),
-				std::forward<Args>(args)...
-			);
-			store.merge_scan();
-		}
-
 		if (store.start_restore()) {
 			unpack = true;
 			inspect(
