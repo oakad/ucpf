@@ -83,6 +83,13 @@ struct string_map {
 		init();
 	}
 
+	template <typename ValueClearFunc>
+	void clear(ValueClearFunc &&func)
+	{
+		clear_impl(std::forward<ValueClearFunc>(func));
+		init();
+	}
+
 	template <typename StringType>
 	pointer find(StringType &&s)
 	{
@@ -251,6 +258,11 @@ struct string_map {
 		os << ut.second << ", overhead ";
 		os << ((double(ut.first) / ut.second) - 1) * 100 << "%\n";
 		return os;
+	}
+
+	allocator_type get_allocator() const
+	{
+		return items.get_allocator();
 	}
 
 private:
@@ -610,14 +622,36 @@ private:
 		);
 	}
 
+	template <typename ValueClearFunc>
+	void clear_impl(ValueClearFunc &&func)
+	{
+		auto a(items.get_allocator());
+		auto last(items.ptr_at(0)->parent());
+		items.for_each_pos(
+			0, last, [
+				a, func{std::forward<ValueClearFunc>(func)}
+			](size_type pos, pair_type &p) -> bool {
+				if (p.is_leaf()) {
+					auto leaf_ptr(p.leaf_ptr());
+					func(a, leaf_ptr->value);
+					value_pair::destroy(a, leaf_ptr);
+				}
+
+				return false;
+			}
+		);
+	}
+
 	void clear_impl()
 	{
 		auto a(items.get_allocator());
 		auto last(items.ptr_at(0)->parent());
 		items.for_each_pos(
 			0, last, [a](size_type pos, pair_type &p) -> bool {
-				if (p.is_leaf())
-					value_pair::destroy(a, p.leaf_ptr());
+				if (p.is_leaf()) {
+					auto leaf_ptr(p.leaf_ptr());
+					value_pair::destroy(a, leaf_ptr);
+				}
 
 				return false;
 			}

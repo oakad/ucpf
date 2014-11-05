@@ -27,6 +27,12 @@ private:
 			typename std::iterator_traits<Iterator>::value_type...
 		>::type value_type;
 
+		typedef typename std::common_type<
+			typename std::iterator_traits<
+				Iterator
+			>::difference_type...
+		>::type difference_type;
+
 		typedef typename mpl::common_base<
 			typename std::iterator_traits<
 				Iterator
@@ -35,12 +41,14 @@ private:
 
 		typedef typename mpl::max<
 			mpl::integral_constant<
-				size_t, std::alignment_of<Iterator>::value
+				std::size_t, std::alignment_of<Iterator>::value
 			>...
 		>::type alignment;
 
 		typedef typename mpl::max<
-			mpl::integral_constant<size_t, sizeof(Iterator)>...
+			mpl::integral_constant<
+				std::size_t, sizeof(Iterator)
+			>...
 		>::type size;
 
 		typedef typename std::aligned_storage<
@@ -52,6 +60,14 @@ private:
 		decltype(std::begin(std::declval<Rn>()))...
 	> base_iterator_traits;
 
+public:
+	typedef typename base_iterator_traits::value_type value_type;
+	typedef typename base_iterator_traits::iterator_category
+	iterator_category;
+	typedef std::size_t size_type;
+	typedef typename base_iterator_traits::difference_type difference_type;
+
+private:
 	struct slice_base {
 		typedef typename base_iterator_traits::storage_type
 		storage_type;
@@ -73,25 +89,22 @@ private:
 		virtual reference dereference(
 			storage_type const *iter
 		) const = 0;
-		virtual size_t size() const = 0;
-		virtual std::pair<size_t, size_t> location(
+		virtual size_type size() const = 0;
+		virtual std::pair<size_type, size_type> location(
 			storage_type const *iter
 		) const = 0;
-		virtual std::ptrdiff_t distance_to(
+		virtual difference_type distance_to(
 			storage_type const *iter, storage_type const *other
 		) const = 0;
-		virtual std::pair<std::ptrdiff_t, int> advance(
-			storage_type *iter, std::ptrdiff_t n
+		virtual std::pair<difference_type, int> advance(
+			storage_type *iter, difference_type n
 		) = 0;
 	};
 public:
-	typedef typename base_iterator_traits::value_type value_type;
-	typedef typename base_iterator_traits::iterator_category
-	iterator_category;
-
 	template <typename ValueType>
 	struct iterator_base : facade<
-		iterator_base<ValueType>, ValueType, iterator_category
+		iterator_base<ValueType>, ValueType, iterator_category,
+		ValueType &, difference_type
 	> {
 		~iterator_base()
 		{
@@ -103,7 +116,7 @@ public:
 		friend struct core_access;
 		friend struct joined_range;
 
-		iterator_base(joined_range *r_, size_t slice_pos_)
+		iterator_base(joined_range *r_, std::size_t slice_pos_)
 		: r(r_), slice_pos(slice_pos_)
 		{
 			if (r && (slice_pos < r->s_access.size()))
@@ -238,7 +251,7 @@ public:
 		}
 
 		joined_range *r;
-		size_t slice_pos;
+		std::size_t slice_pos;
 		typename base_iterator_traits::storage_type iter;
 	};
 
@@ -274,9 +287,9 @@ public:
 		return const_iterator(this, s_access.size());
 	}
 
-	size_t size() const
+	size_type size() const
 	{
-		size_t rv(0);
+		size_type rv(0);
 
 		for (auto s: s_access)
 			rv += s->size();
@@ -285,7 +298,7 @@ public:
 	}
 
 private:
-	template <typename Range, size_t N>
+	template <typename Range, std::size_t N>
 	struct slice : slice_base {
 		typedef decltype(
 			std::begin(std::declval<Range>())
@@ -371,12 +384,12 @@ private:
 			);
 		}
 
-		virtual size_t size() const
+		virtual size_type size() const
 		{
 			return std::distance(first, last);
 		}
 
-		virtual std::pair<size_t, size_t> location(
+		virtual std::pair<size_type, size_type> location(
 			typename slice_base::storage_type const *iter
 		) const
 		{
@@ -387,7 +400,7 @@ private:
 			);
 		}
 
-		virtual std::ptrdiff_t distance_to(
+		virtual difference_type distance_to(
 			typename slice_base::storage_type const *iter,
 			typename slice_base::storage_type const *other
 		) const
@@ -402,25 +415,23 @@ private:
 			return std::distance(x_iter, x_other);
 		}
 
-		virtual std::pair<std::ptrdiff_t, int> advance(
+		virtual std::pair<difference_type, int> advance(
 			typename slice_base::storage_type *iter,
-			std::ptrdiff_t n
+			difference_type n
 		)
 		{
 			auto &x_iter(
 				*reinterpret_cast<iterator *>(iter)
 			);
 			if (n >= 0) {
-				std::ptrdiff_t x_n(std::distance(x_iter, last));
+				auto x_n(std::distance(x_iter, last));
 				std::advance(x_iter, std::min(n, x_n));
 				return std::make_pair(
 					n - std::min(n, x_n),
 					x_iter == last ? 1 : 0
 				);
 			} else {
-				std::ptrdiff_t x_n(
-					std::distance(x_iter, first)
-				);
+				auto x_n(std::distance(x_iter, first));
 				std::advance(x_iter, std::max(n, x_n));
 				return std::make_pair(
 					n - std::max(n, x_n),
@@ -435,7 +446,7 @@ private:
 
 	struct slice_pack_type {
 		typedef typename mpl::package_range_c<
-			size_t, 0, sizeof...(Rn)
+			std::size_t, 0, sizeof...(Rn)
 		>::type indices;
 
 		template <typename Ix, Ix... Cn>

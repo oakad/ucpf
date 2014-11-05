@@ -110,5 +110,10 @@ constexpr uint32_t bswap(uint32_t v)
 	return __builtin_bswap32(v);
 }
 
+constexpr uint64_t bswap(uint64_t v)
+{
+	return __builtin_bswap64(v);
+}
+
 }}
 #endif
