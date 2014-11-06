@@ -134,13 +134,13 @@ private:
 };
 
 template <typename Iterator>
-auto make_range(Iterator first, Iterator last) -> range<Iterator>
+auto make_range(Iterator first, Iterator last)
 {
 	return range<Iterator>(first, last);
 }
 
 template <typename Iterator>
-auto make_range(Iterator first, size_t n) -> range<Iterator>
+auto make_range(Iterator first, size_t n)
 {
 	auto last(first);
 	std::advance(last, n);
@@ -148,13 +148,13 @@ auto make_range(Iterator first, size_t n) -> range<Iterator>
 }
 
 template <typename Range>
-auto make_range(Range &r) -> range<decltype(std::begin(r))>
+auto make_range(Range &r)
 {
 	return range<decltype(std::begin(r))>(std::begin(r), std::end(r));
 }
 
 template <typename CharType>
-auto str(CharType const *s) -> range<CharType const *>
+auto str(CharType const *s)
 {
 	return range<CharType const *>(
 		s, s + std::char_traits<CharType>::length(s)
