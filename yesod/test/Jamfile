@@ -10,8 +10,7 @@ alias test_case : : : : <include>..
 run array_element_count.cpp : : test_case ;
 run bitops.cpp : : test_case ;
 run bitset.cpp : : test_case ;
-run dynamic_bitset.cpp : : test_case ;
-run flat_map.cpp : : test_case ;
+run collector.cpp : : test_case ;
 run float.cpp : : test_case ;
 run is_sequence.cpp : : test_case ;
 run pod_sparse_vector.cpp : : test_case ;

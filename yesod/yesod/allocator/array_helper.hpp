@@ -58,6 +58,34 @@ struct array_helper {
 	}
 
 	template <typename Alloc1, typename U, typename... Args>
+	static T *make(Alloc1 const &a, U *up, Args&&... args)
+	{
+		allocator_type x_alloc(a);
+		auto p(reinterpret_cast<T *>(up));
+		allocator_traits::construct(
+			x_alloc, p, std::forward<Args>(args)...
+		);
+		return p;
+	}
+
+	template <typename Alloc1, typename... Args>
+	static T *alloc(Alloc1 const &a, Args&&... args)
+	{
+		allocator_type x_alloc(a);
+
+		auto deleter([&x_alloc](T *p) -> void {
+			allocator_traits::deallocate(x_alloc, p, 1);
+		});
+
+		std::unique_ptr<T[], decltype(deleter)> s_ptr(
+			allocator_traits::allocate(x_alloc, 1), deleter
+		);
+
+		make(a, s_ptr.get(), std::forward<Args>(args)...);
+		return s_ptr.release();
+	}
+
+	template <typename Alloc1, typename U, typename... Args>
 	static T *make_n(Alloc1 const &a, U *up, size_type n, Args&&... args)
 	{
 		allocator_type x_alloc(a);
@@ -102,7 +130,7 @@ struct array_helper {
 	}
 
 	template <typename Alloc1, typename U, typename Iterator>
-	static T *make(Alloc1 const &a, U *up, Iterator first, Iterator last)
+	static T *make_r(Alloc1 const &a, U *up, Iterator first, Iterator last)
 	{
 		allocator_type x_alloc(a);
 		size_type init_length(0);
@@ -127,7 +155,7 @@ struct array_helper {
 	}
 
 	template <typename Alloc1, typename Iterator>
-	static T *alloc(Alloc1 const &a, Iterator first, Iterator last)
+	static T *alloc_r(Alloc1 const &a, Iterator first, Iterator last)
 	{
 		allocator_type x_alloc(a);
 		auto n(std::distance(first, last));
@@ -140,7 +168,7 @@ struct array_helper {
 			allocator_traits::allocate(x_alloc, n), deleter
 		);
 
-		make(a, s_ptr.get(), first, last);
+		make_r(a, s_ptr.get(), first, last);
 		return s_ptr.release();
 	}
 

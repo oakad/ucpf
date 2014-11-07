@@ -425,13 +425,13 @@ auto sparse_vector<ValueType, Policy>::ptr_node_base::make(
 			max_ptr_node_type, allocator_type
 		> a_h;
 
-		return a_h::alloc_n(a, 1, a);
+		return a_h::alloc(a, a);
 	} else {
 		typedef allocator::array_helper<
 			min_ptr_node_type, allocator_type
 		> a_h;
 
-		return a_h::alloc_n(a, 1, a);
+		return a_h::alloc(a, a);
 	}
 }
 
@@ -445,13 +445,13 @@ auto sparse_vector<ValueType, Policy>::data_node_base::make(
 			max_data_node_type, allocator_type
 		> a_h;
 
-		return a_h::alloc_n(a, 1, a);
+		return a_h::alloc(a, a);
 	} else {
 		typedef allocator::array_helper<
 			min_data_node_type, allocator_type
 		> a_h;
 
-		return a_h::alloc_n(a, 1, a);
+		return a_h::alloc(a, a);
 	}
 }
 

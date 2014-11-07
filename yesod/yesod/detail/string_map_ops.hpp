@@ -843,20 +843,20 @@ auto string_map<CharType, ValueType, Policy>::value_pair::construct(
 	);
 
 	if (suffix_length > Policy::short_suffix_length)
-		s_ptr.reset(ah_c::alloc(a, first, last));
+		s_ptr.reset(ah_c::alloc_r(a, first, last));
 
 	auto p_deleter([&a](value_pair *p) -> void {
 		ah_p::destroy(a, p, 1, true);
 	});
 
 	std::unique_ptr<value_pair, decltype(p_deleter)> p_ptr(
-		ah_p::alloc_n(a, 1, std::forward<Args>(args)...), p_deleter
+		ah_p::alloc(a, std::forward<Args>(args)...), p_deleter
 	);
 
 	if (s_ptr)
 		p_ptr->long_suffix.data = s_ptr.get();
 	else
-		ah_c::make(a, p_ptr->short_suffix, first, last);
+		ah_c::make_r(a, p_ptr->short_suffix, first, last);
 
 	p_ptr->suffix_length = suffix_length;
 	s_ptr.release();
@@ -929,7 +929,7 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 		auto data(long_suffix.data);
 		auto offset(long_suffix.offset);
 
-		ah::make(
+		ah::make_r(
 			a, short_suffix, data + offset + count,
 			data + offset + count + next_length
 		);
@@ -946,7 +946,7 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 		suffix_length = next_length;
 
 		if (long_suffix.offset > suffix_length) {
-			auto s_ptr(ah::alloc(
+			auto s_ptr(ah::alloc_r(
 				a, long_suffix.data + long_suffix.offset,
 				long_suffix.data + long_suffix.offset
 				+ suffix_length

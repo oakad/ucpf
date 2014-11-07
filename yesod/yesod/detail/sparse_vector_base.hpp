@@ -216,8 +216,8 @@ struct sparse_vector<ValueType, Policy> {
 			data_node_base, decltype(release)
 		> qq(q, release);
 
-		allocator::array_helper<value_type, allocator_type>::make_n(
-			std::get<1>(tup_height_alloc), qp.first, 1,
+		allocator::array_helper<value_type, allocator_type>::make(
+			std::get<1>(tup_height_alloc), qp.first,
 			std::forward<Args>(args)...
 		);
 
@@ -517,7 +517,7 @@ private:
 
 			std::unique_ptr<
 				OtherNodeType, decltype(deleter)
-			> p(a_h::alloc_n(a, 1, a), deleter);
+			> p(a_h::alloc(a, a), deleter);
 
 			p->items.init_move(a, self->items);
 			*(parent.ptr->ptr_at(parent.pos)) = p.get();

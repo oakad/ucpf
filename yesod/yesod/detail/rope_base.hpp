@@ -119,7 +119,7 @@ protected:
 			{
 				allocator::array_helper<
 					value_type, Alloc
-				>::make(a, p.get_extra(), p->size);
+				>::make_n(a, p.get_extra(), p->size);
 			}
 
 			template <typename Alloc>
@@ -160,7 +160,7 @@ protected:
 			static void construct(Alloc const &a, node_ptr const &p)
 			{
 				allocator::array_helper<concat, Alloc>::make(
-					a, p.get_extra(), 1
+					a, p.get_extra()
 				);
 			}
 
@@ -204,7 +204,7 @@ protected:
 			{
 				allocator::array_helper<
 					substr, Alloc
-				>::make(a, p.get_extra(), 1);
+				>::make(a, p.get_extra());
 			}
 
 			template <typename Alloc>
@@ -254,7 +254,7 @@ protected:
 			{
 				allocator::array_helper<
 					func, Alloc
-				>::make(a, p.get_extra(), 1);
+				>::make(a, p.get_extra());
 			}
 
 			template <typename Alloc>

@@ -5,8 +5,8 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_YESOD_STRING_MAP_JAN_06_2014_1145)
-#define UCPF_YESOD_STRING_MAP_JAN_06_2014_1145
+#if !defined(UCPF_YESOD_STRING_MAP_20140106T1145)
+#define UCPF_YESOD_STRING_MAP_20140106T1145
 
 #include <yesod/pod_sparse_vector.hpp>
 #include <yesod/detail/dense_encoding_map.hpp>

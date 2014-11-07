@@ -133,11 +133,8 @@ private:
 				buf, sizeof(CharType), count, fd
 			));
 
-			if (rv < ssize_t(count)) {
-				if (rv < 0)
-					rv = 0;
+			if (rv < count)
 				std::fill_n(buf + rv, count - rv, 0);
-			}
 		}
 
 		size_t size() const

@@ -11,6 +11,7 @@
 #include <memory>
 #include <ostream>
 #include <yesod/bitops.hpp>
+#include <yesod/allocator/array_helper.hpp>
 #include <yesod/detail/static_bit_field_map.hpp>
 #include <yesod/detail/tree_print_decorator.hpp>
 
@@ -149,34 +150,23 @@ private:
 	};
 
 	struct ptr_node : node_base {
-		typedef typename std::allocator_traits<
-			typename Policy::allocator_type
-		>::template rebind_alloc<ptr_node> node_allocator_type;
-
-		typedef typename std::allocator_traits<
-			typename Policy::allocator_type
-		>::template rebind_traits<ptr_node> node_allocator_traits;
+		typedef allocator::array_helper<
+			ptr_node, typename Policy::allocator_type
+		> allocator_helper;
 
 		constexpr static size_type size()
 		{
 			return size_type(1) << Policy::ptr_node_order;
 		}
 
-		static ptr_node *construct(allocator_type const &a_)
+		static ptr_node *construct(allocator_type const &a)
 		{
-			node_allocator_type a(a_);
-
-			auto rv(node_allocator_traits::allocate(a, 1));
-			node_allocator_traits::construct(a, rv);
-			return rv;
+			return allocator_helper::alloc(a);
 		}
 
-		static void destroy(allocator_type const &a_, ptr_node *p)
+		static void destroy(allocator_type const &a, ptr_node *p)
 		{
-			node_allocator_type a(a_);
-
-			node_allocator_traits::destroy(a, p);
-			node_allocator_traits::deallocate(a, p, 1);
+			allocator_helper::destroy(a, p, 1, true);
 		}
 
 		node_base *at(size_type pos)
@@ -234,54 +224,44 @@ private:
 	>::type init_type;
 
 	struct data_node : node_base {
-		typedef typename std::allocator_traits<
-			typename Policy::allocator_type
-		>::template rebind_alloc<data_node> node_allocator_type;
+		typedef allocator::array_helper<
+			data_node, typename Policy::allocator_type
+		> allocator_helper;
 
-		typedef typename std::allocator_traits<
-			typename Policy::allocator_type
-		>::template rebind_traits<data_node> node_allocator_traits;
-
+		
 		constexpr static size_type size()
 		{
 			return size_type(1) << Policy::data_node_order;
 		}
 
 		static data_node *construct(
-			allocator_type &a_, init_type &init_func
+			allocator_type &a, init_type &init_func
 		)
 		{
-			node_allocator_type a(a_);
+			auto p(allocator_helper::alloc(a));
 
-			auto rv(node_allocator_traits::allocate(a, 1));
-			node_allocator_traits::construct(a, rv);
-			
 			for (size_type c(0); c < size(); ++c)
-				init_func(a_, rv->ptr_at(c));
+				init_func(a, p->ptr_at(c));
 
-			return rv;
+			return p;
 		}
 
-		static void destroy(allocator_type const &a_, node_base *p)
+		static void destroy(allocator_type const &a, data_node *p)
 		{
-			node_allocator_type a(a_);
-			auto dp(static_cast<data_node *>(p));
-
-			node_allocator_traits::destroy(a, dp);
-			node_allocator_traits::deallocate(a, dp, 1);
+			allocator_helper::destroy(a, p, 1, true);
 		}
 
 		pointer ptr_at(size_type pos)
 		{
-			return &items[pos];
+			return reinterpret_cast<pointer>(&items[pos]);
 		}
 
 		const_pointer ptr_at(size_type pos) const
 		{
-			return &items[pos];
+			return reinterpret_cast<const_pointer>(&items[pos]);
 		}
 
-		value_type items[size()];
+		allocator::aligned_storage_t<value_type> items[size()];
 	};
 
 	typedef typename detail::static_bit_field_map<

@@ -22,12 +22,12 @@ BOOST_AUTO_TEST_CASE(base32_0)
 	base32::decode(v1, in_p);
 	BOOST_CHECK_EQUAL(v1, v2);
 
-	uint8_t out[13] = {0};
+	uint8_t out[14] = {0};
 	uint8_t *out_p(&out[0]);
 	base32::encode(out_p, v2);
-	BOOST_CHECK(0 == strcasecmp(
-		reinterpret_cast<char const *>(out),
-		reinterpret_cast<char const *>(in)
+	BOOST_CHECK_EQUAL(0, strcasecmp(
+		reinterpret_cast<char const *>(in),
+		reinterpret_cast<char const *>(out)
 	));
 }
 

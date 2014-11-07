@@ -16,6 +16,12 @@ namespace test {
 
 struct s0 {};
 
+template <typename T>
+float to_float32(T v)
+{
+	return float(v);
+}
+
 }
 
 BOOST_AUTO_TEST_CASE(float_0)
@@ -52,7 +58,9 @@ BOOST_AUTO_TEST_CASE(float_1)
 	}};
 	std::array<float, 15> a2;
 
-	std::transform(a0.begin(), a0.end(), a2.begin(), float8::to_float32);
+	std::transform(
+		a0.begin(), a0.end(), a2.begin(), test::to_float32<float8>
+	);
 	BOOST_CHECK(a1 == a2);
 }
 
@@ -74,7 +82,9 @@ BOOST_AUTO_TEST_CASE(float_2)
 	}};
 	std::array<float, 15> a2;
 
-	std::transform(a0.begin(), a0.end(), a2.begin(), float16::to_float32);
+	std::transform(
+		a0.begin(), a0.end(), a2.begin(), test::to_float32<float16>
+	);
 	BOOST_CHECK(a1 == a2);
 }
 

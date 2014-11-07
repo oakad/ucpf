@@ -41,7 +41,7 @@ template <
 	void init_at(Alloc const &a, size_type pos)
 	{
 		typedef allocator::array_helper<value_type, Alloc> a_h;
-		a_h::make_n(a, unsafe_ptr_at(pos), 1);
+		a_h::make(a, unsafe_ptr_at(pos));
 	}
 
 	template <typename Alloc>
@@ -108,8 +108,8 @@ template <
 		typedef allocator::array_helper<value_type, Alloc> a_h;
 
 		if (!items.test(pos)) {
-			a_h::make_n(
-				a, unsafe_ptr_at(pos), 1,
+			a_h::make(
+				a, unsafe_ptr_at(pos),
 				std::forward<Args>(args)...
 			);
 			items.set(pos);
@@ -129,7 +129,7 @@ template <
 		if (items.test(pos)) {
 			a_h::destroy(a, unsafe_ptr_at(pos), 1, false);
 			if (is_pod_container)
-				a_h::make_n(a, unsafe_ptr_at(pos), 1);
+				a_h::make(a, unsafe_ptr_at(pos));
 
 			items.reset(pos);
 			return true;

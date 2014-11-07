@@ -291,18 +291,19 @@ template <
 			w &= (base_bit >> (b_off - 1)) - 1;
 
 		size_type rv(0);
+		printf("xx w %zx\n", w);
 
 		while (w_off <= ew_off) {
-			rv += popcount(w);
+			rv += yesod::popcount(w);
 			++w_off;
 			w = std::get<0>(s)[w_off];
 			if (!CountOne)
 				w = ~w;
 		}
-
+		printf("xx1 %zd, %zx\n", rv, w);
 		if (eb_off) {
 			w &= ~((base_bit >> (eb_off - 1)) - 1);
-			rv += popcount(w);
+			rv += yesod::popcount(w);
 		}
 
 		if ((end_pos > x_end_pos) && (std::get<2>(s) == CountOne))
@@ -335,20 +336,20 @@ template <
 		w &= ~((base_bit >> b_off) - 1);
 
 		if (w) {
-			n = w_off * word_bits + (word_bits - ffs(w) - 1);
+			n = (w_off + 1) * word_bits - yesod::ffs(w);
 			return n >= min_n ? n : npos;
 		} else if (!w_off)
 			return npos;
 
 		do {
 			--w_off;
-			n = w_off * word_bits + (word_bits - 1);
+			n = (w_off + 1) * word_bits;
 			w = std::get<0>(s)[w_off];
 			if (!FindOne)
 				w = ~w;
 
 			if (w) {
-				n -= ffs(w);
+				n -= yesod::ffs(w);
 				return n >= min_n ? n : npos;
 			}
 		} while (w_off);
@@ -380,7 +381,7 @@ template <
 
 
 		if (w) {
-			n = w_off * word_bits + (word_bits - fls(w) - 1);
+			n = w_off * word_bits + (word_bits - yesod::fls(w) - 1);
 			if ((
 				(n < std::get<1>(s))
 				|| (std::get<2>(s) == FindOne)
@@ -408,7 +409,7 @@ template <
 			if (!w)
 				continue;
 
-			n += (word_bits - fls(w) - 1);
+			n += word_bits - yesod::fls(w) - 1;
 
 			if (n >= max_n)
 				return npos;
@@ -454,8 +455,8 @@ private:
 
 		if (!w)
 			return 0;
-		auto p1(fls(w));
-		auto p2(ffs(w));
+		auto p1(yesod::fls(w));
+		auto p2(yesod::ffs(w));
 		return p1 - p2;
 	}
 
