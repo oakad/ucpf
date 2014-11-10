@@ -9,6 +9,8 @@
 #if !defined(UCPF_MINA_FIXED_STRING_20141103T1940)
 #define UCPF_MINA_FIXED_STRING_20141103T1940
 
+#include <ostream>
+#include <cstring>
 #include <yesod/allocator/array_helper.hpp>
 
 namespace ucpf { namespace mina {
@@ -20,6 +22,8 @@ struct fixed_string {
 	typedef value_type const *const_iterator;
 	typedef value_type &reference;
 	typedef value_type const &const_reference;
+	typedef value_type *pointer;
+	typedef value_type const *const_pointer;
 
 	static fixed_string make()
 	{
@@ -29,25 +33,40 @@ struct fixed_string {
 		return s;
 	}
 
+	template <typename Alloc, typename Sequence>
+	static fixed_string make(
+		Alloc const &a, Sequence const &other
+	)
+	{
+		return make(a, std::begin(other), std::end(other));
+	}
+
+	template <typename Alloc>
+	static fixed_string make(Alloc const &a, char const *other)
+	{
+		return make(a, other, other + std::strlen(other));
+	}
+
 	template <typename Alloc, typename Iterator>
 	static fixed_string make(
 		Alloc const &a, Iterator first, Iterator last
 	)
 	{
-		allocator::array_helper<value_type, Alloc> a_h;
+		typedef yesod::allocator::array_helper<value_type, Alloc> a_h;
 		auto sz(std::distance(first, last));
+		fixed_string s;
 
-		if (sz > small_string_size) {
-			l_str.count = sz << size_shift;
-			l_str.val_ptr = a_h::alloc(a, first, last);
+		if (sz > static_cast<decltype(sz)>(small_string_size)) {
+			s.l_str.val_ptr = a_h::alloc_r(a, first, last);
+			s.l_str.count = sz << size_shift;
 		} else {
-			s_str.count = static_cast<value_type>(sz);
-			s_str.count <<= size_shift;
-			s_str.count |= flag_bit;
-			a_h::make(a, s_str.val, first, last);
+			a_h::make_r(a, s.s_str.val, first, last);
+			s.s_str.count = static_cast<value_type>(sz);
+			s.s_str.count <<= size_shift;
+			s.s_str.count |= flag_bit;
 		}
 
-		return rv;
+		return s;
 	}
 
 	template <typename Alloc>
@@ -55,25 +74,53 @@ struct fixed_string {
 		Alloc const &a, size_type n, value_type c
 	)
 	{
-		allocator::array_helper<value_type, Alloc> a_h;
+		typedef yesod::allocator::array_helper<value_type, Alloc> a_h;
+		fixed_string s;
 
 		if (n > small_string_size) {
-			l_str.count = n << size_shift;
-			l_str.val_ptr = a_h::alloc_n(a, n, c);
+			s.l_str.val_ptr = a_h::alloc_n(a, n, c);
+			s.l_str.count = n << size_shift;
 		} else {
-			s_str.count = static_cast<value_type>(n);
-			s_str.count <<= size_shift;
-			s_str.count |= flag_bit;
-			a_h::make_n(a, s_str.val, n, c);
+			a_h::make_n(a, s.s_str.val, n, c);
+			s.s_str.count = static_cast<value_type>(n);
+			s.s_str.count <<= size_shift;
+			s.s_str.count |= flag_bit;
 		}
 
-		return rv;
+		return s;
+	}
+
+	template <typename Alloc, typename... Args>
+	static fixed_string make(Alloc const &a, Args&&... args)
+	{
+		typedef yesod::allocator::array_helper<value_type, Alloc> a_h;
+		fixed_string s;
+		std::array<size_type, sizeof...(args)> arg_sz{args.size()...};
+
+		size_type c_sz(0);
+		for (auto sz: arg_sz)
+			c_sz += sz;
+
+		pointer p(nullptr);
+		if (c_sz > small_string_size) {
+			p = a_h::alloc_n(a, c_sz);
+			s.l_str.val_ptr = p;
+			s.l_str.count = c_sz << size_shift;
+		} else {
+			p = s.s_str.val;
+			s.s_str.count = static_cast<value_type>(c_sz);
+			s.s_str.count <<= size_shift;
+			s.s_str.count |= flag_bit;
+		}
+
+		emplace_next(a, p, std::forward<Args>(args)...); 
+		return s;
 	}
 
 	template <typename Alloc>
 	static void destroy(Alloc const &a, fixed_string &s)
 	{
-		allocator::array_helper<value_type, Alloc> a_h;
+		typedef yesod::allocator::array_helper<value_type, Alloc> a_h;
 
 		a_h::destroy(
 			a, s.str_ptr(), s.size(), !(s.s_str.count & flag_bit)
@@ -99,11 +146,33 @@ struct fixed_string {
 		return *(str_ptr() + pos);
 	}
 
+	iterator begin()
+	{
+		return str_ptr();
+	}
+
+	const_iterator begin() const
+	{
+		return str_ptr();
+	}
+
+	iterator end()
+	{
+		return str_ptr() + size();
+	}
+
+	const_iterator end() const
+	{
+		return str_ptr() + size();
+	}
+
 	friend std::ostream &operator<<(
 		std::ostream &os, fixed_string const &s
 	)
 	{
-		return os.write(str_ptr(), size());
+		return os.write(
+			reinterpret_cast<char const *>(s.str_ptr()), s.size()
+		);
 	}
 
 private:
@@ -121,12 +190,31 @@ private:
 #error Unsupported endianess
 #endif
 
-	value_type *str_ptr()
+	template <typename Alloc, typename S0>
+	static void emplace_next(Alloc const &a, pointer p, S0 &&s0)
+	{
+		typedef yesod::allocator::array_helper<value_type, Alloc> a_h;
+
+		a_h::make_r(a, p, s0.begin(), s0.end());
+	}
+
+	template <typename Alloc, typename S0, typename... Sn>
+	static void emplace_next(
+		Alloc const &a, pointer p, S0 &&s0, Sn&&... sn
+	)
+	{
+		typedef yesod::allocator::array_helper<value_type, Alloc> a_h;
+
+		a_h::make_r(a, p, s0.begin(), s0.end());
+		emplace_next(a, p + s0.size(), std::forward<Sn>(sn)...);
+	}
+
+	pointer str_ptr()
 	{
 		return (s_str.count & flag_bit) ? s_str.val : l_str.val_ptr;
 	}
 
-	value_type const *str_ptr() const
+	const_pointer str_ptr() const
 	{
 		return (s_str.count & flag_bit) ? s_str.val : l_str.val_ptr;
 	}

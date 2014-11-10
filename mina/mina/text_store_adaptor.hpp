@@ -11,6 +11,7 @@
 
 #include <yesod/string_map.hpp>
 #include <mina/fixed_string.hpp>
+#include <yesod/iterator/seq_range.hpp>
 
 namespace ucpf { namespace mina {
 
