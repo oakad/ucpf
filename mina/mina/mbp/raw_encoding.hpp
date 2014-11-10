@@ -345,7 +345,7 @@ bool advance_skip(ForwardIterator &first, ForwardIterator last)
 template <typename ForwardIterator>
 bool advance_n(ForwardIterator &first, ForwardIterator last, size_t count)
 {
-	if (std::distance(first, last) >= count) {
+	if (std::distance(first, last) >= std::ptrdiff_t(count)) {
 		std::advance(first, count);
 		return true;
 	} else

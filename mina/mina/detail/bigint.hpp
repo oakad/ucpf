@@ -77,6 +77,14 @@ struct bigint {
 	constexpr static auto limb_digits_10 = traits_type::limb_digits_10;
 
 	template <typename Vector>
+	static auto bit_size(Vector const &v)
+	{
+		return v.size() * limb_bits - (
+			v.back() ? yesod::clz(v.back()) : limb_bits
+		);
+	}
+
+	template <typename Vector>
 	static auto to_ascii_hex(Vector const &v)
 	{
 		typedef std::vector<
@@ -165,8 +173,8 @@ struct bigint {
 	template <typename Vector>
 	static int compare(Vector const &l, Vector const &r)
 	{
-		auto l_sz(l.size() * limb_bits - yesod::clz(l.back()));
-		auto r_sz(r.size() * limb_bits - yesod::clz(r.back()));
+		auto l_sz(bit_size(l));
+		auto r_sz(bit_size(r));
 
 		if (l_sz > r_sz)
 			return 1;
@@ -190,9 +198,9 @@ struct bigint {
 	{
 		constexpr static limb_type max_value = ~limb_type(0);
 
-		auto l0_sz(l0.size() * limb_bits - yesod::clz(l0.back()));
-		auto l1_sz(l1.size() * limb_bits - yesod::clz(l1.back()));
-		auto r_sz(r.size() * limb_bits - yesod::clz(r.back()));
+		auto l0_sz(bit_size(l0));
+		auto l1_sz(bit_size(l1));
+		auto r_sz(bit_size(r));
 
 		auto l_sz(std::max(l0_sz, l1_sz));
 
@@ -381,10 +389,8 @@ struct bigint {
 	template <typename Vector>
 	static limb_type divide_near(Vector &num, Vector const &denom)
 	{
-		auto denom_sz(
-			denom.size() * limb_bits - yesod::clz(denom.back())
-		);
-		auto num_sz(num.size() * limb_bits - yesod::clz(num.back()));
+		auto num_sz(bit_size(num));
+		auto denom_sz(bit_size(denom));
 
 		if (num_sz < denom_sz)
 			return 0;
@@ -395,8 +401,7 @@ struct bigint {
 			auto order(num_sz - denom_sz);
 			subtract_scaled(num, denom, order - 1);
 			rv += limb_type(1) << (order - 1);
-			num_sz = num.size() * limb_bits
-				 - yesod::clz(num.back());
+			num_sz = bit_size(num);
 		}
 
 		while (compare(num, denom) >= 0) {

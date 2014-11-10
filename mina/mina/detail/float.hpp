@@ -126,7 +126,7 @@ struct float_t {
 		auto x_m(m);
 		auto x_exp(exp);
 		auto lz(yesod::clz(x_m));
-		if (lz < exponent_bits) {
+		if (lz < int(exponent_bits)) {
 			x_m >>= exponent_bits - lz;
 			x_exp += exponent_bits - lz;
 		}

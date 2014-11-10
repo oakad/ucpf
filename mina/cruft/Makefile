@@ -14,7 +14,7 @@ t5 : t5.cpp
 	$(CC) $(CXXFLAGS) -m32 -O3 -o $@ $^
 
 t4 : t4.cpp
-	$(CC) $(CXXFLAGS) -m32 -O3 -lquadmath -o $@ $^
+	$(CC) $(CXXFLAGS) -O3 -lquadmath -o $@ $^
 
 t3 : t3.cpp
 	$(CC) $(CXXFLAGS) -o $@ $^

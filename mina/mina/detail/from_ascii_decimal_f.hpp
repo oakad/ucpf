@@ -218,7 +218,7 @@ struct from_ascii_decimal_f {
 				dst += *iter++;
 				dd -= limb_digits_10;
 				rv += limb_digits_10;
-				if (dd < limb_digits_10)
+				if (dd < int(limb_digits_10))
 					break;
 			}
 
@@ -235,7 +235,7 @@ struct from_ascii_decimal_f {
 			}
 		}
 
-		if (dd < limb_digits_10) {
+		if (dd < int(limb_digits_10)) {
 			r_val = small_power_10[limb_digits_10 - dd] >> 1;
 			auto rem(*iter % small_power_10[limb_digits_10 - dd]);
 			dst += *iter / small_power_10[limb_digits_10 - dd];

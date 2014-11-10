@@ -171,7 +171,7 @@ struct unpack_helper<T, kind_flags::float_t> {
 		))
 			return false;
 
-		v = Tw(unpack_integral<false, Tr>(x_first, first));
+		v = Tw(unpack_integral<false, Tr>(x_first, first)).get();
 		return true;
 	}
 };
@@ -307,9 +307,9 @@ struct unpack_helper<T, kind_flags::float_t | kind_flags::sequence> {
 		for (; list_size; --list_size) {
 			auto x_last(x_first);
 			std::advance(x_last, x_step);
-			v.push_back(
-				Tw(unpack_integral<false, Tr>(x_first, x_last))
-			);
+			v.push_back(Tw(
+				unpack_integral<false, Tr>(x_first, x_last)
+			).get());
 			x_first = x_last;
 		}
 
