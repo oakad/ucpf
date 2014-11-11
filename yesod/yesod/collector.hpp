@@ -87,20 +87,24 @@ template <
 		auto &node_pos(std::get<1>(tup_head_pos_alloc_emb));
 		auto &a(std::get<2>(tup_head_pos_alloc_emb));
 
-		if (node_pos == BlockCount) {
+		if (node_pos == (BlockCount - 1)) {
 			auto p(node::make(a));
 			p->prev = head;
 			p->next = head->next;
 			head->next = p;
 			p->next->prev = p;
+			allocator_helper_type::make(
+				a, &head->items[node_pos],
+				std::forward<Args>(args)...
+			);
+
 			head = p;
 			node_pos = 0;
-		}
-
-		allocator_helper_type::make(
-			a, &head->items[node_pos], std::forward<Args>(args)...
-		);
-		++node_pos;
+		} else
+			allocator_helper_type::make(
+				a, &head->items[node_pos++],
+				std::forward<Args>(args)...
+			);
 	}
 
 	reference back()

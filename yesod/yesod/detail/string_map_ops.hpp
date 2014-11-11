@@ -15,6 +15,8 @@
 #if !defined(UCPF_YESOD_DETAIL_STRING_MAP_OPS_JAN_06_2014_1145)
 #define UCPF_YESOD_DETAIL_STRING_MAP_OPS_JAN_06_2014_1145
 
+#include <yesod/collector.hpp>
+
 namespace ucpf { namespace yesod {
 
 template <typename CharType, typename ValueType, typename Policy>
@@ -264,7 +266,11 @@ auto string_map<CharType, ValueType, Policy>::erase_prefix(
 	}
 
 	auto p_pos(p.first->parent());
-	std::vector<iter_loc, allocator_type> tree_loc({iter_loc(p)}, a);
+	collector<
+		iter_loc, 10, true, allocator_type
+	> tree_loc(items.get_allocator());
+	tree_loc.emplace_back(first);
+
 	size_type rv(0);
 
 	while (true) {
@@ -399,9 +405,10 @@ bool string_map<CharType, ValueType, Policy>::for_each_impl(
 	PairType first, key_string_type &prefix, Pred &&pred
 ) const
 {
-	std::vector<iter_loc, allocator_type> tree_loc(
-		{iter_loc(first)}, items.get_allocator()
-	);
+	collector<
+		iter_loc, 10, true, allocator_type
+	> tree_loc(items.get_allocator());
+	tree_loc.emplace_back(first);
 	auto const breadth(index_offset(std::get<0>(tup_breadth_map)));
 	c_decoding_adapter<decltype(tup_breadth_map)> map(tup_breadth_map);
 
@@ -723,6 +730,7 @@ void string_map<CharType, ValueType, Policy>::relocate(
 	std::vector<
 		uintptr_t, allocator_type
 	> index_set(items.get_allocator());
+	index_set.reserve(32);
 	iter_loc tree_loc(loc);
 	auto const breadth(index_offset(std::get<0>(tup_breadth_map)));
 

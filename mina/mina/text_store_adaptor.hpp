@@ -10,13 +10,16 @@
 #define UCPF_MINA_TEXT_STORE_ADAPTOR_20140523T1800
 
 #include <yesod/string_map.hpp>
+#include <yesod/iterator/range.hpp>
+
 #include <mina/fixed_string.hpp>
-#include <yesod/iterator/seq_range.hpp>
 
 namespace ucpf { namespace mina {
 
 template <typename StoreType, typename Alloc>
 struct text_store_adaptor {
+	constexpr static char key_separator = '.';
+
 	text_store_adaptor(StoreType &store_, Alloc const &a)
 	: items(a), levels(a), store(store_), sync_not_present(false)
 	{}
@@ -92,18 +95,79 @@ struct text_store_adaptor {
 
 	void push_level(char const *name)
 	{
-		if (name)
-			levels.push_back(level{std::string(name), 0});
-		else {
-			std::string s_name("value");
-			s_name += std::to_string(levels.back().child_name_cnt);
-			++levels.back().child_name_cnt;
-			levels.push_back(level{s_name, 0});
+		namespace yi = ucpf::yesod::iterator;
+
+		auto a(items.get_allocator());
+		fixed_string next_name;
+		bool inc_child_cnt(false);
+		auto &c_level(levels.back());
+		bool first_level_name(c_level.name.empty());
+		auto next_loc(c_level.loc);
+
+		auto deleter = [&a](fixed_string *s) -> void {
+			fixed_string::destroy(a, *s);
 		}
+
+		std::unique_ptr<
+			fixed_string, decltype(deleter)
+		> s_ptr(nullptr, deleter);
+
+		if (!first_level_name && next_loc)
+			next_loc = items.locate_rel(
+				next_loc, yi::make_range(&key_separator, 1)
+			);
+
+		if (name) {
+			auto x_name(yi::str(name));
+
+			if (first_level_name)
+				next_name = fixed_string::make(a, x_name);
+			else
+				next_name = fixed_string::make(
+					a, levels.back().name,
+					yi::make_range(&key_separator, 1),
+					x_name
+				);
+
+			if (next_loc)
+				next_loc = items.locate_rel(next_loc, x_name);
+
+			s_ptr.reset(&next_name);
+		} else {
+			auto x_name(to_fixed_string(
+				yi::str("value_"),
+				levels.back().child_name_cnt, a
+			));
+
+			s_ptr.reset(&x_name);
+			if (levels.back().name.empty())
+				next_name = fixed_string::make(
+					a, x_name
+				);
+			else
+				next_name = fixed_string::make(
+					a, levels.back().name,
+					yi::make_range(&key_separator, 1),
+					x_name
+				);
+
+			if (next_loc)
+				next_loc = items.locate_rel(next_loc, x_name);
+
+			s_ptr.reset(&next_name);
+			inc_child_cnt = true;
+		}
+
+		levels.push_back(level{next_loc, next_name, 0});
+		if (inc_child_cnt)
+			++c_level.child_name_cnt;
+		s_ptr.release();
 	}
 
 	void pop_level()
 	{
+		auto a(items.get_allocator());
+		fixed_string::destroy(a, levels.back().name);
 		levels.pop_back();
 	}
 
@@ -118,6 +182,8 @@ struct text_store_adaptor {
 	}
 
 private:
+	fixed_string make_next_name(char const *suffix);
+
 	struct string_map_policy : yesod::string_map_default_policy {
 		typedef Alloc allocator_type;
 	};
@@ -130,7 +196,7 @@ private:
 		uint32_t child_name_cnt;
 	};
 
-	std::vector<level, Alloc> levels;
+	std::collector<level, 8, true, Alloc> levels;
 	StoreType &store;
 	bool sync_not_present;
 };

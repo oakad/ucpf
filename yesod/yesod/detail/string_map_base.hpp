@@ -41,6 +41,10 @@ struct string_map {
 	typedef typename allocator_traits::const_pointer const_pointer;
 
 	struct locus {
+		locus()
+		: offset(~uintptr_t(0)), leaf_pos(0)
+		{}
+
 		explicit operator bool() const
 		{
 			return offset < ~uintptr_t(0);
@@ -48,10 +52,6 @@ struct string_map {
 
 	private:
 		friend struct string_map;
-
-		locus()
-		: offset(~uintptr_t(0)), leaf_pos(0)
-		{}
 
 		locus(uintptr_t offset_, uintptr_t leaf_pos_)
 		: offset(offset_), leaf_pos(leaf_pos_)

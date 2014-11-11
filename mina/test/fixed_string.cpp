@@ -19,10 +19,10 @@ BOOST_AUTO_TEST_CASE(fixed_string_0)
 {
 	std::allocator<void> a;
 
-	auto s0(fixed_string::make(a, "aa"));
+	auto s0(fixed_string::make_s(a, "aa"));
 	auto s1(std::string("bb"));
 	auto s2(std::vector<char>{'c', 'c'});
-	auto s3(fixed_string::make(a, "dd"));
+	auto s3(fixed_string::make_s(a, "dd"));
 	auto s4(fixed_string::make(a, s0, s1, s2, s3));
 
 	std::string rs0("aabbccdd");
@@ -39,10 +39,10 @@ BOOST_AUTO_TEST_CASE(fixed_string_1)
 {
 	std::allocator<void> a;
 
-	auto s0(fixed_string::make(a, "aaaa aaaa aaaa aaaa "));
-	auto s1(fixed_string::make(a, "bbbb bbbb bbbb bbbb "));
+	auto s0(fixed_string::make_s(a, "aaaa aaaa aaaa aaaa "));
+	auto s1(fixed_string::make_s(a, "bbbb bbbb bbbb bbbb "));
 	auto s2(std::string("cccc cccc cccc cccc "));
-	auto s3(fixed_string::make(a, "dddd dddd dddd dddd "));
+	auto s3(fixed_string::make_s(a, "dddd dddd dddd dddd "));
 	auto s4(fixed_string::make(a, s0, s1, s2, s3));
 	std::string rs0(
 		"aaaa aaaa aaaa aaaa "

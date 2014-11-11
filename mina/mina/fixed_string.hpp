@@ -33,22 +33,17 @@ struct fixed_string {
 		return s;
 	}
 
-	template <typename Alloc, typename Sequence>
-	static fixed_string make(
-		Alloc const &a, Sequence const &other
-	)
-	{
-		return make(a, std::begin(other), std::end(other));
-	}
-
 	template <typename Alloc>
-	static fixed_string make(Alloc const &a, char const *other)
+	static fixed_string make_s(Alloc const &a, char const *other)
 	{
-		return make(a, other, other + std::strlen(other));
+		return make_r(
+			a, other,
+			other + std::char_traits<char>::length(other)
+		);
 	}
 
 	template <typename Alloc, typename Iterator>
-	static fixed_string make(
+	static fixed_string make_r(
 		Alloc const &a, Iterator first, Iterator last
 	)
 	{
@@ -134,6 +129,11 @@ struct fixed_string {
 			return (s_str.count >> size_shift) & short_size_mask;
 		else
 			return (l_str.count >> size_shift) & long_size_mask;
+	}
+
+	bool empty() const
+	{
+		return s_str.count == flag_bit;
 	}
 
 	reference operator[](size_type pos)
