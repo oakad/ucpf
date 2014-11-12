@@ -107,6 +107,16 @@ template <
 			);
 	}
 
+	void push_back(value_type const &v)
+	{
+		emplace_back(v);
+	}
+
+	void push_back(value_type &&v)
+	{
+		emplace_back(std::forward<value_type>(v));
+	}
+
 	reference back()
 	{
 		auto head(std::get<0>(tup_head_pos_alloc_emb));

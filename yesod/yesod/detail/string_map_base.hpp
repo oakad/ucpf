@@ -45,6 +45,11 @@ struct string_map {
 		: offset(~uintptr_t(0)), leaf_pos(0)
 		{}
 
+		static locus root()
+		{
+			return locus{0, 0};
+		}
+
 		explicit operator bool() const
 		{
 			return offset < ~uintptr_t(0);
@@ -152,7 +157,7 @@ struct string_map {
 	template <typename Iterator>
 	locus locate(Iterator first_, Iterator last_) const
 	{
-		return locate_rel(locus{0, 0}, first_, last_);
+		return locate_rel(locus::root(), first_, last_);
 	}
 
 	template <typename StringType>
@@ -628,12 +633,11 @@ private:
 		auto a(items.get_allocator());
 		auto last(items.ptr_at(0)->parent());
 		items.for_each_pos(
-			0, last, [
-				a, func{std::forward<ValueClearFunc>(func)}
-			](size_type pos, pair_type &p) -> bool {
+			0, last,
+			[a, func](size_type pos, pair_type &p) -> bool {
 				if (p.is_leaf()) {
 					auto leaf_ptr(p.leaf_ptr());
-					func(a, leaf_ptr->value);
+					func(leaf_ptr->value);
 					value_pair::destroy(a, leaf_ptr);
 				}
 

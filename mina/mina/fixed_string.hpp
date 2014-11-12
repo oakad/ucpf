@@ -16,7 +16,7 @@
 namespace ucpf { namespace mina {
 
 struct fixed_string {
-	typedef uint8_t value_type;
+	typedef char value_type;
 	typedef std::size_t size_type;
 	typedef value_type *iterator;
 	typedef value_type const *const_iterator;
@@ -38,7 +38,7 @@ struct fixed_string {
 	{
 		return make_r(
 			a, other,
-			other + std::char_traits<char>::length(other)
+			other + std::char_traits<value_type>::length(other)
 		);
 	}
 

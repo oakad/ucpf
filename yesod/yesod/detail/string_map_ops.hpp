@@ -77,7 +77,9 @@ auto string_map<CharType, ValueType, Policy>::locate_rel(
 		auto l_ptr(p->leaf_ptr());
 		auto d(std::distance(first, last));
 
-		if (l_ptr->common_length(first, last, base.leaf_pos) == d)
+		if (decltype(d)(
+			l_ptr->common_length(first, last, base.leaf_pos)
+		) == d)
 			return locus(base.offset, base.leaf_pos + d);
 		else
 			return locus();
@@ -92,9 +94,9 @@ auto string_map<CharType, ValueType, Policy>::locate_rel(
 		return locus(q.second, 0);
 
 	if (q.first->is_leaf()) {
-		auto l_ptr(q->leaf_ptr());
-		if (l_ptr->common_length(first, last, 0) == d)
-			return locus{q.second, d};
+		auto l_ptr(q.first->leaf_ptr());
+		if (decltype(d)(l_ptr->common_length(first, last, 0)) == d)
+			return locus{q.second, uintptr_t(d)};
 	}
 
 	return locus();
