@@ -10,9 +10,7 @@
 
 #include <array>
 #include <cstdint>
-#include <yesod/float.hpp>
 #include <yesod/bitops.hpp>
-#include <yesod/compose_bool.hpp>
 
 namespace ucpf { namespace mina { namespace mbp {
 
@@ -304,31 +302,6 @@ struct scalar_type {
 	typedef typename yesod::mpl::at<
 		type_map, yesod::mpl::int_<NumericTypeRank>
 	>::type type;
-};
-
-struct kind_flags {
-	enum {
-		integral = 1,
-		float_t  = 2,
-		sequence = 4
-	};
-};
-
-template <typename T, int Kind, bool IsSequence = false>
-struct classify {
-	constexpr static int value = ucpf::yesod::compose_bool<
-		int, Kind, yesod::is_floating_point<T>::value,
-		std::is_integral<T>::value
-	>::value;
-	typedef typename std::integral_constant<int, value> type;
-};
-
-template <typename T, int Kind>
-struct classify<T, Kind, true> {
-	constexpr static int value = classify<
-		typename T::value_type, Kind | kind_flags::sequence, false
-	>::value;
-	typedef typename std::integral_constant<int, value> type;
 };
 
 template <typename ForwardIterator>

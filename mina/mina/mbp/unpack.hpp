@@ -9,6 +9,7 @@
 #if !defined(UCPF_MINA_MBP_UNPACK_20140608T2300)
 #define UCPF_MINA_MBP_UNPACK_20140608T2300
 
+#include <mina/detail/classify.hpp>
 #include <mina/mbp/raw_encoding.hpp>
 
 namespace ucpf { namespace mina { namespace mbp { namespace detail {
@@ -28,7 +29,7 @@ struct unpack_helper<T, 0> {
 };
 
 template <typename T>
-struct unpack_helper<T, kind_flags::sequence> {
+struct unpack_helper<T, mina::detail::kind_flags::sequence> {
 	template <typename ForwardIterator>
 	static bool apply(ForwardIterator &first, ForwardIterator last, T &&v)
 	{
@@ -43,9 +44,8 @@ struct unpack_helper<T, kind_flags::sequence> {
 			return false;
 		++first;
 
-		constexpr auto next_kind(detail::classify<
-			typename T::value_type, 0,
-			yesod::is_sequence<typename T::value_type>::value
+		constexpr auto next_kind(mina::detail::classify<
+			typename T::value_type
 		>::value);
 
 		while (first != last) {
@@ -72,7 +72,7 @@ struct unpack_helper<T, kind_flags::sequence> {
 };
 
 template <typename T>
-struct unpack_helper<T, kind_flags::integral> {
+struct unpack_helper<T, mina::detail::kind_flags::integral> {
 	template <typename ForwardIterator>
 	static bool apply(ForwardIterator &first, ForwardIterator last, T &&v)
 	{
@@ -129,7 +129,7 @@ struct unpack_helper<T, kind_flags::integral> {
 };
 
 template <typename T>
-struct unpack_helper<T, kind_flags::float_t> {
+struct unpack_helper<T, mina::detail::kind_flags::float_t> {
 	template <typename ForwardIterator>
 	static bool apply(ForwardIterator &first, ForwardIterator last, T &&v)
 	{
@@ -177,7 +177,7 @@ struct unpack_helper<T, kind_flags::float_t> {
 };
 
 template <typename T>
-struct unpack_helper<T, kind_flags::integral | kind_flags::sequence> {
+struct unpack_helper<T, mina::detail::kind_flags::integral_sequence> {
 	template <typename ForwardIterator>
 	static bool apply(ForwardIterator &first, ForwardIterator last, T &&v)
 	{
@@ -252,7 +252,7 @@ struct unpack_helper<T, kind_flags::integral | kind_flags::sequence> {
 };
 
 template <typename T>
-struct unpack_helper<T, kind_flags::float_t | kind_flags::sequence> {
+struct unpack_helper<T, mina::detail::kind_flags::float_sequence> {
 	template <typename ForwardIterator>
 	static bool apply(ForwardIterator &first, ForwardIterator last, T &&v)
 	{
@@ -322,9 +322,9 @@ bool unpack(ForwardIterator &first, ForwardIterator last, T &&v)
 {
 	typedef typename std::remove_reference<T>::type Tr;
 
-	return unpack_helper<T, detail::classify<
-		Tr, 0, yesod::is_sequence<Tr>::value
-	>::value>::apply(first, last, std::forward<T>(v));
+	return unpack_helper<
+		T, mina::detail::classify<Tr>::value
+	>::apply(first, last, std::forward<T>(v));
 }
 
 template <typename ForwardIterator, typename T, typename ...Tn>

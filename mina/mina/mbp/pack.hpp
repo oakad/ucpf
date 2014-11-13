@@ -8,9 +8,9 @@
 #if !defined(UCPF_MINA_MBP_PACK_20131107T1700)
 #define UCPF_MINA_MBP_PACK_20131107T1700
 
-#include <cstdint>
 #include <array>
-#include <yesod/is_sequence.hpp>
+#include <cstdint>
+#include <mina/detail/classify.hpp>
 #include <mina/mbp/raw_encoding.hpp>
 
 namespace ucpf { namespace mina { namespace mbp { namespace detail {
@@ -57,7 +57,7 @@ struct pack_helper<T, 0> {
 };
 
 template <typename T>
-struct pack_helper<T, kind_flags::sequence> {
+struct pack_helper<T, mina::detail::kind_flags::sequence> {
 	template <typename OutputIterator>
 	static void apply(OutputIterator &&sink, T &&v)
 	{
@@ -66,9 +66,8 @@ struct pack_helper<T, kind_flags::sequence> {
 
 		*sink++ = detail::tuple_start_code;
 
-		constexpr auto next_kind(detail::classify<
-			typename T::value_type, 0,
-			yesod::is_sequence<typename T::value_type>::value
+		constexpr auto next_kind(mina::detail::classify<
+			typename T::value_type
 		>::value);
 
 		for (auto &xv: v)
@@ -81,7 +80,7 @@ struct pack_helper<T, kind_flags::sequence> {
 };
 
 template <typename T>
-struct pack_helper<T, kind_flags::integral> {
+struct pack_helper<T, mina::detail::kind_flags::integral> {
 	template <typename OutputIterator>
 	static void apply(OutputIterator &&sink, T &&v)
 	{
@@ -115,7 +114,7 @@ struct pack_helper<T, kind_flags::integral> {
 };
 
 template <typename T>
-struct pack_helper<T, kind_flags::float_t> {
+struct pack_helper<T, mina::detail::kind_flags::float_t> {
 	template <typename OutputIterator>
 	static void apply(OutputIterator &&sink, T &&v)
 	{
@@ -139,7 +138,7 @@ struct pack_helper<T, kind_flags::float_t> {
 };
 
 template <typename T>
-struct pack_helper<T, kind_flags::integral | kind_flags::sequence> {
+struct pack_helper<T, mina::detail::kind_flags::integral_sequence> {
 	template <typename OutputIterator>
 	static void apply(OutputIterator &&sink, T &&v)
 	{
@@ -182,9 +181,7 @@ struct pack_helper<T, kind_flags::integral | kind_flags::sequence> {
 };
 
 template <typename T>
-struct pack_helper<
-	T, kind_flags::float_t | kind_flags::sequence
-> {
+struct pack_helper<T, mina::detail::kind_flags::float_sequence> {
 	template <typename OutputIterator>
 	static void apply(OutputIterator &&sink, T &&v)
 	{
@@ -230,9 +227,7 @@ void pack(OutputIterator &&sink, T &&v)
 {
 	typedef typename std::remove_reference<T>::type Tr;
 	pack_helper<
-		T, detail::classify<
-			Tr, 0, yesod::is_sequence<Tr>::value
-		>::value
+		T, mina::detail::classify<Tr>::value
 	>::apply(std::forward<OutputIterator>(sink), std::forward<T>(v));
 }
 

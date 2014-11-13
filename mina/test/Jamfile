@@ -3,9 +3,7 @@ import testing ;
 alias test_case : : : : <include>..
                         <include>../../yesod
                         <library>../..//unit_test_framework
-                        <library>../..//test_exec_monitor
-                        <toolset>clang:<cxxflags>-ferror-limit=40
-                        <toolset>gcc:<cxxflags>-fmax-errors=4 ;
+                        <library>../..//test_exec_monitor ;
 
 run fixed_string.cpp : : test_case ;
 run from_ascii_decimal2.cpp : : test_case : <linkflags>-lquadmath ;
