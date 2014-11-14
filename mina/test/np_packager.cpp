@@ -6,8 +6,9 @@
  * shed by the Free Software Foundation.
  */
 
+#define BOOST_TEST_DYN_LINK
 #define BOOST_TEST_MODULE mina
-#include <boost/test/included/unit_test.hpp>
+#include <boost/test/unit_test.hpp>
 
 #include <mina/np_packager.hpp>
 #include <mina/text_store_adaptor.hpp>
@@ -246,7 +247,7 @@ BOOST_AUTO_TEST_CASE(np_packager_0)
 	test::c_type_0 test_0;
 	pack.restore(MINA_NPP(test_0));
 
-	BOOST_CHECK_EQUAL(test_0.fielde, 0x86ba);
+	BOOST_CHECK_EQUAL(test_0.fielde, 34490);
 }
 
 }}

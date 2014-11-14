@@ -3,11 +3,12 @@ import testing ;
 alias test_case : : : : <include>..
                         <include>../../yesod
                         <library>../..//unit_test_framework
-                        <library>../..//test_exec_monitor ;
+                        <library>../..//test_exec_monitor
+                        <linkflags>-lquadmath ;
 
-run fixed_string.cpp : : test_case ;
-run from_ascii_decimal2.cpp : : test_case : <linkflags>-lquadmath ;
+run fixed_string.cpp : : test_case : <cflags>-H ;
+run from_ascii_decimal2.cpp : : test_case ;
 run mbp.cpp : : test_case ;
 run np_packager.cpp : : test_case : <linkflags>-lgdbm <variant>debug ;
-run to_ascii_decimal1.cpp : : test_case : <linkflags>-lquadmath ;
-run to_ascii_decimal2.cpp : : test_case : <linkflags>-lquadmath ;
+run to_ascii_decimal1.cpp : : test_case ;
+run to_ascii_decimal2.cpp : : test_case ;

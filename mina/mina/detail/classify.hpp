@@ -17,8 +17,9 @@ namespace ucpf { namespace mina { namespace detail {
 
 struct kind_flags {
 	enum {
+		any = 0,
 		integral = 1,
-		float_t  = 2,
+		float_t = 2,
 		sequence = 4,
 		integral_sequence = sequence | integral,
 		float_sequence = sequence | float_t

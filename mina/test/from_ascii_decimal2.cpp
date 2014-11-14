@@ -6,8 +6,9 @@
  * shed by the Free Software Foundation.
  */
 
+#define BOOST_TEST_DYN_LINK
 #define BOOST_TEST_MODULE mina
-#include <boost/test/included/unit_test.hpp>
+#include <boost/test/unit_test.hpp>
 
 #include <string>
 #include <mina/from_ascii_decimal.hpp>

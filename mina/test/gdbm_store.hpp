@@ -10,6 +10,8 @@
 #define UCPF_MINA_TEST_GDBM_STORE_20141111T2100
 
 #include <gdbm.h>
+#include <fcntl.h>
+
 #include <string>
 
 namespace ucpf { namespace mina { namespace test {
@@ -33,6 +35,7 @@ struct gdbm_store {
 			db_path.c_str(), sysconf(_SC_PAGESIZE),
 			GDBM_READER, O_RDONLY, nullptr
 		);
+		printf("reader %p\n", db);
 
 	}
 	void writer_open()

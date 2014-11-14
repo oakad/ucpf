@@ -45,11 +45,6 @@ struct string_map {
 		: offset(~uintptr_t(0)), leaf_pos(0)
 		{}
 
-		static locus root()
-		{
-			return locus{0, 0};
-		}
-
 		explicit operator bool() const
 		{
 			return offset < ~uintptr_t(0);
@@ -95,6 +90,11 @@ struct string_map {
 		init();
 	}
 
+	locus search_root() const
+	{
+		return locus(0, 0);
+	}
+
 	template <typename StringType>
 	pointer find(StringType &&s)
 	{
@@ -110,13 +110,13 @@ struct string_map {
 	template <typename Iterator>
 	const_pointer find(Iterator first, Iterator last) const
 	{
-		return find_rel(locus(0, 0), first, last);
+		return find_rel(search_root(), first, last);
 	}
 
 	template <typename Iterator>
 	pointer find(Iterator first, Iterator last)
 	{
-		return find_rel(locus(0, 0), first, last);
+		return find_rel(search_root(), first, last);
 	}
 
 	template <typename StringType>

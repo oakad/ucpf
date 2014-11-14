@@ -12,7 +12,9 @@
 #include <yesod/string_map.hpp>
 #include <yesod/iterator/range.hpp>
 
-#include <mina/fixed_string_utils.hpp>
+#include <mina/string_utils.hpp>
+
+#include <iostream>
 
 namespace ucpf { namespace mina {
 
@@ -61,8 +63,7 @@ struct text_store_adaptor {
 				}
 			);
 			levels.emplace_back(
-				decltype(level::loc)::root(),
-				fixed_string::make()
+				items.search_root(), fixed_string::make()
 			);
 
 		} else
@@ -114,7 +115,7 @@ struct text_store_adaptor {
 			}
 		);
 
-		levels.emplace_back();
+		levels.emplace_back(items.search_root(), fixed_string::make());
 
 		return true;
 	}
@@ -147,8 +148,8 @@ struct text_store_adaptor {
 
 		if (c_level.loc)
 			next_loc = items.locate_rel(
-				c_level.loc,
-				next_name.second, next_name.first.end()
+				c_level.loc, next_name.second,
+				next_name.first.end()
 			);
 
 
@@ -172,7 +173,7 @@ struct text_store_adaptor {
 		auto next_name(
 			name ? make_next_name(name) : make_next_auto_name()
 		);
-
+		std::cout << "--1- " << next_name.first << '\n';
 		auto deleter = [&a](fixed_string *s) -> void {
 			fixed_string::destroy(a, *s);
 		};

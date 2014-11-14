@@ -40,25 +40,33 @@ int main(int argc, char **argv)
 		s_in.clear();
 	}
 
-	//x_map.dump(std::cout);
+	auto r0(x_map.search_root());
+	auto r1(x_map.locate_rel(r0, std::string("/contrib")));
+	auto r2(x_map.locate_rel(r1, std::string("/btree_gin")));
+	auto r3(x_map.locate_rel(r2, std::string("/expected")));
+	auto v(x_map.find_rel(r3, std::string("/money.out")));
+	printf("val %p, %d\n", v, v ? *v : -1);
+/*
+	x_map.dump(std::cout);
 
-	//x_map.erase_prefix(std::string("/src/tutorial"));
+	x_map.erase_prefix(std::string("/src/tutorial"));
 
-	//printf("=========\n");
+	printf("=========\n");
 	x_map.for_each([](char *first, char *last, int val) -> bool {
 		std::string key(first, last);
 		printf("%s\n", key.c_str());
 		return false;
 	});
-/*
+
 	r_idx.for_each_prefix(
 		std::string("abcdefghijklmnopqrstu"),
 		[](std::string const &key, int val) -> void {
 			printf("key_p1 |%s| val %d\n", key.c_str(), val);
 		}
 	);
-*/
+
 	x_map.dump(std::cerr);
+*/
 #endif
 
 	return 0;

@@ -33,11 +33,8 @@ struct fixed_string_wrapper {
 	fixed_string str;
 };
 
-template <typename T, int Kind>
-struct string_cvt_helper;
-
-template <typename T>
-struct string_cvt_helper<T, kind_flags::integral> {
+template <typename T, bool IsFloat>
+struct string_cvt_scalar {
 	template <typename StringType, typename Alloc>
 	static bool generate(StringType &s, T const &v, Alloc const &a)
 	{
@@ -45,15 +42,15 @@ struct string_cvt_helper<T, kind_flags::integral> {
 			typename StringType::value_type, 32, true, Alloc
 		> sink(a);
 
-		to_ascii_decimal_converter<T, false>::apply(
+		to_ascii_decimal_converter<T, IsFloat>::apply(
 			std::back_inserter(sink), v, a
 		);
 
 		if (sink.empty()) {
-			s = StringType();
+			s = std::move(StringType());
 			return false;
 		} else {
-			s = StringType(sink.begin(), sink.end(), a);
+			s = std::move(StringType(sink.begin(), sink.end(), a));
 			return true;
 		}
 	}
@@ -62,11 +59,142 @@ struct string_cvt_helper<T, kind_flags::integral> {
 	static bool parse(T &v, StringType const &s, Alloc const &a)
 	{
 		auto first(s.begin());
-		return from_ascii_decimal_converter<T, false>::apply(
+		return from_ascii_decimal_converter<T, IsFloat>::apply(
 			first, s.end(), v, a
 		);
 	}
 };
+
+template <typename T, bool IsFloat, bool IsString = false>
+struct string_cvt_sequence {
+	template <typename StringType, typename Alloc>
+	static bool generate(StringType &s, T const &v, Alloc const &a)
+	{
+		typedef typename T::value_type Tv;
+
+		yesod::collector<
+			typename StringType::value_type, 32, true, Alloc
+		> sink(a);
+
+		auto first(v.begin());
+		auto last(v.end());
+
+		if (first == last)
+			return false;
+
+		to_ascii_decimal_converter<Tv, IsFloat>::apply(
+			std::back_inserter(sink), *first, a
+		);
+
+		for (++first; first != last; ++first) {
+			sink.push_back(',');
+			sink.push_back(' ');
+			to_ascii_decimal_converter<Tv, IsFloat>::apply(
+				std::back_inserter(sink), *first, a
+			);
+		}
+
+		s = std::move(StringType(sink.begin(), sink.end(), a));
+		return true;
+	}
+
+	template <typename StringType, typename Alloc>
+	static bool parse(T &v, StringType const &s, Alloc const &a)
+	{
+		typedef typename T::value_type Tv;
+
+		auto skip_space = [](auto &first, auto last) -> bool {
+			for (; first != last; ++first) {
+				if (!std::isspace(*first))
+					return true;
+			}
+			return false;
+		};
+
+		auto first(s.begin());
+		auto last(s.end());
+		Tv vv;
+
+		if (!skip_space(first, last))
+			return false;
+
+		if (!from_ascii_decimal_converter<Tv, IsFloat>::apply(
+			first, last, vv, a
+		))
+			return false;
+
+		v.emplace_back(vv);
+		if (!skip_space(first, last))
+			return true;
+
+		while (true) {
+			if (*first != ',')
+				break;
+
+			++first;
+			if (!skip_space(first, last))
+				break;
+
+			if (!from_ascii_decimal_converter<Tv, IsFloat>::apply(
+				first, last, vv, a
+			))
+				break;
+
+			v.emplace_back(vv);
+			if (!skip_space(first, last))
+				break;
+		}
+		return true;
+	}
+};
+
+template <typename T>
+struct string_cvt_sequence<T, false, true> {
+	template <typename StringType, typename Alloc>
+	static bool generate(StringType &s, T const &v, Alloc const &a)
+	{
+		s = std::move(StringType(v.begin(), v.end(), a));
+		return true;
+	}
+
+	template <typename StringType, typename Alloc>
+	static bool parse(T &v, StringType const &s, Alloc const &a)
+	{
+		v = std::move(T(s.begin(), s.end(), a));
+		return true;
+	}
+};
+
+template <typename T, int Kind>
+struct string_cvt_helper;
+
+template <typename T>
+struct string_cvt_helper<
+	T, kind_flags::integral
+> : string_cvt_scalar<T, false> {};
+
+template <typename T>
+struct string_cvt_helper<
+	T, kind_flags::float_t
+> : string_cvt_scalar<T, true> {};
+
+template <typename CharType, typename TraitsType, typename Alloc>
+struct string_cvt_helper<
+	std::basic_string<CharType, TraitsType, Alloc>,
+	kind_flags::integral_sequence
+> : string_cvt_sequence<
+	std::basic_string<CharType, TraitsType, Alloc>, false, true
+> {};
+
+template <typename T>
+struct string_cvt_helper<
+	T, kind_flags::integral_sequence
+> : string_cvt_sequence<T, false, false> {};
+
+template <typename T>
+struct string_cvt_helper<
+	T, kind_flags::float_sequence
+> : string_cvt_sequence<T, true, false> {};
 
 }
 
