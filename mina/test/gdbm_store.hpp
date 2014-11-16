@@ -60,6 +60,7 @@ struct gdbm_store {
 		while (key.dptr) {
 			auto value(::gdbm_fetch(db, key));
 			++pair_cnt;
+			printf("--2- %p, %d\n", value.dptr, value.dsize);
 			if (sink(
 				key.dptr, key.dsize, value.dptr, value.dsize
 			)) {

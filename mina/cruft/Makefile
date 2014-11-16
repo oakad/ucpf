@@ -2,7 +2,7 @@ CC=g++
 CXXFLAGS+=-std=gnu++14 -I.. -I../../yesod
 
 t6 : t6.cpp
-	$(CC) $(CXXFLAGS) -g -o $@ $^
+	$(CC) $(CXXFLAGS) -O5 -fsanitize=undefined -o $@ $^
 
 test_fwr : test_fwr.cpp
 	$(CC) $(CXXFLAGS) -g -O3 -lquadmath -o $@ $^

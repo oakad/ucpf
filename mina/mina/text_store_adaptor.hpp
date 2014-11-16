@@ -105,6 +105,7 @@ struct text_store_adaptor {
 				auto key, auto key_size,
 				auto value, auto value_size
 			) -> bool {
+				printf("--3- key %p, val %p\n", key, value);
 				items.emplace(
 					key, key + key_size,
 					fixed_string::make_r(
@@ -116,7 +117,7 @@ struct text_store_adaptor {
 		);
 
 		levels.emplace_back(items.search_root(), fixed_string::make());
-
+		printf("--4- in restore\n");
 		return true;
 	}
 
@@ -130,6 +131,7 @@ struct text_store_adaptor {
 	{
 		namespace yi = ucpf::yesod::iterator;
 
+		printf("-5b- push %s\n", name);
 		auto a(items.get_allocator());
 		auto next_name(
 			name ? make_next_name(name) : make_next_auto_name()
@@ -148,15 +150,17 @@ struct text_store_adaptor {
 
 		if (c_level.loc)
 			next_loc = items.locate_rel(
-				c_level.loc, next_name.second,
+				c_level.loc,
+				next_name.first.begin() + next_name.second,
 				next_name.first.end()
 			);
 
-
+		printf("-5l- loc2\n");
 		levels.emplace_back(next_loc, next_name.first);
 		if (!name)
 			++c_level.child_name_cnt;
 		s_ptr.release();
+		printf("-5e- push %s\n", name);
 	}
 
 	void pop_level()
@@ -184,9 +188,11 @@ struct text_store_adaptor {
 
 		auto last_loc(levels.back().loc);
 		auto val_ptr(last_loc ? items.find_rel(
-			last_loc, next_name.second, next_name.first.end()
+			last_loc, next_name.first.begin() + next_name.second,
+			next_name.first.end()
 		) : nullptr);
 
+		printf("-x1- %p, %d\n", val_ptr, bool(last_loc));
 		if (in_save) {
 			if (sync_not_present && val_ptr)
 				(*val_ptr)[0] = '0';
@@ -209,7 +215,7 @@ struct text_store_adaptor {
 
 private:
 	std::pair<
-		fixed_string, fixed_string::iterator
+		fixed_string, fixed_string::size_type
 	> make_next_name(char const *suffix)
 	{
 		namespace yi = ucpf::yesod::iterator;
@@ -221,21 +227,19 @@ private:
 				items.get_allocator(), suffix
 			);
 
-			return std::make_pair(next_name, next_name.begin());
+			return std::make_pair(next_name, 0);
 		} else {
 			next_name = fixed_string::make(
 				items.get_allocator(), prefix,
 				yi::str(key_separator), yi::str(suffix)
 			);
 
-			return std::make_pair(
-				next_name, next_name.begin() + prefix.size()
-			);
+			return std::make_pair(next_name, prefix.size());
 		}
 	}
 
 	std::pair<
-		fixed_string, fixed_string::iterator
+		fixed_string, fixed_string::size_type
 	> make_next_auto_name()
 	{
 		namespace yi = ucpf::yesod::iterator;
@@ -262,16 +266,14 @@ private:
 				suffix
 			);
 
-			return std::make_pair(next_name, next_name.begin());
+			return std::make_pair(next_name, 0);
 		} else {
 			next_name = fixed_string::make(
 				items.get_allocator(), prefix,
 				yi::str(key_separator), suffix
 			);
 
-			return std::make_pair(
-				next_name, next_name.begin() + prefix.size()
-			);
+			return std::make_pair(next_name, prefix.size());
 		}
 	}
 

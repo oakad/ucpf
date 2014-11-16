@@ -6,8 +6,9 @@
     file LICENSEarg<0>_0.txt or copy at http://www.boost.org/LICENSEarg<0>_0.txt)
 ==============================================================================*/
 
+#define BOOST_TEST_DYN_LINK
 #define BOOST_TEST_MODULE yesod_mpl
-#include <boost/test/included/unit_test.hpp>
+#include <boost/test/unit_test.hpp>
 
 #include <yesod/mpl/apply.hpp>
 #include <yesod/mpl/lambda.hpp>

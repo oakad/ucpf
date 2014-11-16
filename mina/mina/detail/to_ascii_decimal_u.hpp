@@ -117,7 +117,7 @@ struct to_ascii_decimal_u<uint32_t> {
 			acc = (acc * xv) >> (32 + shift_100);
 
 			rv[1] |= uint32_t(
-				ascii_decimal_digits[xv - acc * 100]
+				ascii_decimal_digits[xv - uint32_t(acc * 100)]
 			) << s;
 			xv = acc;
 		}

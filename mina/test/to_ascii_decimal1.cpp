@@ -130,7 +130,6 @@ BOOST_AUTO_TEST_CASE(to_ascii_decimal1_2)
 		"+614332, +111105854, +2147483647"
 	);
 	auto iter1(n1.begin());
-
 	while (true) {
 		to_ascii_decimal(sink, *iter1);
 		++iter1;
