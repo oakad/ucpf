@@ -29,16 +29,21 @@ struct gdbm_store {
 			::gdbm_close(db);
 	}
 
-	void reader_open()
+	void start_restore()
 	{
 		db = ::gdbm_open(
 			db_path.c_str(), sysconf(_SC_PAGESIZE),
 			GDBM_READER, O_RDONLY, nullptr
 		);
-		printf("reader %p\n", db);
-
 	}
-	void writer_open()
+
+	void end_restore()
+	{
+		::gdbm_close(db);
+		db = nullptr;
+	}
+
+	void start_save()
 	{
 		db = ::gdbm_open(
 			db_path.c_str(), sysconf(_SC_PAGESIZE),
@@ -46,21 +51,20 @@ struct gdbm_store {
 		);
 	}
 
-	void close()
+	void end_save()
 	{
 		::gdbm_close(db);
 		db = nullptr;
 	}
 
 	template <typename SinkFunc>
-	size_type load_all(SinkFunc &&sink)
+	size_type restore_all(SinkFunc &&sink)
 	{
 		size_type pair_cnt(0);
 		auto key(::gdbm_firstkey(db));
 		while (key.dptr) {
 			auto value(::gdbm_fetch(db, key));
 			++pair_cnt;
-			printf("--2- %p, %d\n", value.dptr, value.dsize);
 			if (sink(
 				key.dptr, key.dsize, value.dptr, value.dsize
 			)) {
@@ -87,7 +91,7 @@ struct gdbm_store {
 		::gdbm_delete(db, x_key);
 	}
 
-	void store(
+	void save(
 		char *key, int key_size,
 		char *value, int value_size
 	)

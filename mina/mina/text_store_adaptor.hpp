@@ -22,7 +22,7 @@ template <typename StoreType, typename Alloc>
 struct text_store_adaptor {
 	text_store_adaptor(StoreType &store_ref_, Alloc const &a)
 	: items(a), levels(a), store_ref(store_ref_), key_separator("."),
-	  sync_not_present(false), in_save(false)
+	  sync_not_present(false)
 	{}
 
 	~text_store_adaptor()
@@ -45,7 +45,7 @@ struct text_store_adaptor {
 
 	bool start_save()
 	{
-		store_ref.writer_open();
+		store_ref.start_save();
 		if (sync_not_present) {
 			auto a(items.get_allocator());
 			store_ref.load_all(
@@ -63,13 +63,13 @@ struct text_store_adaptor {
 				}
 			);
 			levels.emplace_back(
-				items.search_root(), fixed_string::make()
+				items.search_root(), fixed_string::make(),
+				false
 			);
 
 		} else
 			levels.emplace_back();
 
-		in_save = true;
 		return true;
 	}
 
@@ -91,21 +91,19 @@ struct text_store_adaptor {
 				}
 			);
 		}
-		store_ref.close();
+		store_ref.end_save();
 		clear();
-		in_save = false;
 	}
 
 	bool start_restore()
 	{
-		store_ref.reader_open();
+		store_ref.start_restore();
 		auto a(items.get_allocator());
-		store_ref.load_all(
+		store_ref.restore_all(
 			[this, &a](
 				auto key, auto key_size,
 				auto value, auto value_size
 			) -> bool {
-				printf("--3- key %p, val %p\n", key, value);
 				items.emplace(
 					key, key + key_size,
 					fixed_string::make_r(
@@ -116,22 +114,22 @@ struct text_store_adaptor {
 			}
 		);
 
-		levels.emplace_back(items.search_root(), fixed_string::make());
-		printf("--4- in restore\n");
+		levels.emplace_back(
+			items.search_root(), fixed_string::make(), false
+		);
 		return true;
 	}
 
 	void end_restore()
 	{
-		store_ref.close();
+		store_ref.end_restore();
 		clear();
 	}
 
-	void push_level(char const *name)
+	void descend(char const *name)
 	{
 		namespace yi = ucpf::yesod::iterator;
 
-		printf("-5b- push %s\n", name);
 		auto a(items.get_allocator());
 		auto next_name(
 			name ? make_next_name(name) : make_next_auto_name()
@@ -155,29 +153,74 @@ struct text_store_adaptor {
 				next_name.first.end()
 			);
 
-		printf("-5l- loc2\n");
-		levels.emplace_back(next_loc, next_name.first);
+		levels.emplace_back(next_loc, next_name.first, !name);
 		if (!name)
 			++c_level.child_name_cnt;
 		s_ptr.release();
-		printf("-5e- push %s\n", name);
 	}
 
-	void pop_level()
+	void ascend(bool release_auto_name)
 	{
 		auto a(items.get_allocator());
 		fixed_string::destroy(a, levels.back().name);
+		release_auto_name
+		= release_auto_name && levels.back().auto_name;
+
 		levels.pop_back();
+		if (release_auto_name)
+			--levels.back().child_name_cnt;
 	}
 
 	template <typename T>
-	bool sync_value(char const *name, T &&value)
+	void save_value(char const *name, T &&value)
 	{
 		auto a(items.get_allocator());
 		auto next_name(
 			name ? make_next_name(name) : make_next_auto_name()
 		);
-		std::cout << "--1- " << next_name.first << '\n';
+
+		auto deleter = [&a](fixed_string *s) -> void {
+			fixed_string::destroy(a, *s);
+		};
+
+		std::unique_ptr<
+			fixed_string, decltype(deleter)
+		> s_ptr(&next_name.first, deleter);
+
+		auto last_loc(levels.back().loc);
+
+		if (sync_not_present) {
+			auto val_ptr(last_loc ? items.find_rel(
+				last_loc,
+				next_name.first.begin() + next_name.second,
+				next_name.first.end()
+			) : nullptr);
+
+			if (val_ptr)
+				(*val_ptr)[0] = '0';
+		}
+
+		fixed_string str_val;
+		to_fixed_string(str_val, value, a);
+		decltype(s_ptr) v_ptr(&str_val, deleter);
+		store_ref.save(
+			next_name.first.begin(),
+			next_name.first.size(),
+			str_val.begin(), str_val.size()
+		);
+
+		if (!name)
+			++levels.back().child_name_cnt;
+	}
+
+	template <typename T>
+	void restore_value(char const *name, T &&value)
+	{
+		auto a(items.get_allocator());
+		auto next_name(
+			name ? make_next_name(name) : make_next_auto_name()
+		);
+
 		auto deleter = [&a](fixed_string *s) -> void {
 			fixed_string::destroy(a, *s);
 		};
@@ -192,25 +235,32 @@ struct text_store_adaptor {
 			next_name.first.end()
 		) : nullptr);
 
-		printf("-x1- %p, %d\n", val_ptr, bool(last_loc));
-		if (in_save) {
-			if (sync_not_present && val_ptr)
-				(*val_ptr)[0] = '0';
-
-			fixed_string str_val;
-			to_fixed_string(str_val, value, a);
-			decltype(s_ptr) v_ptr(&str_val, deleter);
-			store_ref.store(
-				next_name.first.begin(),
-				next_name.first.size(),
-				str_val.begin(), str_val.size()
-			);
-		} else if (val_ptr)
+		if (val_ptr)
 			from_fixed_string(value, *val_ptr, a);
-		else
+
+		if (!name)
+			++levels.back().child_name_cnt;
+	}
+
+	bool probe_name(char const *name)
+	{
+		auto next_name(
+			name ? make_next_name(name) : make_next_auto_name()
+		);
+
+		auto last_loc(levels.back().loc);
+		if (!last_loc)
 			return false;
 
-		return true;
+		auto next_loc(items.locate_rel(
+			last_loc, next_name.first.begin() + next_name.second,
+			next_name.first.end()
+		));
+
+		if (!name)
+			++levels.back().child_name_cnt;
+
+		return bool(next_loc);
 	}
 
 private:
@@ -270,7 +320,8 @@ private:
 		} else {
 			next_name = fixed_string::make(
 				items.get_allocator(), prefix,
-				yi::str(key_separator), suffix
+				yi::str(key_separator), yi::str("value_"),
+				suffix
 			);
 
 			return std::make_pair(next_name, prefix.size());
@@ -287,13 +338,16 @@ private:
 		typename decltype(items)::locus loc;
 		fixed_string name;
 		uint32_t child_name_cnt;
+		bool auto_name;
 
 		level()
-		: name(fixed_string::make()), child_name_cnt(0)
+		: name(fixed_string::make()), child_name_cnt(0),
+		  auto_name(false)
 		{}
 
-		level(decltype(loc) loc_, fixed_string name_)
-		: loc(loc_), name(name_), child_name_cnt(0)
+		level(decltype(loc) loc_, fixed_string name_, bool auto_name_)
+		: loc(loc_), name(name_), child_name_cnt(0),
+		  auto_name(auto_name_)
 		{}
 	};
 
@@ -301,7 +355,6 @@ private:
 	StoreType &store_ref;
 	char const *key_separator;
 	bool sync_not_present;
-	bool in_save;
 };
 
 }}

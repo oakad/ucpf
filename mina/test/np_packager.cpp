@@ -31,7 +31,7 @@ struct c_type_0 {
 	uint16_t fielde;
 	float tentheraling;
 	double confer;
-	int32_t bleakfulner;
+	std::vector<int32_t> bleakfulner;
 
 	struct {
 		template <typename Packager>
@@ -184,7 +184,7 @@ struct c_type_0 {
 					));
 				}
 
-				double troscoppletion;
+				std::list<double> troscoppletion;
 
 				struct {
 					template <typename Packager>
@@ -196,7 +196,7 @@ struct c_type_0 {
 					}
 
 					float croveletit;
-				} nerainglester;
+				} nerainglester[3];
 			} neiguadarnis;
 		} indialaskable;
 
@@ -247,7 +247,36 @@ BOOST_AUTO_TEST_CASE(np_packager_0)
 	test::c_type_0 test_0;
 	pack.restore(MINA_NPP(test_0));
 
+	std::vector<int32_t> ref0{515, 645, 463, 696};
+
 	BOOST_CHECK_EQUAL(test_0.fielde, 34490);
+	BOOST_CHECK_EQUAL_COLLECTIONS(
+		test_0.bleakfulner.begin(), test_0.bleakfulner.end(),
+		ref0.begin(), ref0.end()
+	);
+	BOOST_CHECK_EQUAL(
+		test_0.subdive.spargumen.fijiffus,
+		std::string("spargumen mumak")
+	);
+
+	auto &v1(test_0.subdive.indialaskable.neiguadarnis.troscoppletion);
+	std::list<double> ref1{2.3, -56.4, 123.789};
+	BOOST_CHECK_EQUAL_COLLECTIONS(
+		v1.begin(), v1.end(), ref1.begin(), ref1.end()
+	);
+
+	BOOST_CHECK_EQUAL(
+		test_0.subdive.indialaskable.neiguadarnis.nerainglester[0]
+		.croveletit, 1.01f
+	);
+	BOOST_CHECK_EQUAL(
+		test_0.subdive.indialaskable.neiguadarnis.nerainglester[1]
+		.croveletit, 1.11f
+	);
+	BOOST_CHECK_EQUAL(
+		test_0.subdive.indialaskable.neiguadarnis.nerainglester[2]
+		.croveletit, 1.21f
+	);
 }
 
 }}

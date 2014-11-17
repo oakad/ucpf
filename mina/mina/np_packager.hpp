@@ -11,9 +11,130 @@
 
 #include <utility>
 #include <initializer_list>
+#include <yesod/is_sequence.hpp>
 #include <mina/detail/is_composite.hpp>
 
 namespace ucpf { namespace mina {
+namespace detail {
+
+template <typename Td, typename T, typename Packager>
+struct pack_adaptor {
+	template <typename U, bool Composite = false>
+	struct dispatch {
+		static void save_value(
+			Packager &p, char const *name, U &&value
+		)
+		{
+			p.save_value(name, std::forward<U>(value));
+		}
+
+		static void restore_value(
+			Packager &p, char const *name, U &&value
+		)
+		{
+			p.restore_value(name, std::forward<U>(value));
+		}
+	};
+
+	template <typename U>
+	struct dispatch<U, true> {
+		static void save_value(
+			Packager &p, char const *name, U &&value
+		)
+		{
+			p.descend(name);
+			value.mina_pack(p, false);
+			p.ascend(false);
+		}
+
+		static void restore_value(
+			Packager &p, char const *name, U &&value
+		)
+		{
+			p.descend(name);
+			value.mina_pack(p, true);
+			p.ascend(false);
+		}
+	};
+
+	static void save_value(
+		Packager &p, char const *name, T &&value
+	)
+	{
+		dispatch<
+			T, detail::is_composite<Td, Packager>::value
+		>::save_value(p, name, std::forward<T>(value));
+	}
+
+	static void restore_value(
+		Packager &p, char const *name, T &&value
+	)
+	{
+		dispatch<
+			T, detail::is_composite<Td, Packager>::value
+		>::restore_value(p, name, std::forward<T>(value));
+	}
+};
+
+template <typename Tv, std::size_t N, typename T, typename Packager>
+struct pack_adaptor<Tv [N], T, Packager> {
+	static void save_value(
+		Packager &p, char const *name, T &&value
+	)
+	{
+		p.descend(name);
+		for (std::size_t c(0); c < N; ++c)
+			p.inspect_s(nullptr, value[c]);
+
+		p.ascend(false);
+	}
+
+	static void restore_value(
+		Packager &p, char const *name, T &&value
+	)
+	{
+		p.descend(name);
+		for (std::size_t c(0); c < N; ++c)
+			p.inspect_s(nullptr, value[c]);
+
+		p.ascend(false);
+	}
+};
+
+template <typename Tv, typename Alloc, typename T, typename Packager>
+struct pack_adaptor<std::vector<Tv, Alloc>, T, Packager> {
+	static void save_value(
+		Packager &p, char const *name, T &&value
+	)
+	{
+		p.descend(name);
+		for (auto &v: value)
+			p.inspect_s(nullptr, v);
+
+		p.ascend(false);
+	}
+
+	static void restore_value(
+		Packager &p, char const *name, T &&value
+	)
+	{
+		p.descend(name);
+		std::size_t c(0);
+		while (p.probe_name(nullptr))
+			++c;
+
+		p.ascend(true);
+		value.clear();
+		value.resize(c);
+		p.descend(name);
+		for (auto &v: value)
+			p.inspect_s(nullptr, v);
+
+		p.ascend(false);
+	}
+};
+
+}
 
 template <typename StoreType>
 struct np_packager {
@@ -69,37 +190,33 @@ struct np_packager {
 	}
 
 private:
-	template <typename T, bool Composite = true>
-	struct cls
-	{
-		static void apply(
-			np_packager &self, char const *name, T &&value
-		)
-		{
-			self.inspect_c(name, std::forward<T>(value));
-		}
-	};
+	template <typename Td, typename T, typename Packager>
+	friend struct detail::pack_adaptor;
 
-	template <typename T>
-	struct cls<T, false>
+	template <typename T0>
+	void inspect_s(char const *name, T0 &&a0)
 	{
-		static void apply(
-			np_packager &self, char const *name, T &&value
-		)
-		{
-			self.inspect_s(name, std::forward<T>(value));
-		}
-	};
+		if (unpack)
+			detail::pack_adaptor<
+				typename std::remove_reference<T0>::type,
+				T0, np_packager
+			>::restore_value(*this, name, std::forward<T0>(a0));
+		else
+			detail::pack_adaptor<
+				typename std::remove_reference<T0>::type,
+				T0, np_packager
+			>::save_value(*this, name, std::forward<T0>(a0));
+	}
 
 	void inspect(
-		typename name_pack_type::iterator iter,
+		typename name_pack_type::const_iterator iter,
 		name_pack_type &&names
 	)
 	{}
 
 	template <typename T0, typename ...Tn>
 	void inspect(
-		typename name_pack_type::iterator iter,
+		typename name_pack_type::const_iterator iter,
 		name_pack_type &&names, T0 &&a0, Tn &&...an
 	)
 	{
@@ -110,12 +227,7 @@ private:
 			++iter;
 		}
 
-		cls<
-			T0, detail::is_composite<
-				typename std::remove_reference<T0>::type,
-				np_packager
-			>::value
-		>::apply(*this, name, std::forward<T0>(a0));
+		inspect_s(name, std::forward<T0>(a0));
 
 		inspect(
 			iter, std::forward<name_pack_type>(names),
@@ -124,17 +236,30 @@ private:
 	}
 
 	template <typename T>
-	void inspect_s(char const *name, T &&value)
+	void save_value(char const *name, T &&value)
 	{
-		store.sync_value(name, std::forward<T>(value));
+		store.save_value(name, std::forward<T>(value));
 	}
 
 	template <typename T>
-	void inspect_c(char const *name, T &&value)
+	void restore_value(char const *name, T &&value)
 	{
-		store.push_level(name);
-		value.mina_pack(*this, unpack);
-		store.pop_level();
+		store.restore_value(name, std::forward<T>(value));
+	}
+
+	bool probe_name(char const *name)
+	{
+		return store.probe_name(name);
+	}
+
+	void descend(char const *name)
+	{
+		store.descend(name);
+	}
+
+	void ascend(bool release_auto_name)
+	{
+		store.ascend(release_auto_name);
 	}
 
 	bool unpack;

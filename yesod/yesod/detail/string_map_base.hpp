@@ -564,7 +564,7 @@ private:
 				++first;
 				++pos;
 			}
-			return pos;
+			return pos - offset;
 		}
 
 		template <typename IndexIterator>

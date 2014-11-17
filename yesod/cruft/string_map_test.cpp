@@ -34,6 +34,7 @@ int main(int argc, char **argv)
 	x_map.dump_internal(std::cout);
 #endif
 #if 1
+/*
 	while (std::getline(std::cin, s_in)) {
 		x_map.emplace(s_in, ord);
 		++ord;
@@ -45,6 +46,13 @@ int main(int argc, char **argv)
 	auto r2(x_map.locate_rel(r1, std::string("/btree_gin")));
 	auto r3(x_map.locate_rel(r2, std::string("/expected")));
 	auto v(x_map.find_rel(r3, std::string("/money.out")));
+	printf("val %p, %d\n", v, v ? *v : -1);
+*/
+	decltype(x_map) y_map;
+	y_map.emplace(std::string("test_0.fielde"), 999);
+	auto p0(y_map.search_root());
+	auto p1(y_map.locate_rel(p0, std::string("test_0")));
+	auto v(y_map.find_rel(p1, std::string(".fielde")));
 	printf("val %p, %d\n", v, v ? *v : -1);
 /*
 	x_map.dump(std::cout);
