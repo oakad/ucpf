@@ -304,6 +304,110 @@ auto string_map<CharType, ValueType, Policy>::erase_prefix(
 }
 
 template <typename CharType, typename ValueType, typename Policy>
+template <typename Iterator>
+auto string_map<CharType, ValueType, Policy>::count_terminations(
+	locus base, Iterator first, Iterator last
+) const -> size_type
+{
+	if (first == last)
+		return count_leaves(base);
+
+	auto p(items.ptr_at(base.offset));
+	if (p->is_leaf())
+		return 1;
+
+	auto iter(first);
+	auto const breadth(index_offset(std::get<0>(tup_breadth_map)));
+	
+	bool abort(false);
+	size_type t_cnt(0);
+
+	collector<
+		iter_loc, 10, true, allocator_type
+	> tree_loc(items.get_allocator());
+
+	tree_loc.emplace_back(c_pair_loc(p, base.offset));
+	while (true) {
+		auto pp(tree_loc.back().next_child(items, breadth));
+
+		if (!pp.first || abort) {
+			tree_loc.pop_back();
+			if (tree_loc.empty())
+				return t_cnt;
+
+			if (abort)
+				abort = false;
+			else if (iter != first)
+				--iter;
+
+			++tree_loc.back().index;
+			continue;
+		}
+
+		if (pp.first->is_leaf()) {
+			++t_cnt;
+			++tree_loc.back().index;
+			continue;
+		} else if (*iter == offset_char(tree_loc.back().index)) {
+			++iter;
+			if (iter == last) {
+				++t_cnt;
+				tree_loc.pop_back();
+				if (tree_loc.empty())
+					return t_cnt;
+
+				++tree_loc.back().index;
+				--iter;
+				continue;
+			}
+		} else if(iter != first)
+			abort = true;
+
+		tree_loc.emplace_back(pp);
+	}
+}
+
+template <typename CharType, typename ValueType, typename Policy>
+auto string_map<
+	CharType, ValueType, Policy
+>::count_leaves(locus base) const -> size_type
+{
+	auto const breadth(index_offset(std::get<0>(tup_breadth_map)));
+	auto p(items.ptr_at(base.offset));
+
+	if (p->is_leaf())
+		return 1;
+
+	size_type l_cnt(0);
+
+	collector<
+		iter_loc, 10, true, allocator_type
+	> tree_loc(items.get_allocator());
+
+	tree_loc.emplace_back(c_pair_loc(p, base.offset));
+	while (true) {
+		auto pp(tree_loc.back().next_child(items, breadth));
+
+		if (!pp.first) {
+			tree_loc.pop_back();
+			if (tree_loc.empty())
+				return l_cnt;
+
+			++tree_loc.back().index;
+			continue;
+		}
+
+		if (pp.first->is_leaf()) {
+			++l_cnt;
+			++tree_loc.back().index;
+			continue;
+		}
+
+		tree_loc.emplace_back(pp);
+	}
+}
+
+template <typename CharType, typename ValueType, typename Policy>
 std::ostream &string_map<CharType, ValueType, Policy>::dump(
 	std::ostream &os
 ) const

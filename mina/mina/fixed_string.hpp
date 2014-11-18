@@ -65,7 +65,7 @@ struct fixed_string {
 	}
 
 	template <typename Alloc>
-	static fixed_string make(
+	static fixed_string make_c(
 		Alloc const &a, size_type n, value_type c
 	)
 	{

@@ -48,14 +48,14 @@ struct text_store_adaptor {
 		store_ref.start_save();
 		if (sync_not_present) {
 			auto a(items.get_allocator());
-			store_ref.load_all(
+			store_ref.restore_all(
 				[this, &a](
 					auto key, auto key_size,
 					auto value, auto value_size
 				) -> bool {
 					items.emplace(
 						key, key + key_size,
-						fixed_string::make(
+						fixed_string::make_c(
 							a, 1, '1'
 						)
 					);
@@ -63,8 +63,7 @@ struct text_store_adaptor {
 				}
 			);
 			levels.emplace_back(
-				items.search_root(), fixed_string::make(),
-				false
+				items.search_root(), fixed_string::make()
 			);
 
 		} else
@@ -114,9 +113,7 @@ struct text_store_adaptor {
 			}
 		);
 
-		levels.emplace_back(
-			items.search_root(), fixed_string::make(), false
-		);
+		levels.emplace_back(items.search_root(), fixed_string::make());
 		return true;
 	}
 
@@ -153,22 +150,17 @@ struct text_store_adaptor {
 				next_name.first.end()
 			);
 
-		levels.emplace_back(next_loc, next_name.first, !name);
+		levels.emplace_back(next_loc, next_name.first);
 		if (!name)
 			++c_level.child_name_cnt;
 		s_ptr.release();
 	}
 
-	void ascend(bool release_auto_name)
+	void ascend()
 	{
 		auto a(items.get_allocator());
 		fixed_string::destroy(a, levels.back().name);
-		release_auto_name
-		= release_auto_name && levels.back().auto_name;
-
 		levels.pop_back();
-		if (release_auto_name)
-			--levels.back().child_name_cnt;
 	}
 
 	template <typename T>
@@ -242,25 +234,19 @@ struct text_store_adaptor {
 			++levels.back().child_name_cnt;
 	}
 
-	bool probe_name(char const *name)
+	std::size_t count_values() const
 	{
-		auto next_name(
-			name ? make_next_name(name) : make_next_auto_name()
-		);
+		namespace yi = ucpf::yesod::iterator;
 
-		auto last_loc(levels.back().loc);
-		if (!last_loc)
-			return false;
+		auto loc(levels.back().loc);
+		if (!loc)
+			return 0;
 
-		auto next_loc(items.locate_rel(
-			last_loc, next_name.first.begin() + next_name.second,
-			next_name.first.end()
-		));
+		loc = items.locate_rel(loc, yi::str(key_separator));
+		if (!loc)
+			return 0;
 
-		if (!name)
-			++levels.back().child_name_cnt;
-
-		return bool(next_loc);
+		return items.count_terminations(loc, yi::str(key_separator));
 	}
 
 private:
@@ -338,16 +324,13 @@ private:
 		typename decltype(items)::locus loc;
 		fixed_string name;
 		uint32_t child_name_cnt;
-		bool auto_name;
 
 		level()
-		: name(fixed_string::make()), child_name_cnt(0),
-		  auto_name(false)
+		: name(fixed_string::make()), child_name_cnt(0)
 		{}
 
-		level(decltype(loc) loc_, fixed_string name_, bool auto_name_)
-		: loc(loc_), name(name_), child_name_cnt(0),
-		  auto_name(auto_name_)
+		level(decltype(loc) loc_, fixed_string name_)
+		: loc(loc_), name(name_), child_name_cnt(0)
 		{}
 	};
 

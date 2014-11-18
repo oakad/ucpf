@@ -9,8 +9,10 @@
 #define BOOST_TEST_DYN_LINK
 #define BOOST_TEST_MODULE yesod
 #include <boost/test/unit_test.hpp>
+#include <boost/test/output_test_stream.hpp>
 
 #include <map>
+#include <fstream>
 #include <yesod/string_map.hpp>
 #include <yesod/coder/xxhash.hpp>
 #include <yesod/iterator/range.hpp>
@@ -173,6 +175,11 @@ BOOST_AUTO_TEST_CASE(string_map_2)
 	BOOST_CHECK_EQUAL_COLLECTIONS(
 		ref0.begin(), ref0.end(), ref1.begin(), ref1.end()
 	);
+
+	auto l0(m0.locate(std::string("/contrib")));
+	BOOST_CHECK_EQUAL(m0.count_leaves(l0), 871);
+	auto l1(m0.locate(std::string("/src/pl/plpython")));
+	BOOST_CHECK_EQUAL(m0.count_leaves(l1), 98);
 }
 
 }}

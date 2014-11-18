@@ -157,7 +157,7 @@ struct string_map {
 	template <typename Iterator>
 	locus locate(Iterator first_, Iterator last_) const
 	{
-		return locate_rel(locus::root(), first_, last_);
+		return locate_rel(search_root(), first_, last_);
 	}
 
 	template <typename StringType>
@@ -199,6 +199,19 @@ struct string_map {
 
 	template <typename Iterator>
 	size_type erase_prefix(Iterator first_, Iterator last_);
+
+	template <typename StringType>
+	size_type count_terminations(locus base, StringType &&s) const
+	{
+		return count_terminations(base, std::begin(s), std::end(s));
+	}
+
+	template <typename Iterator>
+	size_type count_terminations(
+		locus base, Iterator first, Iterator last
+	) const;
+
+	size_type count_leaves(locus base) const;
 
 	template <typename Pred>
 	bool for_each(Pred &&pred)

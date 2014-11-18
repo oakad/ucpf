@@ -34,13 +34,13 @@ int main(int argc, char **argv)
 	x_map.dump_internal(std::cout);
 #endif
 #if 1
-/*
+
 	while (std::getline(std::cin, s_in)) {
 		x_map.emplace(s_in, ord);
 		++ord;
 		s_in.clear();
 	}
-
+/*
 	auto r0(x_map.search_root());
 	auto r1(x_map.locate_rel(r0, std::string("/contrib")));
 	auto r2(x_map.locate_rel(r1, std::string("/btree_gin")));
@@ -48,15 +48,15 @@ int main(int argc, char **argv)
 	auto v(x_map.find_rel(r3, std::string("/money.out")));
 	printf("val %p, %d\n", v, v ? *v : -1);
 */
-	decltype(x_map) y_map;
-	y_map.emplace(std::string("test_0.fielde"), 999);
-	auto p0(y_map.search_root());
-	auto p1(y_map.locate_rel(p0, std::string("test_0")));
-	auto v(y_map.find_rel(p1, std::string(".fielde")));
-	printf("val %p, %d\n", v, v ? *v : -1);
-/*
-	x_map.dump(std::cout);
 
+	//x_map.dump(std::cout);
+	auto l0(x_map.locate(std::string("/aaa/")));
+	auto l1(x_map.locate(std::string("/bbb/value_1/")));
+	auto x0(x_map.count_terminations(l0, std::string("/.|+")));
+	auto x1(x_map.count_terminations(l1, std::string("/.|+")));
+	printf("xx %zd, %zd\n", x0, x1);
+
+/*
 	x_map.erase_prefix(std::string("/src/tutorial"));
 
 	printf("=========\n");

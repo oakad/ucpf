@@ -44,7 +44,7 @@ struct pack_adaptor {
 		{
 			p.descend(name);
 			value.mina_pack(p, false);
-			p.ascend(false);
+			p.ascend();
 		}
 
 		static void restore_value(
@@ -53,7 +53,7 @@ struct pack_adaptor {
 		{
 			p.descend(name);
 			value.mina_pack(p, true);
-			p.ascend(false);
+			p.ascend();
 		}
 	};
 
@@ -86,7 +86,7 @@ struct pack_adaptor<Tv [N], T, Packager> {
 		for (std::size_t c(0); c < N; ++c)
 			p.inspect_s(nullptr, value[c]);
 
-		p.ascend(false);
+		p.ascend();
 	}
 
 	static void restore_value(
@@ -97,7 +97,7 @@ struct pack_adaptor<Tv [N], T, Packager> {
 		for (std::size_t c(0); c < N; ++c)
 			p.inspect_s(nullptr, value[c]);
 
-		p.ascend(false);
+		p.ascend();
 	}
 };
 
@@ -111,7 +111,7 @@ struct pack_adaptor<std::vector<Tv, Alloc>, T, Packager> {
 		for (auto &v: value)
 			p.inspect_s(nullptr, v);
 
-		p.ascend(false);
+		p.ascend();
 	}
 
 	static void restore_value(
@@ -119,18 +119,13 @@ struct pack_adaptor<std::vector<Tv, Alloc>, T, Packager> {
 	)
 	{
 		p.descend(name);
-		std::size_t c(0);
-		while (p.probe_name(nullptr))
-			++c;
-
-		p.ascend(true);
+		auto c(p.count_values());
 		value.clear();
 		value.resize(c);
-		p.descend(name);
 		for (auto &v: value)
 			p.inspect_s(nullptr, v);
 
-		p.ascend(false);
+		p.ascend();
 	}
 };
 
@@ -247,9 +242,9 @@ private:
 		store.restore_value(name, std::forward<T>(value));
 	}
 
-	bool probe_name(char const *name)
+	std::size_t count_values()
 	{
-		return store.probe_name(name);
+		return store.count_values();
 	}
 
 	void descend(char const *name)
@@ -257,9 +252,9 @@ private:
 		store.descend(name);
 	}
 
-	void ascend(bool release_auto_name)
+	void ascend()
 	{
-		store.ascend(release_auto_name);
+		store.ascend();
 	}
 
 	bool unpack;
