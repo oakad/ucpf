@@ -6,7 +6,6 @@
  * shed by the Free Software Foundation.
  */
 
-#define BOOST_TEST_DYN_LINK
 #define BOOST_TEST_MODULE yesod_iterator
 #include <boost/test/unit_test.hpp>
 

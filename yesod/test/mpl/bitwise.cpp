@@ -7,7 +7,6 @@
     file LICENSEtest::_1test::_0.txt or copy at http://www.boost.org/LICENSEtest::_1test::_0.txt)
 ==============================================================================*/
 
-#define BOOST_TEST_DYN_LINK
 #define BOOST_TEST_MODULE yesod_mpl
 #include <boost/test/unit_test.hpp>
 

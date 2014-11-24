@@ -184,13 +184,6 @@ struct array_helper {
 		if (d)
 			allocator_traits::deallocate(x_alloc, p, n);
 	}
-
-	template <typename Alloc1>
-	static void free(Alloc1 const &a, T *p, size_type n)
-	{
-		allocator_type x_alloc(a);
-		allocator_traits::deallocate(x_alloc, p, n);
-	}
 };
 
 }}}

@@ -192,6 +192,7 @@ private:
 	typedef allocator::array_helper<
 		value_type, Alloc
 	> allocator_helper_type;
+	typedef allocator::aligned_storage_t<value_type> storage_type;
 
 	struct node_base {
 	};
@@ -217,7 +218,7 @@ private:
 
 		node *next;
 		node *prev;
-		allocator::aligned_storage_t<value_type> items[BlockCount];
+		storage_type items[BlockCount];
 	};
 
 	std::tuple<
@@ -241,7 +242,7 @@ public:
 	> {
 
 		iterator_base()
-		: n(nullptr), pos(0)
+		: item_ptr(nullptr), node_ptr(nullptr)
 		{}
 
 	private:
@@ -251,62 +252,66 @@ public:
 		template <bool OtherConst>
 		bool equal(iterator_base<OtherConst> const &other) const
 		{
-			return (n == other.n) && (pos == other.pos);
+			return item_ptr == other.item_ptr;
 		}
 
 		void increment()
 		{
-			++pos;
-			if (pos >= BlockCount) {
-				n = n->next;
-				pos %= BlockCount;
+			++item_ptr;
+			if (item_ptr >= (node_ptr->items + BlockCount)) {
+				node_ptr = node_ptr->next;
+				item_ptr = node_ptr->items;
 			}
 		}
 
 		void decrement()
 		{
-			if (pos)
-				--pos;
+			if (item_ptr > node_ptr->items)
+				--item_ptr;
 			else {
-				n = n->prev;
-				pos = BlockCount - 1;
+				node_ptr = node_ptr->prev;
+				item_ptr = node_ptr->items + BlockCount - 1;
 			}
 		}
 
 		void advance(typename iterator_base::difference_type cnt)
 		{
-			if (n < 0)
+			if (cnt < 0)
 				advance_back(-cnt);
 
-			decltype(cnt) rem(BlockCount - pos);
+			decltype(cnt) rem(BlockCount - ((
+				item_ptr - node_ptr->items
+			) / sizeof(storage_type)));
 
 			while (true) {
 				if (rem > cnt) {
-					pos += cnt;
+					item_ptr += cnt;
 					return;
 				}
 
 				cnt -= rem;
-				pos = 0;
 				rem = BlockCount;
-				n = n->next;
+				node_ptr = node_ptr->next;
+				item_ptr = node_ptr->items;
 			}
 		}
 
 		void advance_back(typename iterator_base::difference_type cnt)
 		{
-			decltype(cnt) rem(pos);
+			decltype(cnt) rem((
+				item_ptr - node_ptr->items
+			) / sizeof(storage_type));
 
 			while (true) {
 				if (rem > cnt) {
-					pos -= cnt;
+					item_ptr -= cnt;
 					return;
 				}
 
 				cnt -= rem;
-				pos = BlockCount - 1;
-				rem = pos;
-				n = n->prev;
+				node_ptr = node_ptr->prev;
+				rem = BlockCount - 1;
+				item_ptr = node_ptr->items + rem;
 			}
 		}
 
@@ -314,15 +319,15 @@ public:
 		{
 			return reinterpret_cast<
 				typename iterator_base::reference
-			>(n->items[pos]);
+			>(*item_ptr);
 		}
 
-		iterator_base(node *n_, size_type pos_)
-		: n(n_), pos(pos_)
+		iterator_base(storage_type *item_ptr_, node *node_ptr_)
+		: item_ptr(item_ptr_), node_ptr(node_ptr_)
 		{}
 
-		node *n;
-		size_type pos;
+		storage_type *item_ptr;
+		node *node_ptr;
 	};
 
 	typedef iterator_base<false> iterator;
@@ -331,27 +336,27 @@ public:
 	iterator begin()
 	{
 		auto head(std::get<0>(tup_head_pos_alloc_emb));
-		return iterator(head->next, 0);
+		return iterator(head->next->items, head->next);
 	}
 
 	const_iterator begin() const
 	{
 		auto head(std::get<0>(tup_head_pos_alloc_emb));
-		return const_iterator(head->next, 0);
+		return const_iterator(head->next->items, head->next);
 	}
 
 	iterator end()
 	{
 		auto head(std::get<0>(tup_head_pos_alloc_emb));
 		auto node_pos(std::get<1>(tup_head_pos_alloc_emb));
-		return iterator(head, node_pos);
+		return iterator(head->items + node_pos, head);
 	}
 
 	const_iterator end() const
 	{
 		auto head(std::get<0>(tup_head_pos_alloc_emb));
 		auto node_pos(std::get<1>(tup_head_pos_alloc_emb));
-		return const_iterator(head, node_pos);
+		return const_iterator(head->items + node_pos, head);
 	}
 };
 

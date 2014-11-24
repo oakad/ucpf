@@ -1,6 +1,7 @@
 import testing ;
 
-alias test_case : : : : <include>../..
+alias test_case : : : : <define>BOOST_TEST_DYN_LINK
+                        <include>../..
                         <library>../../..//unit_test_framework
                         <library>../../..//test_exec_monitor ;
 
