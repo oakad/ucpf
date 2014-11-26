@@ -35,8 +35,7 @@ template <
 	stream_collector(Producer &prod, Alloc const &a)
 	: head{{&head.base, 0}, this},
 	  tup_eos_pos_prod_alloc(false, 0, prod, a)
-	{
-	}
+	{}
 
 	~stream_collector()
 	{

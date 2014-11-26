@@ -2,4 +2,4 @@ using gcc ;
 
 lib unit_test_framework : : <name>boost_unit_test_framework ;
 lib test_exec_monitor : : <name>boost_test_exec_monitor ;
-lib random : : <name>boost_random ;
+lib context : : <name>boost_context ;
