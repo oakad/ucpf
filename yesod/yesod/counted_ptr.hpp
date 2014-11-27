@@ -5,38 +5,16 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_YESOD_COUNTED_PTR_OCT_31_2013_1800)
-#define UCPF_YESOD_COUNTED_PTR_OCT_31_2013_1800
+#if !defined(UCPF_YESOD_COUNTED_PTR_20131031T1800)
+#define UCPF_YESOD_COUNTED_PTR_20131031T1800
 
 #include <yesod/detail/counted_ptr.hpp>
 
 namespace ucpf { namespace yesod {
 
 template <typename ValueType>
-struct counted_ptr;
-
-template <typename ValueType, typename Alloc, typename... Args>
-counted_ptr<ValueType> allocate_counted(
-	Alloc const &a,
-	typename counted_ptr<ValueType>::extra_size_t extra_size,
-	Args&&... args
-);
-
-template <typename ValueType, typename Alloc, typename... Args>
-counted_ptr<ValueType> allocate_counted(Alloc const &a, Args&&... args);
-
-template <typename ValueType, typename... Args>
-counted_ptr<ValueType> make_counted(
-	typename counted_ptr<ValueType>::extra_size_t extra_size,
-	Args&&... args
-);
-
-template <typename ValueType, typename... Args>
-counted_ptr<ValueType> make_counted(Args&&... args);
-
-template <typename ValueType>
 struct counted_ptr {
-	typedef ValueType type;
+	typedef ValueType value_type;
 
 	struct extra_size_t {
 		explicit extra_size_t(size_t size_)
@@ -59,105 +37,84 @@ struct counted_ptr {
 	: ptr(0)
 	{}
 
-	counted_ptr(counted_ptr const &p)
-	: ptr(p.lock_ptr_val())
+	counted_ptr(counted_ptr const &other)
+	: ptr(other.ptr)
 	{
-		auto s_ptr(load());
-		if (s_ptr)
-			s_ptr->add_ref_copy();
-
-		p.release_ptr();
+		if (ptr)
+			ptr->add_ref_copy();
 	}
 
-	counted_ptr(counted_ptr &&p)
-	: ptr(p.lock_ptr_val())
+	counted_ptr(counted_ptr &&other)
+	: ptr(other.ptr)
 	{
-		p.ptr.exchange(0);
+		other.ptr = nullptr;
 	}
 
-	counted_ptr &operator=(counted_ptr const &p)
+	counted_ptr &operator=(counted_ptr const &other)
 	{
-		auto s_ptr(lock_ptr_val());
-		auto r_ptr(p.lock_ptr_val());
-		ptr.exchange(r_ptr | lock_mask);
+		if (ptr)
+			ptr->release();
 
-		if (s_ptr != r_ptr) {
-			if (r_ptr)
-				reinterpret_cast<
-					container_ptr_t
-				>(r_ptr)->add_ref_copy();
+		ptr = other.ptr;
 
-			p.release_ptr();
-			release_ptr();
+		if (ptr)
+			ptr->add_ref_copy();
 
-			if (s_ptr)
-				reinterpret_cast<
-					container_ptr_t
-				>(s_ptr)->release();
-		} else {
-			p.release_ptr();
-			release_ptr();
-		}
 		return *this;
 	}
 
-	counted_ptr &operator=(counted_ptr &&p)
+	counted_ptr &operator=(counted_ptr &&other)
 	{
-		auto s_ptr(lock_ptr_val());
-		auto r_ptr(p.lock_ptr_val());
-		ptr.exchange(r_ptr | lock_mask);
-		p.ptr.exchange(0);
+		if (ptr)
+			ptr->release();
 
-		if (s_ptr && (s_ptr != r_ptr)) {
-			release_ptr();
-			reinterpret_cast<container_ptr_t>(s_ptr)->release();
-		} else
-			release_ptr();
+		ptr = other.ptr;
+		other.ptr = nullptr;
 
 		return *this;
 	}
 
 	void reset()
 	{
-		lock_ptr_val();
-		auto s_ptr(ptr.exchange(0) & ~lock_mask);
-		if (s_ptr)
-			reinterpret_cast<container_ptr_t>(s_ptr)->release();
+		if (ptr) {
+			ptr->release();
+			ptr = nullptr;
+		}
 	}
 
-	ValueType *get() const
+	value_type *get() const
 	{
-		return load()->get_val_ptr();
+		return ptr->get_val_ptr();
 	}
 
-	typename std::add_lvalue_reference<ValueType>::type operator*() const
+	typename std::add_lvalue_reference<value_type>::type operator*() const
 	{
 		return *get();
 	}
 
-	ValueType *operator->() const
+	value_type *operator->() const
 	{
 		return get();
 	}
 
 	void *get_extra() const
 	{
-		return load()->get_extra();
+		return ptr->get_extra();
 	}
 
 	void *get_extra(size_t &sz) const
 	{
-		return load()->get_extra(sz);
+		return ptr->get_extra(sz);
 	}
 
 	void access_allocator(void *data) const
 	{
-		load()->access_allocator(data);
+		ptr->access_allocator(data);
 	}
 
 	explicit operator bool() const
 	{
-		return load() ? true : false;
+		return ptr ? true : false;
 	}
 
 	bool unique() const
@@ -167,35 +124,28 @@ struct counted_ptr {
 
 	unsigned long use_count() const
 	{
-		auto s_ptr(load());
-		if (s_ptr)
-			return s_ptr->get_use_count();
-		else
-			return 0;
+		return ptr ? ptr->get_use_count() : 0;
 	}
 
-	void swap(counted_ptr<ValueType> &p)
+	void swap(counted_ptr<ValueType> &other)
 	{
-		auto s_ptr(lock_ptr_val());
-		auto r_ptr(p.lock_ptr_val());
-		p.ptr.exchange(s_ptr);
-		ptr.exchange(r_ptr);
+		std::swap(ptr, other.ptr);
 	}
 
 	detail::counted_ptr_val<ValueType> *get_value_container() const
 	{
-		return load();
+		return ptr;
 	}
 
 	template <typename Alloc>
 	Alloc const &get_allocator() const
 	{
 		Alloc *a_ptr(nullptr);
-		auto s_ptr(load());
-		if (s_ptr) {
-			auto aw(s_ptr->get_alloc_wrapper());
+		if (ptr) {
+			auto aw(ptr->get_alloc_wrapper());
 			a_ptr = dynamic_cast<Alloc *>(aw);
 		}
+
 		if (!a_ptr)
 			throw std::bad_cast();
 
@@ -227,41 +177,16 @@ private:
 	template <typename ValueType1>
 	friend struct counted_ptr;
 
-	typedef detail::counted_ptr_val<ValueType> *container_ptr_t;
+	typedef detail::counted_ptr_val<ValueType> container_type;
 
-	explicit counted_ptr(container_ptr_t ptr_, bool inc)
-	: ptr(reinterpret_cast<uintptr_t>(ptr_))
+	explicit counted_ptr(container_type *ptr_, bool inc)
+	: ptr(ptr_)
 	{
-		if (inc && ptr) {
-			load()->add_ref_copy();
-		}
+		if (inc && ptr)
+			ptr->add_ref_copy();
 	}
 
-	container_ptr_t load() const
-	{
-		return reinterpret_cast<container_ptr_t>(
-			ptr.load() & ~lock_mask
-		);
-	}
-
-	uintptr_t lock_ptr_val() const
-	{
-		auto p(ptr.load() & ~lock_mask);
-
-		while (!ptr.compare_exchange_weak(p, p | lock_mask)) {
-			p = ptr.load() & ~lock_mask;
-			std::atomic_thread_fence(std::memory_order_release);
-		}
-		return p;
-	}
-
-	void release_ptr() const
-	{
-		ptr &= ~lock_mask;
-	}
-
-	static constexpr uintptr_t lock_mask = 1;
-	mutable std::atomic<uintptr_t> ptr;
+	container_type *ptr;
 };
 
 template <typename ValueType, typename Alloc, typename... Args>
@@ -294,11 +219,10 @@ counted_ptr<ValueType> make_counted(
 	Args&&... args
 )
 {
-	std::allocator<void> a;
-
 	return counted_ptr<ValueType>(
 		detail::counted_ptr_val<ValueType>::construct(
-			a, extra_size.size, std::forward<Args>(args)...
+			std::allocator<void>(), extra_size.size,
+			std::forward<Args>(args)...
 		), false
 	);
 }
@@ -306,11 +230,9 @@ counted_ptr<ValueType> make_counted(
 template <typename ValueType, typename... Args>
 counted_ptr<ValueType> make_counted(Args&&... args)
 {
-	std::allocator<void> a;
-
 	return counted_ptr<ValueType>(
 		detail::counted_ptr_val<ValueType>::construct(
-			a, 0, std::forward<Args>(args)...
+			std::allocator<void>(), 0, std::forward<Args>(args)...
 		), false
 	);
 }

@@ -6,8 +6,8 @@
  * shed by the Free Software Foundation.
  */
 
-#if !defined(UCPF_YESOD_DETAIL_COUNTED_PTR_OCT_31_2013_1800)
-#define UCPF_YESOD_DETAIL_COUNTED_PTR_OCT_31_2013_1800
+#if !defined(UCPF_YESOD_DETAIL_COUNTED_PTR_20131031T1800)
+#define UCPF_YESOD_DETAIL_COUNTED_PTR_20131031T1800
 
 #include <atomic>
 #include <memory>
@@ -267,12 +267,12 @@ struct alignas(void *) counted_ptr_val {
 		}
 	}
 
-	ValueType const *get_val_ptr() const
+	value_type const *get_val_ptr() const
 	{
 		return reinterpret_cast<ValueType const *>(&val);
 	}
 
-	ValueType *get_val_ptr()
+	value_type *get_val_ptr()
 	{
 		return reinterpret_cast<ValueType *>(&val);
 	}

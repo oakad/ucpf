@@ -20,6 +20,11 @@ extern "C" {
 namespace ucpf { namespace zivug { namespace socket {
 
 struct descriptor {
+	descriptor()
+	: fd(-1)
+	{}
+
+	
 	int fd;
 };
 
