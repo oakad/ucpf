@@ -1,4 +1,5 @@
 
+exe t2 : t2.cpp : <include>.. ;
 exe t1 : t1.cpp : <include>.. ;
 
-install . : t1 ;
+install . : t1 t2 ;

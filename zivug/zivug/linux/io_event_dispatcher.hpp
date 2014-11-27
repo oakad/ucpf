@@ -5,8 +5,8 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_ZIVUG_SOCKET_20141126T1500)
-#define UCPF_ZIVUG_SOCKET_20141126T1500
+#if !defined(UCPF_ZIVUG_IO_EVENT_DISPATCHER_20141126T1500)
+#define UCPF_ZIVUG_IO_EVENT_DISPATCHER_20141126T1500
 
 extern "C" {
 
@@ -15,28 +15,37 @@ extern "C" {
 
 }
 
+#include <chrono>
 #include <system_error>
 
-namespace ucpf { namespace zivug { namespace socket {
+namespace ucpf { namespace zivug { namespace io {
 
 struct descriptor {
 	descriptor()
 	: fd(-1)
 	{}
 
-	
-	int fd;
-};
+	template <typename OpenFunc>
+	descriptor(OpenFunc &&func)
+	: fd(func())
+	{}
 
-struct event {
-	enum {
-		READ = 0,
-		WRITE = 1,
-		PRIORITY_READ = 2,
-		HANG_UP = 3,
-		READ_HANG_UP = 4,
-		ERROR = 5
-	};
+	descriptor(descriptor const &other) = delete;
+	descriptor &operator=(descriptor const &other) = delete;
+
+	~descriptor()
+	{
+		if (fd >= 0)
+			close(fd);
+	}
+
+	int native() const
+	{
+		return fd;
+	}
+
+private:
+	int fd;
 };
 
 struct notification {
@@ -67,23 +76,29 @@ struct event_dispatcher {
 			);
 	}
 
+	template <typename Rep, typename Period>
+	event_dispatcher(std::chrono::duration<Rep, Period> const &timeout_)
+	: event_dispatcher()
+	{
+		timeout = std::chrono::duration_cast<
+			std::chrono::milliseconds
+		>(timeout_).count();
+	}
+
 	~event_dispatcher()
 	{
 		if (fd >= 0)
 			::close(fd);
 	}
 
-	void reset(descriptor d, notification &n)
+	void set(descriptor const &d, notification &n)
 	{
 		::epoll_event ev{
-			.events = all_events_mask | one_shot_event_mask,
+			.events = all_events_mask | edge_triggered_event_mask,
 			.data = { .ptr = &n }
 		};
 
-		auto rv(epoll_ctl(fd, EPOLL_CTL_MOD, d.fd, &ev));
-
-		if ((rv < 0) && (errno == ENOENT))
-			rv = epoll_ctl(fd, EPOLL_CTL_ADD, d.fd, &ev);
+		auto rv(epoll_ctl(fd, EPOLL_CTL_ADD, d.native(), &ev));
 
 		if (rv < 0)
 			throw std::system_error(
@@ -91,9 +106,27 @@ struct event_dispatcher {
 			);
 	}
 
-	void remove(descriptor d)
+	void reset(descriptor const &d, notification &n)
 	{
-		epoll_ctl(fd, EPOLL_CTL_DEL, d.fd, nullptr);
+		::epoll_event ev{
+			.events = all_events_mask | one_shot_event_mask,
+			.data = { .ptr = &n }
+		};
+
+		auto rv(epoll_ctl(fd, EPOLL_CTL_MOD, d.native(), &ev));
+
+		if ((rv < 0) && (errno == ENOENT))
+			rv = epoll_ctl(fd, EPOLL_CTL_ADD, d.native(), &ev);
+
+		if (rv < 0)
+			throw std::system_error(
+				errno, std::system_category()
+			);
+	}
+
+	void remove(descriptor const &d)
+	{
+		epoll_ctl(fd, EPOLL_CTL_DEL, d.native(), nullptr);
 	}
 
 	bool process_next()
@@ -156,6 +189,8 @@ private:
 	= EPOLLRDBAND | EPOLLWRBAND;
 	constexpr static uint32_t priority_event_mask = EPOLLPRI;
 	constexpr static uint32_t read_hang_up_event_mask = EPOLLRDHUP;
+	constexpr static uint32_t edge_triggered_event_mask
+	= EPOLLET;
 	constexpr static uint32_t one_shot_event_mask
 	= EPOLLONESHOT | EPOLLET;
 
