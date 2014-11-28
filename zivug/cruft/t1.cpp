@@ -73,7 +73,15 @@ sigset_t sig_n<Dispatcher>::sig_mask;
 void t1()
 {
 	using namespace std::literals::chrono_literals;
-	io::event_dispatcher<16> ev_d(5s);
+
+	struct {
+		struct {
+			int event_count = 16;
+			int timeout_ms = 5000;
+		} epoll;
+	} config;
+
+	io::event_dispatcher ev_d(config);
 
 	::sigfillset(&sig_n<decltype(ev_d)>::sig_mask);
 	::sigprocmask(SIG_BLOCK, &sig_n<decltype(ev_d)>::sig_mask, nullptr);

@@ -15,7 +15,6 @@ extern "C" {
 
 }
 
-#include <chrono>
 #include <system_error>
 
 namespace ucpf { namespace zivug { namespace io {
@@ -65,24 +64,16 @@ struct notification {
 	{}
 };
 
-template <std::size_t EventCount>
 struct event_dispatcher {
-	event_dispatcher()
-	: fd(::epoll_create1(0)), timeout(-1)
+	template <typename ConfigType>
+	event_dispatcher(ConfigType const &config)
+	: fd(::epoll_create1(0)), timeout(config.epoll.timeout_ms),
+	  event_count(config.epoll.event_count)
 	{
 		if (fd < 0)
 			throw std::system_error(
 				errno, std::system_category()
 			);
-	}
-
-	template <typename Rep, typename Period>
-	event_dispatcher(std::chrono::duration<Rep, Period> const &timeout_)
-	: event_dispatcher()
-	{
-		timeout = std::chrono::duration_cast<
-			std::chrono::milliseconds
-		>(timeout_).count();
 	}
 
 	~event_dispatcher()
@@ -124,6 +115,43 @@ struct event_dispatcher {
 			);
 	}
 
+	void reset_read(descriptor const &d, notification &n)
+	{
+		::epoll_event ev{
+			.events = read_events_mask | one_shot_event_mask,
+			.data = { .ptr = &n }
+		};
+
+		auto rv(epoll_ctl(fd, EPOLL_CTL_MOD, d.native(), &ev));
+
+		if ((rv < 0) && (errno == ENOENT))
+			rv = epoll_ctl(fd, EPOLL_CTL_ADD, d.native(), &ev);
+
+		if (rv < 0)
+			throw std::system_error(
+				errno, std::system_category()
+			);
+	}
+
+	void reset_write(descriptor const &d, notification &n)
+	{
+		::epoll_event ev{
+			.events = write_events_mask | one_shot_event_mask,
+			.data = { .ptr = &n }
+		};
+
+		auto rv(epoll_ctl(fd, EPOLL_CTL_MOD, d.native(), &ev));
+
+		if ((rv < 0) && (errno == ENOENT))
+			rv = epoll_ctl(fd, EPOLL_CTL_ADD, d.native(), &ev);
+
+		if (rv < 0)
+			throw std::system_error(
+				errno, std::system_category()
+			);
+
+	}
+
 	void remove(descriptor const &d)
 	{
 		epoll_ctl(fd, EPOLL_CTL_DEL, d.native(), nullptr);
@@ -131,7 +159,8 @@ struct event_dispatcher {
 
 	bool process_next()
 	{
-		auto rv(::epoll_wait(fd, ev_buf, EventCount, timeout));
+		::epoll_event ev_buf[event_count];
+		auto rv(::epoll_wait(fd, ev_buf, event_count, timeout));
 
 		for (auto c(0); c < rv; ++c) {
 			auto n_ptr(reinterpret_cast<notification *>(
@@ -145,19 +174,22 @@ struct event_dispatcher {
 					ev_buf[c].events
 					& priority_event_mask
 				);
-			else if (ev_buf[c].events & write_event_mask)
+
+			if (ev_buf[c].events & write_event_mask)
 				n_ptr->write_ready(
 					ev_buf[c].events
 					& out_of_band_event_mask,
 					ev_buf[c].events
 					& priority_event_mask
 				);
-			else if (ev_buf[c].events & hang_up_event_mask)
+
+			if (ev_buf[c].events & hang_up_event_mask)
 				n_ptr->hang_up(
 					ev_buf[c].events
 					& read_hang_up_event_mask
 				);
-			else if (ev_buf[c].events & error_event_mask)
+
+			if (ev_buf[c].events & error_event_mask)
 				n_ptr->error(
 					ev_buf[c].events
 					& priority_event_mask
@@ -181,6 +213,13 @@ private:
 	= EPOLLHUP | EPOLLRDHUP;
 	constexpr static uint32_t error_event_mask
 	= EPOLLERR;
+
+	constexpr static uint32_t read_events_mask
+	= read_event_mask | hang_up_event_mask
+	  | error_event_mask;
+	constexpr static uint32_t write_events_mask
+	= write_event_mask | hang_up_event_mask
+	  | error_event_mask;
 	constexpr static uint32_t all_events_mask
 	= read_event_mask | write_event_mask | hang_up_event_mask
 	  | error_event_mask;
@@ -196,7 +235,7 @@ private:
 
 	int fd;
 	int timeout;
-	::epoll_event ev_buf[EventCount];
+	int event_count;
 };
 
 }}}

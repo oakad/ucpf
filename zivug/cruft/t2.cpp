@@ -106,7 +106,14 @@ struct socket_n : io::notification {
 void t1()
 {
 	using namespace std::literals::chrono_literals;
-	io::event_dispatcher<16> ev_d;
+	struct {
+		struct {
+			int event_count = 16;
+			int timeout_ms = 5000;
+		} epoll;
+	} config;
+
+	io::event_dispatcher ev_d(config);
 
 	socket_n<decltype(ev_d)> ss(ev_d);
 
