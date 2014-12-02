@@ -1,0 +1,3 @@
+
+lib zivug : [ glob *.cpp ] linux//zivug : <target-os>linux ;
+

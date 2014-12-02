@@ -1,0 +1,2 @@
+
+lib zivug : [ glob *.cpp ] : <include>../.. ;

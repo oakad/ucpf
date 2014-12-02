@@ -17,13 +17,9 @@ struct server : notification {
 	struct server(
 		event_dispatcher &disp_, ConfigType const &config
 	)
-	: d(socket::create(config.server.protocol)), disp(disp_)
+	: d(socket_configurator::create_server(config.server.settings)),
+	  disp(disp_)
 	{
-		socket::set_options(d.native, config.server.options);
-		
-		socket::bind_iface(d.native(), config.server.interfaces);
-		socket::bind_addr(d.native(), config.server.addresses);
-
 		src_disp.reset_read(d, *this);
 
 		auto rv(::listen(d.native(), config.server.listen_backlog));

@@ -29,6 +29,12 @@ struct descriptor {
 	: fd(func())
 	{}
 
+	descriptor(descriptor &&other)
+	: fd(-1)
+	{
+		std::swap(fd, other.fd);
+	}
+
 	descriptor(descriptor const &other) = delete;
 	descriptor &operator=(descriptor const &other) = delete;
 
