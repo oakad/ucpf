@@ -100,7 +100,10 @@ int main(int argc, char **argv)
 		out[p.first & mask] = p.second;
 
 	for (auto s: out)
-		printf("{\"%s\", },\n", s.c_str());
+		printf(
+			"{\"%s\", %zd, &option<int, level, >::set},\n",
+			s.c_str(), s.size()
+		);
 
 	return 0;
 }

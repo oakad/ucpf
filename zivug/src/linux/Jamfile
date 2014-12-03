@@ -1,2 +1,3 @@
 
-lib zivug : [ glob *.cpp ] : <include>../.. ;
+lib zivug : [ glob *.cpp ]
+          : <include>../.. <include>../../../yesod ;

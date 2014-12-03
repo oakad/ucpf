@@ -14,21 +14,32 @@ extern "C" {
 }
 
 #include <array>
+#include <yesod/coder/xxhash.hpp>
 #include <zivug/linux/io_event_dispatcher.hpp>
 #include <zivug/linux/io_socket_configurator.hpp>
 
 namespace {
 
 template <typename ValueType, int Level, int OptName>
-struct option;
+struct option {
+	static void set(
+		ucpf::zivug::io::descriptor &d,
+		char const *val_first, char const *val_last
+	)
+	{
+	}
+};
 
 template <int Level, int OptName>
 struct option<int, Level, OptName> {
-	static void set(ucpf::zivug::io::descriptor &d, char const *val)
+	static void set(
+		ucpf::zivug::io::descriptor &d,
+		char const *val_first, char const *val_last
+	)
 	{
-		int x_val;
+		int x_val(0);
 
-		auto rc(setsocopt(
+		auto rc(::setsockopt(
 			d.native(), Level, OptName, &x_val, sizeof(x_val)
 		));
 		if (rc < 0)
@@ -38,60 +49,81 @@ struct option<int, Level, OptName> {
 	}
 };
 
-struct static_hash_base {
-};
-
 template <int Level>
-struct option_symbols_t;
+struct option_symbols;
 
 template <>
-struct option_symbols_t<SOL_SOCKET> : static_hash_base {
-	constexpr static uint32_t seed = 0x014eb0d6;
+struct option_symbols<SOL_SOCKET> {
+	constexpr static int level = SOL_SOCKET;
+	constexpr static uint32_t seed = 0x13e1d776;
 	constexpr static uint32_t order = 5;
 	constexpr static uint32_t mask = (uint32_t(1) << order) - 1;
 
+	struct entry {
+		char const *name;
+		std::size_t name_sz;
+		void (*func)(
+			ucpf::zivug::io::descriptor &d,
+			char const *val_first, char const *val_last
+		);
+	};
+
 	constexpr static std::array<
-		std::pair<
-			char const *, void (*)(
-				ucpf::zivug::io::descriptor &d,
-				char const *val
-			)
-		>, (std::size_t(1) << order)
+		entry, (std::size_t(1) << order)
 	> symbols = {{
-		{"sndbuf", &option<int, SOL_SOCKET, SO_SNDBUF>::set},
-		{"dontroute", &option<int, SOL_SOCKET, SO_DONTROUTE>::set}
-		{nullptr, nullptr},
-		{"oobinline", SO_OOBINLINE},
-		{"keepalive", SO_KEEPALIVE},
-		{"linger_sec", SO_LINGER_SEC},
-		{"nread", SO_NREAD},
-		{nullptr, nullptr},
-		{"sndlowat", SO_SNDLOWAT},
-		{nullptr, nullptr},
-		{"nosigpipe", SO_NOSIGPIPE},
-		{"reuseaddr", SO_REUSEADDR},
-		{"broadcast", SO_BROADCAST},
-		{"rcvbuf", SO_RCVBUF},
-		{nullptr, nullptr},
-		{nullptr, nullptr},
-		{nullptr, nullptr},
-		{nullptr, nullptr},
-		{nullptr, nullptr},
-		{"sndtimeo", SO_SNDTIMEO},
-		{nullptr, nullptr},
-		{"type", SO_TYPE},
-		{"nwrite", SO_NWRITE},
-		{"rcvtimeo", SO_RCVTIMEO},
-		{"linger", SO_LINGER},
-		{"reuseport", SO_REUSEPORT},
-		{nullptr, nullptr},
-		{nullptr, nullptr},
-		{nullptr, nullptr},
-		{"debug", SO_DEBUG},
-		{"rcvlowat", SO_RCVLOWAT},
-		{"error", SO_ERROR}
+		{nullptr, 0, nullptr},
+		{"broadcast", 9, &option<int, level, SO_BROADCAST>::set},
+		{"passcred", 8, &option<int, level, SO_PASSCRED>::set},
+		{"reuseport", 9, &option<int, level, SO_REUSEPORT>::set},
+		{"sndtimeo", 8, &option<::timeval, level, SO_SNDTIMEO>::set},
+		{nullptr, 0, nullptr},
+		{"sndbuf", 6, &option<int, level, SO_SNDBUF>::set},
+		{"keepalive", 9, &option<int, level, SO_KEEPALIVE>::set},
+		{nullptr, 0, nullptr},
+		{nullptr, 0, nullptr},
+		{"priority", 8, &option<int, level, SO_PRIORITY>::set},
+		{nullptr, 0, nullptr},
+		{nullptr, 0, nullptr},
+		{"linger", 6, &option<::linger, level, SO_LINGER>::set},
+		{"reuseaddr", 9, &option<int, level, SO_REUSEADDR>::set},
+		{"type", 4, &option<void, level, SO_TYPE>::set},
+		{"error", 5, &option<void, level, SO_ERROR>::set},
+		{"debug", 5, &option<int, level, SO_DEBUG>::set},
+		{nullptr, 0, nullptr},
+		{"sndbufforce", 11, &option<int, level, SO_SNDBUFFORCE>::set},
+		{"rcvbuf", 6, &option<int, level, SO_RCVBUF>::set},
+		{nullptr, 0, nullptr},
+		{"rcvtimeo", 8, &option<::timeval, level, SO_RCVTIMEO>::set},
+		{"no_check", 8, &option<int, level, SO_NO_CHECK>::set},
+		{"bsdcompat", 9, &option<int, level, SO_BSDCOMPAT>::set},
+		{nullptr, 0, nullptr},
+		{"oobinline", 9, &option<int, level, SO_OOBINLINE>::set},
+		{"rcvlowat", 8, &option<int, level, SO_RCVLOWAT>::set},
+		{"rcvbufforce", 11, &option<int, level, SO_RCVBUFFORCE>::set},
+		{"peercred", 8, &option<int, level, SO_PEERCRED>::set},
+		{"dontroute", 9, &option<int, level, SO_DONTROUTE>::set},
+		{"sndlowat", 8, &option<int, level, SO_SNDLOWAT>::set}
 	}};
-} option_symbols;
+
+	static void set(
+		ucpf::zivug::io::descriptor &d,
+		char const *name_first, char const *name_last,
+		char const *val_first, char const *val_last
+	)
+	{
+		ucpf::yesod::coder::xxhash<> h(seed);
+		h.update(name_first, name_last);
+		auto key(h.digest() & mask);
+		auto const &e(symbols[key]);
+
+		if (!std::equal(
+			name_first, name_last, e.name, e.name + e.name_sz
+		))
+			return;
+
+		e.func(d, val_first, val_last);
+	}
+};
 
 }
 
