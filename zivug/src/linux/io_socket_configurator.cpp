@@ -15,8 +15,11 @@ extern "C" {
 
 #include <array>
 #include <yesod/coder/xxhash.hpp>
+#include <mina/from_ascii_decimal.hpp>
 #include <zivug/linux/io_event_dispatcher.hpp>
 #include <zivug/linux/io_socket_configurator.hpp>
+
+#include "network_defines.hpp"
 
 namespace {
 
@@ -24,7 +27,7 @@ template <typename ValueType, int Level, int OptName>
 struct option {
 	static void set(
 		ucpf::zivug::io::descriptor &d,
-		char const *opt_first, char const *opt_last
+		char const *val_first, char const *val_last
 	)
 	{
 		throw std::system_error(
@@ -37,10 +40,22 @@ template <int Level, int OptName>
 struct option<int, Level, OptName> {
 	static void set(
 		ucpf::zivug::io::descriptor &d,
-		char const *opt_first, char const *opt_last
+		char const *val_first, char const *val_last
 	)
 	{
+		using ucpf::mina::detail::from_ascii_decimal_converter;
 		int x_val(0);
+
+		for (; val_first != val_last; ++val_first)
+			if (!std::isspace(*val_first))
+				break;
+
+		if (!from_ascii_decimal_converter<int, false>::parse_signed(
+			val_first, val_last, x_val
+		))
+			throw std::system_error(
+				EINVAL, std::system_category()
+			);
 
 		auto rc(::setsockopt(
 			d.native(), Level, OptName, &x_val, sizeof(x_val)
@@ -56,7 +71,7 @@ template <int Level>
 struct option_symbols {
 	static void set(
 		ucpf::zivug::io::descriptor &d,
-		char const *opt_first, char const *opt_last,
+		char const *val_first, char const *val_last
 	)
 	{
 		throw std::system_error(
@@ -77,63 +92,48 @@ struct option_symbols<SOL_SOCKET> {
 		std::size_t name_sz;
 		void (*func)(
 			ucpf::zivug::io::descriptor &d,
-			char const *opt_first, char const *opt_last
+			char const *val_first, char const *val_last
 		);
 	};
 
 	constexpr static std::array<
 		entry, (std::size_t(1) << order)
 	> symbols = {{
-		{nullptr, 0, nullptr},
-		{"broadcast", 9, &option<int, level, SO_BROADCAST>::set},
-		{"passcred", 8, &option<int, level, SO_PASSCRED>::set},
-		{"reuseport", 9, &option<int, level, SO_REUSEPORT>::set},
-		{"sndtimeo", 8, &option<::timeval, level, SO_SNDTIMEO>::set},
-		{nullptr, 0, nullptr},
-		{"sndbuf", 6, &option<int, level, SO_SNDBUF>::set},
-		{"keepalive", 9, &option<int, level, SO_KEEPALIVE>::set},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{"priority", 8, &option<int, level, SO_PRIORITY>::set},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{"linger", 6, &option<::linger, level, SO_LINGER>::set},
-		{"reuseaddr", 9, &option<int, level, SO_REUSEADDR>::set},
-		{"type", 4, &option<void, level, SO_TYPE>::set},
-		{"error", 5, &option<void, level, SO_ERROR>::set},
-		{"debug", 5, &option<int, level, SO_DEBUG>::set},
-		{nullptr, 0, nullptr},
-		{"sndbufforce", 11, &option<int, level, SO_SNDBUFFORCE>::set},
-		{"rcvbuf", 6, &option<int, level, SO_RCVBUF>::set},
-		{nullptr, 0, nullptr},
-		{"rcvtimeo", 8, &option<::timeval, level, SO_RCVTIMEO>::set},
-		{"no_check", 8, &option<int, level, SO_NO_CHECK>::set},
-		{"bsdcompat", 9, &option<int, level, SO_BSDCOMPAT>::set},
-		{nullptr, 0, nullptr},
-		{"oobinline", 9, &option<int, level, SO_OOBINLINE>::set},
-		{"rcvlowat", 8, &option<int, level, SO_RCVLOWAT>::set},
-		{"rcvbufforce", 11, &option<int, level, SO_RCVBUFFORCE>::set},
-		{"peercred", 8, &option<int, level, SO_PEERCRED>::set},
-		{"dontroute", 9, &option<int, level, SO_DONTROUTE>::set},
-		{"sndlowat", 8, &option<int, level, SO_SNDLOWAT>::set}
+#include "symbols/socket_common_options.hpp"
 	}};
 
 	static void set(
 		ucpf::zivug::io::descriptor &d,
-		char const *opt_first, char const *opt_last
+		char const *val_first, char const *val_last
 	)
 	{
+		/* option = val */
+		auto *last(val_first);
+		for (; last != val_last; ++last)
+			if (*last == '=')
+				break;
+
+		auto x_last(last);
+		for (; x_last != val_first; --x_last)
+			if (!std::isspace(*x_last)) {
+				++x_last;
+				break;
+			}
+
 		ucpf::yesod::coder::xxhash<> h(seed);
-		h.update(name_first, name_last);
+		h.update(val_first, x_last);
 		auto key(h.digest() & mask);
 		auto const &e(symbols[key]);
 
 		if (!std::equal(
-			name_first, name_last, e.name, e.name + e.name_sz
-		))
+			e.name, e.name + e.name_sz, val_first, last
+		) || (last == val_last))
+			throw std::system_error(
+				ENOPROTOOPT, std::system_category()
+			);
 			return;
 
-		e.func(d, val_first, val_last);
+		e.func(d, last + 1, val_last);
 	}
 };
 
@@ -147,88 +147,94 @@ struct level_symbols {
 		std::size_t name_sz;
 		void (*func)(
 			ucpf::zivug::io::descriptor &d,
-			char const *opt_first, char const *opt_last
+			char const *val_first, char const *val_last
 		);
 	};
 
 	constexpr static std::array<
 		entry, (std::size_t(1) << order)
 	> symbols = {{
-		{"udplite", 7, &option_symbols<SOL_UDPLITE>::set},
-		{"rose", 4, &option_symbols<SOL_ROSE>::set},
-		{"udp", 3, &option_symbols<SOL_UDP>::set},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{"ipx", 3, &option_symbols<SOL_IPX>::set},
-		{nullptr, 0, nullptr},
-		{"pppol2tp", 8, &option_symbols<SOL_PPPOL2TP>::set},
-		{"ipv6", 4, &option_symbols<SOL_IPV6>::set},
-		{"atm", 3, &option_symbols<SOL_ATM>::set},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{"icmpv6", 6, &option_symbols<SOL_ICMPV6>::set},
-		{"caif", 4, &option_symbols<SOL_CAIF>::set},
-		{nullptr, 0, nullptr},
-		{"x25", 3, &option_symbols<SOL_X25>::set},
-		{nullptr, 0, nullptr},
-		{"alg", 3, &option_symbols<SOL_ALG>::set},
-		{"rxrpc", 5, &option_symbols<SOL_RXRPC>::set},
-		{"nfc", 3, &option_symbols<SOL_NFC>::set},
-		{"packet", 6, &option_symbols<SOL_PACKET>::set},
-		{"decnet", 6, &option_symbols<SOL_DECNET>::set},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{"raw", 3, &option_symbols<SOL_RAW>::set},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{"tcp", 3, &option_symbols<SOL_TCP>::set},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{"atalk", 5, &option_symbols<SOL_ATALK>::set},
-		{nullptr, 0, nullptr},
-		{"netbeui", 7, &option_symbols<SOL_NETBEUI>::set},
-		{"ax25", 4, &option_symbols<SOL_AX25>::set},
-		{nullptr, 0, nullptr},
-		{"llc", 3, &option_symbols<SOL_LLC>::set},
-		{"rds", 3, &option_symbols<SOL_RDS>::set},
-		{"pnpipe", 6, &option_symbols<SOL_PNPIPE>::set},
-		{nullptr, 0, nullptr},
-		{"ip", 2, &option_symbols<SOL_IP>::set},
-		{nullptr, 0, nullptr},
-		{"irda", 4, &option_symbols<SOL_IRDA>::set},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{"icmp", 4, &option_symbols<SOL_ICMP>::set},
-		{"bluetooth", 9, &option_symbols<SOL_BLUETOOTH>::set},
-		{"netlink", 7, &option_symbols<SOL_NETLINK>::set},
-		{"sctp", 4, &option_symbols<SOL_SCTP>::set},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{"iucv", 4, &option_symbols<SOL_IUCV>::set},
-		{"aal", 3, &option_symbols<SOL_AAL>::set},
-		{"netrom", 6, &option_symbols<SOL_NETROM>::set},
-		{nullptr, 0, nullptr},
-		{nullptr, 0, nullptr},
-		{"dccp", 4, &option_symbols<SOL_DCCP>::set},
-		{"tipc", 4, &option_symbols<SOL_TIPC>::set},
+#include "symbols/socket_levels.hpp"
 	}};
 
 	static void set(
 		ucpf::zivug::io::descriptor &d,
-		char const *opt_first, char const *opt_last
+		char const *val_first, char const *val_last
 	)
 	{
+		/* socket_level.option = val */
+		for (; val_first != val_last; ++val_first)
+			if (!std::isspace(*val_first))
+				break;
+
+		char const *last(val_first);
+		for (; last != val_last; ++last)
+			if (*last == '.')
+				break;
+
+		ucpf::yesod::coder::xxhash<> h(seed);
+		h.update(val_first, last);
+		auto key(h.digest() & mask);
+		auto const &e(symbols[key]);
+		if (!std::equal(
+			e.name, e.name + e.name_sz,
+			val_first, last
+		) || (last == val_last))
+			throw std::system_error(
+				ENOPROTOOPT, std::system_category()
+			);
+
+		e.func(d, last, val_last);
 	}
+};
+
+struct family_base {
+};
+
+template <int AddrFamily>
+struct family : family_base {
+};
+
+template <int AddrFamily>
+struct family_entry {
+	constexpr static family<AddrFamily> addr_family = {};
+	constexpr static family_base const *impl = &addr_family;
+};
+
+struct family_symbols {
+	constexpr static uint32_t seed = 0x0042b748;
+	constexpr static uint32_t order = 6;
+	constexpr static uint32_t mask = (uint32_t(1) << order) - 1;
+
+	struct entry {
+		char const *name;
+		std::size_t name_sz;
+		family_base const *addr_family;
+	};
+
+		constexpr static std::array<
+		entry, (std::size_t(1) << order)
+	> symbols = {{
+#include "symbols/address_families.hpp"
+	}};
 };
 
 }
 
 namespace ucpf { namespace zivug { namespace io {
+
+descriptor socket_configurator::make_descriptor(
+	char const *type_first, char const *type_last, void **ctx
+)
+{
+}
+
+void socket_configurator::apply_setting(
+	descriptor &d, char const *s_first, char const *s_last, void *ctx
+)
+{
+	/* option: socket_level.option = val */
+	/* bind: socket_level.option = val */
+}
+
 }}}

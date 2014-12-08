@@ -74,11 +74,12 @@ int main(int argc, char **argv)
 
 	auto bit_ord(yesod::order_base_2(x_map.size()));
 	auto min_ord(check_collisions(bit_ord, x_map));
+/*
 	static std::random_device src;
 	std::mt19937 gen(src());
 	std::uniform_int_distribution<uint32_t> dis;
 
-	for (int retries = 10000; retries; --retries) {
+	for (int retries = 1000000; retries; --retries) {
 		auto x_seed(dis(gen));
 		auto n_map(std::move(rehash(x_seed, x_map)));
 		if (n_map.empty())
@@ -91,6 +92,20 @@ int main(int argc, char **argv)
 			seed = x_seed;
 		}
 	}
+*/
+	for (uint32_t x_seed(0); x_seed < 0x10000000; ++x_seed) {
+		auto n_map(std::move(rehash(x_seed, x_map)));
+		if (n_map.empty())
+			continue;
+
+		auto n_ord(check_collisions(bit_ord, n_map));
+		if (n_ord < 7) {
+			min_ord = n_ord;
+			x_map.swap(n_map);
+			seed = x_seed;
+			break;
+		}
+	}
 
 	printf("no collisions at order %d, seed %08x\n", min_ord, seed);
 	std::vector<std::string> out(std::size_t(1) << min_ord, std::string());
@@ -101,7 +116,7 @@ int main(int argc, char **argv)
 
 	for (auto s: out)
 		printf(
-			"{\"%s\", %zd, &option<int, level, >::set},\n",
+			"{\"%s\", %zd, &entry<int, level, >::set},\n",
 			s.c_str(), s.size()
 		);
 

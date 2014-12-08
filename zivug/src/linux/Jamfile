@@ -1,3 +1,5 @@
 
 lib zivug : [ glob *.cpp ]
-          : <include>../.. <include>../../../yesod ;
+          : <include>../..
+            <include>../../../yesod
+            <include>../../../mina ;

@@ -17,7 +17,7 @@ struct server : notification {
 	struct server(
 		event_dispatcher &disp_, ConfigType const &config
 	)
-	: d(socket_configurator::create_server(config.server.settings)),
+	: d(socket_configurator::create(config.server)),
 	  disp(disp_)
 	{
 		src_disp.reset_read(d, *this);
