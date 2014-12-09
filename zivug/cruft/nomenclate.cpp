@@ -51,6 +51,8 @@ Map rehash(int seed, Map const &map)
 	return x_map;
 }
 
+#define FIND_RANDOM 1
+
 int main(int argc, char **argv)
 {
 	uint32_t seed(0);
@@ -74,7 +76,7 @@ int main(int argc, char **argv)
 
 	auto bit_ord(yesod::order_base_2(x_map.size()));
 	auto min_ord(check_collisions(bit_ord, x_map));
-/*
+#if FIND_RANDOM
 	static std::random_device src;
 	std::mt19937 gen(src());
 	std::uniform_int_distribution<uint32_t> dis;
@@ -92,7 +94,7 @@ int main(int argc, char **argv)
 			seed = x_seed;
 		}
 	}
-*/
+#else
 	for (uint32_t x_seed(0); x_seed < 0x10000000; ++x_seed) {
 		auto n_map(std::move(rehash(x_seed, x_map)));
 		if (n_map.empty())
@@ -106,7 +108,7 @@ int main(int argc, char **argv)
 			break;
 		}
 	}
-
+#endif
 	printf("no collisions at order %d, seed %08x\n", min_ord, seed);
 	std::vector<std::string> out(std::size_t(1) << min_ord, std::string());
 	uint32_t mask((uint32_t(1) << min_ord) - 1);

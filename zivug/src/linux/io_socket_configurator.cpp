@@ -188,6 +188,31 @@ struct level_symbols {
 	}
 };
 
+struct type_symbols {
+	constexpr static uint32_t seed = 0x7c1148ec;
+	constexpr static uint32_t order = 3;
+	constexpr static uint32_t mask = (uint32_t(1) << order) - 1;
+
+	struct entry {
+		char const *name;
+		std::size_t name_sz;
+		int socket_type;
+	};
+
+	constexpr static std::array<
+		entry, (std::size_t(1) << order)
+	> symbols = {{
+		{nullptr, 0, -1},
+		{"dccp", 4, SOCK_DCCP},
+		{"raw", 3, SOCK_RAW},
+		{"rdm", 3, SOCK_RDM},
+		{"stream", 6, SOCK_STREAM},
+		{"seqpacket", 9, SOCK_SEQPACKET},
+		{"dgram", 5, SOCK_DGRAM},
+		{"packet", 6, SOCK_PACKET}
+	}};
+};
+
 struct family_base {
 };
 
