@@ -28,12 +28,13 @@ struct socket_configurator {
 
 private:
 	static descriptor make_descriptor(
-		char const *type_first, char const *type_last, void **ctx
+		char const *type_first, char const *type_last,
+		void const **ctx
 	);
 
 	static void apply_setting(
 		descriptor &d, char const *s_first, char const *s_last,
-		void *ctx
+		void const *ctx
 	);
 };
 

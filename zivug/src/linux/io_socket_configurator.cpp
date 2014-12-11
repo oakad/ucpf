@@ -10,6 +10,7 @@ extern "C" {
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netdb.h>
 
 }
 
@@ -21,7 +22,8 @@ extern "C" {
 
 #include "network_defines.hpp"
 
-namespace {
+namespace ucpf { namespace zivug { namespace io {
+namespace detail {
 
 template <typename ValueType, int Level, int OptName>
 struct option {
@@ -214,10 +216,26 @@ struct type_symbols {
 };
 
 struct family_base {
+	virtual int create(char const *first, char const *last) const = 0;
+	virtual void bind(
+		int fd, char const *first, char const *last
+	) const = 0;
 };
 
 template <int AddrFamily>
 struct family : family_base {
+	virtual int create(char const *first, char const *last) const
+	{
+		throw std::system_error(
+			EAFNOSUPPORT, std::system_category()
+		);
+	}
+
+	virtual void bind(
+		int fd, char const *first, char const *last
+	) const
+	{
+	}
 };
 
 template <int AddrFamily>
@@ -242,20 +260,90 @@ struct family_symbols {
 	> symbols = {{
 #include "symbols/address_families.hpp"
 	}};
+
+	static family_base const *get(char const *n_first, char const *n_last)
+	{
+		ucpf::yesod::coder::xxhash<> h(seed);
+		h.update(n_first, n_last);
+		auto key(h.digest() & mask);
+		auto const &e(symbols[key]);
+
+		if (!e.addr_family)
+			throw std::system_error(
+				EAFNOSUPPORT, std::system_category()
+			);
+
+		return e.addr_family;
+	}
 };
+
+std::pair<int, bool> get_protocol_id_impl(
+	char const *p_name, std::size_t buf_sz
+)
+{
+	char buf[buf_sz];
+	::protoent p_entry, *rv;
+
+	auto rc(::getprotobyname_r(p_name, &p_entry, buf, buf_sz, &rv));
+	if (rc == ERANGE)
+		return std::make_pair(-1, true);
+	else if (!rc && rv)
+		return std::make_pair(rv->p_proto, false);
+	else
+		throw std::system_error(
+			rc, std::system_category()
+		);
+}
+
+int get_protocol_id(char const *p_first, char const *p_last)
+{
+	auto p_sz(p_last - p_first);
+	char p_name[p_sz + 1];
+	__builtin_memcpy(p_name, p_first, p_sz);
+	p_name[p_sz] = 0;
+	std::size_t buf_sz(128);
+
+	while (true) {
+		auto p(get_protocol_id_impl(p_name, buf_sz));
+		if (!p.second)
+			return p.first;
+		buf_sz = (buf_sz * 3) >> 1;
+	}
+}
 
 }
 
-namespace ucpf { namespace zivug { namespace io {
-
 descriptor socket_configurator::make_descriptor(
-	char const *type_first, char const *type_last, void **ctx
+	char const *type_first, char const *type_last, void const **ctx
 )
 {
+	/* family.type || family.type.protocol */
+	for (; type_first != type_last; ++type_first)
+		if (!std::isspace(*type_first))
+			break;
+
+	char const *x_last(type_first);
+	detail::family_base const *fb(nullptr);
+
+	for (; x_last != type_last; ++x_last) {
+		if (*x_last == '.') {
+			fb = detail::family_symbols::get(type_first, x_last);
+			break;
+		}
+	}
+	if (!fb)
+		throw std::system_error(EINVAL, std::system_category());
+
+	*ctx = reinterpret_cast<void const *>(fb);
+	++x_last;
+	return descriptor([fb, x_last, type_last]() -> int {
+		return fb->create(x_last, type_last);
+	});
 }
 
 void socket_configurator::apply_setting(
-	descriptor &d, char const *s_first, char const *s_last, void *ctx
+	descriptor &d, char const *s_first, char const *s_last,
+	void const *ctx
 )
 {
 	/* option: socket_level.option = val */

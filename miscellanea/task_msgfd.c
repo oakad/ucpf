@@ -1,5 +1,5 @@
 /*
- *  fs/sendfd.c
+ *  fs/task_msgfd.c
  *
  *  Copyright (C) 2014 Alex Dubov <oakad@yahoo.com>
  *
@@ -73,6 +73,7 @@ struct ktask_msg_endp {
 	atomic_long_t pending_max;
 	atomic_long_t pending_current;
 	atomic_long_t pending;
+	wait_queue_head_t task_msg_wqh;
 };
 
 struct msgq_base {
