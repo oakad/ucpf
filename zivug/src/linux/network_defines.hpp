@@ -1,3 +1,6 @@
+#if !defined(HPP_49CCD79CD323F9AC789FFA98751F1F37)
+#define HPP_49CCD79CD323F9AC789FFA98751F1F37
+
 #if !defined(AF_IB)
 #define AF_IB 27
 #endif
@@ -136,4 +139,6 @@
 
 #if !defined(SOL_NFC)
 #define SOL_NFC 280
+#endif
+
 #endif

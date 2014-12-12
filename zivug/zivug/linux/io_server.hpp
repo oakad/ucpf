@@ -5,8 +5,8 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_ZIVUG_IO_SERVER_20141128T2300)
-#define UCPF_ZIVUG_IO_SERVER_20141128T2300
+#if !defined(HPP_DC2F14E6CDC5FC3F00E94D68412624CF)
+#define HPP_DC2F14E6CDC5FC3F00E94D68412624CF
 
 #include <zuvug/arch/io_event_dispatcher.hpp>
 

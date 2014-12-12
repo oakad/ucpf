@@ -5,8 +5,8 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_ZIVUG_IO_SOCKET_CONFIGURATOR_20141201T2300)
-#define UCPF_ZIVUG_IO_SOCKET_CONFIGURATOR_20141201T2300
+#if !defined(HPP_5AF9A5BAC9C9C8F182489F819FA23DCF)
+#define HPP_5AF9A5BAC9C9C8F182489F819FA23DCF
 
 namespace ucpf { namespace zivug { namespace io {
 
@@ -28,12 +28,11 @@ struct socket_configurator {
 
 private:
 	static descriptor make_descriptor(
-		char const *type_first, char const *type_last,
-		void const **ctx
+		char const *first, char const *last, void const **ctx
 	);
 
 	static void apply_setting(
-		descriptor &d, char const *s_first, char const *s_last,
+		descriptor &d, char const *first, char const *last,
 		void const *ctx
 	);
 };

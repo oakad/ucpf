@@ -6,21 +6,13 @@
  * shed by the Free Software Foundation.
  */
 
-extern "C" {
-
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-
-}
+#include "io_socket_private.hpp"
 
 #include <array>
 #include <yesod/coder/xxhash.hpp>
 #include <mina/from_ascii_decimal.hpp>
 #include <zivug/linux/io_event_dispatcher.hpp>
 #include <zivug/linux/io_socket_configurator.hpp>
-
-#include "network_defines.hpp"
 
 namespace ucpf { namespace zivug { namespace io {
 namespace detail {
@@ -213,28 +205,20 @@ struct type_symbols {
 		{"dgram", 5, SOCK_DGRAM},
 		{"packet", 6, SOCK_PACKET}
 	}};
-};
 
-struct family_base {
-	virtual int create(char const *first, char const *last) const = 0;
-	virtual void bind(
-		int fd, char const *first, char const *last
-	) const = 0;
-};
-
-template <int AddrFamily>
-struct family : family_base {
-	virtual int create(char const *first, char const *last) const
+	static int get(char const *first, char const *last)
 	{
-		throw std::system_error(
-			EAFNOSUPPORT, std::system_category()
-		);
-	}
+		ucpf::yesod::coder::xxhash<> h(seed);
+		h.update(first, last);
+		auto key(h.digest() & mask);
+		auto const &e(symbols[key]);
 
-	virtual void bind(
-		int fd, char const *first, char const *last
-	) const
-	{
+		if (!e.name)
+			throw std::system_error(
+				ESOCKTNOSUPPORT, std::system_category()
+			);
+
+		return e.socket_type;
 	}
 };
 
@@ -261,10 +245,10 @@ struct family_symbols {
 #include "symbols/address_families.hpp"
 	}};
 
-	static family_base const *get(char const *n_first, char const *n_last)
+	static family_base const *get(char const *first, char const *last)
 	{
 		ucpf::yesod::coder::xxhash<> h(seed);
-		h.update(n_first, n_last);
+		h.update(first, last);
 		auto key(h.digest() & mask);
 		auto const &e(symbols[key]);
 
@@ -277,67 +261,43 @@ struct family_symbols {
 	}
 };
 
-std::pair<int, bool> get_protocol_id_impl(
-	char const *p_name, std::size_t buf_sz
-)
-{
-	char buf[buf_sz];
-	::protoent p_entry, *rv;
-
-	auto rc(::getprotobyname_r(p_name, &p_entry, buf, buf_sz, &rv));
-	if (rc == ERANGE)
-		return std::make_pair(-1, true);
-	else if (!rc && rv)
-		return std::make_pair(rv->p_proto, false);
-	else
-		throw std::system_error(
-			rc, std::system_category()
-		);
-}
-
-int get_protocol_id(char const *p_first, char const *p_last)
-{
-	auto p_sz(p_last - p_first);
-	char p_name[p_sz + 1];
-	__builtin_memcpy(p_name, p_first, p_sz);
-	p_name[p_sz] = 0;
-	std::size_t buf_sz(128);
-
-	while (true) {
-		auto p(get_protocol_id_impl(p_name, buf_sz));
-		if (!p.second)
-			return p.first;
-		buf_sz = (buf_sz * 3) >> 1;
-	}
-}
-
 }
 
 descriptor socket_configurator::make_descriptor(
-	char const *type_first, char const *type_last, void const **ctx
+	char const *first, char const *last, void const **ctx
 )
 {
 	/* family.type || family.type.protocol */
-	for (; type_first != type_last; ++type_first)
-		if (!std::isspace(*type_first))
+	for (; first != last; ++first)
+		if (!std::isspace(*first))
 			break;
 
-	char const *x_last(type_first);
-	detail::family_base const *fb(nullptr);
-
-	for (; x_last != type_last; ++x_last) {
-		if (*x_last == '.') {
-			fb = detail::family_symbols::get(type_first, x_last);
+	auto x_s0(first);
+	for (; x_s0 != last; ++x_s0)
+		if (*x_s0 == '.')
 			break;
-		}
-	}
+
+	if (x_s0 == last)
+		throw std::system_error(EINVAL, std::system_category());
+
+	auto x_s1(x_s0 + 1);
+	for (; x_s1 != last; ++x_s1)
+		if (*x_s1 == '.')
+			break;
+
+	auto fb(detail::family_symbols::get(first, x_s0));
 	if (!fb)
 		throw std::system_error(EINVAL, std::system_category());
 
+	auto s_type(detail::type_symbols::get(x_s0 + 1, x_s1));
+
 	*ctx = reinterpret_cast<void const *>(fb);
-	++x_last;
-	return descriptor([fb, x_last, type_last]() -> int {
-		return fb->create(x_last, type_last);
+
+	if (x_s1 != last)
+		++x_s1;
+
+	return descriptor([fb, s_type, x_s1, last]() -> int {
+		return fb->create(s_type, x_s1, last);
 	});
 }
 

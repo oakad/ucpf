@@ -5,8 +5,8 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_ZIVUG_IO_EVENT_DISPATCHER_20141126T1500)
-#define UCPF_ZIVUG_IO_EVENT_DISPATCHER_20141126T1500
+#if !defined(HPP_E9C0D279EF6DE6EE0217C75F7640D97C)
+#define HPP_E9C0D279EF6DE6EE0217C75F7640D97C
 
 extern "C" {
 
