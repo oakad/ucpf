@@ -1,5 +1,5 @@
 
-lib zivug : [ glob *.cpp ]
-          : <include>../..
-            <include>../../../yesod
-            <include>../../../mina ;
+convert zivug obj : [ glob *.cpp ]
+                  : <include>../..
+                    <include>../../../yesod
+                    <include>../../../mina ;

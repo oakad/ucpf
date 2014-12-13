@@ -56,6 +56,12 @@ int family<AF_INET>::create(
 	return ::socket(AF_INET, type, proto);
 }
 
+void family<AF_INET>::bind(
+	int fd, char const *proto_first, char const *proto_last
+) const
+{
+}
+
 int family<AF_INET6>::create(
 	int type, char const *proto_first, char const *proto_last
 ) const
@@ -66,6 +72,12 @@ int family<AF_INET6>::create(
 	);
 
 	return ::socket(AF_INET6, type, proto);
+}
+
+void family<AF_INET6>::bind(
+	int fd, char const *proto_first, char const *proto_last
+) const
+{
 }
 
 }}}}

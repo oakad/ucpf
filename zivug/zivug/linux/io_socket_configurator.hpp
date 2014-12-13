@@ -8,20 +8,27 @@
 #if !defined(HPP_5AF9A5BAC9C9C8F182489F819FA23DCF)
 #define HPP_5AF9A5BAC9C9C8F182489F819FA23DCF
 
+#include <zivug/arch/io_event_dispatcher.hpp>
+	
 namespace ucpf { namespace zivug { namespace io {
 
 struct socket_configurator {
 	template <typename ConfiType>
-	static descriptor create_server(ConfiType const& config)
+	static descriptor make_server(ConfiType const& config)
 	{
-		void *ctx;
+		void const *ctx;
 
 		descriptor d(make_descriptor(
-			std::begin(config.type), std::end(config.type), &ctx
+			std::begin(config.protocol).base(),
+			std::end(config.protocol).base(),
+			&ctx
 		));
 
 		for (auto &opt: config.settings)
-			apply_setting(d, std::begin(opt), std::end(opt), ctx);
+			apply_setting(
+				d, std::begin(opt).base(),
+				std::end(opt).base(), ctx
+			);
 
 		return d;
 	}

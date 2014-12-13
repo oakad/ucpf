@@ -17,12 +17,12 @@ struct server : notification {
 	struct server(
 		event_dispatcher &disp_, ConfigType const &config
 	)
-	: d(socket_configurator::create(config.server)),
+	: d(socket_configurator::create(config)),
 	  disp(disp_)
 	{
 		src_disp.reset_read(d, *this);
 
-		auto rv(::listen(d.native(), config.server.listen_backlog));
+		auto rv(::listen(d.native(), config.listen_backlog));
 		if (rv < 0)
 			throw std::system_error(errno, std::system_category());
 	}

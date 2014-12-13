@@ -222,11 +222,18 @@ struct type_symbols {
 	}
 };
 
+constexpr std::array<
+	type_symbols::entry, (std::size_t(1) << type_symbols::order)
+> type_symbols::symbols;
+
 template <int AddrFamily>
 struct family_entry {
 	constexpr static family<AddrFamily> addr_family = {};
 	constexpr static family_base const *impl = &addr_family;
 };
+
+template <int AddrFamily>
+constexpr family<AddrFamily> family_entry<AddrFamily>::addr_family;
 
 struct family_symbols {
 	constexpr static uint32_t seed = 0x0042b748;
@@ -260,6 +267,10 @@ struct family_symbols {
 		return e.addr_family;
 	}
 };
+
+constexpr std::array<
+	family_symbols::entry, (std::size_t(1) << family_symbols::order)
+> family_symbols::symbols;
 
 }
 
