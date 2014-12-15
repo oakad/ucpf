@@ -17,12 +17,25 @@
 namespace ucpf { namespace zivug { namespace io {
 namespace detail {
 
+struct string_tag {
+};
+
+template <typename ValueType>
+struct ro_tag {
+	typedef ValueType value_type;
+};
+
+struct option_base {
+	virtual void set(
+		descriptor const &d, char const *first, char const *last
+	) const = 0;
+};
+
 template <typename ValueType, int Level, int OptName>
-struct option {
-	static void set(
-		ucpf::zivug::io::descriptor &d,
-		char const *val_first, char const *val_last
-	)
+struct option : option_base {
+	virtual void set(
+		descriptor const &d, char const *first, char const *last
+	) const
 	{
 		throw std::system_error(
 			ENOPROTOOPT, std::system_category()
@@ -31,21 +44,16 @@ struct option {
 };
 
 template <int Level, int OptName>
-struct option<int, Level, OptName> {
-	static void set(
-		ucpf::zivug::io::descriptor &d,
-		char const *val_first, char const *val_last
-	)
+struct option<int, Level, OptName> : option_base {
+	virtual void set(
+		descriptor const &d, char const *first, char const *last
+	) const
 	{
 		using ucpf::mina::detail::from_ascii_decimal_converter;
 		int x_val(0);
 
-		for (; val_first != val_last; ++val_first)
-			if (!std::isspace(*val_first))
-				break;
-
 		if (!from_ascii_decimal_converter<int, false>::parse_signed(
-			val_first, val_last, x_val
+			first, last, x_val
 		))
 			throw std::system_error(
 				EINVAL, std::system_category()
@@ -54,6 +62,7 @@ struct option<int, Level, OptName> {
 		auto rc(::setsockopt(
 			d.native(), Level, OptName, &x_val, sizeof(x_val)
 		));
+
 		if (rc < 0)
 			throw std::system_error(
 				errno, std::system_category()
@@ -61,12 +70,45 @@ struct option<int, Level, OptName> {
 	}
 };
 
+template <int Level, int OptName>
+struct option<string_tag, Level, OptName> : option_base {
+	virtual void set(
+		descriptor const &d, char const *first, char const *last
+	) const
+	{
+		auto rc(::setsockopt(
+			d.native(), Level, OptName, first, last - first
+		));
+
+		if (rc < 0)
+			throw std::system_error(
+				errno, std::system_category()
+			);
+	}
+};
+
+template <typename ValueType, int Level, int OptName>
+struct option_entry {
+	constexpr static option<ValueType, Level, OptName> sock_option = {};
+	constexpr static option_base const *impl = &sock_option;
+};
+
+template <typename ValueType, int Level, int OptName>
+constexpr option<ValueType, Level, OptName> option_entry<
+	ValueType, Level, OptName
+>::sock_option;
+
+struct option_level_base {
+	virtual void set(
+		descriptor const &d, char const *first, char const *last
+	) const = 0;
+};
+
 template <int Level>
-struct option_symbols {
-	static void set(
-		ucpf::zivug::io::descriptor &d,
-		char const *val_first, char const *val_last
-	)
+struct option_level : option_level_base {
+	virtual void set(
+		descriptor const &d, char const *first, char const *last
+	) const
 	{
 		throw std::system_error(
 			ENOPROTOOPT, std::system_category()
@@ -75,61 +117,82 @@ struct option_symbols {
 };
 
 template <>
-struct option_symbols<SOL_SOCKET> {
+struct option_level<SOL_SOCKET> : option_level_base {
 	constexpr static int level = SOL_SOCKET;
-	constexpr static uint32_t seed = 0x13e1d776;
-	constexpr static uint32_t order = 5;
+	constexpr static uint32_t seed = 0x01e8;
+	constexpr static uint32_t order = 7;
 	constexpr static uint32_t mask = (uint32_t(1) << order) - 1;
 
 	struct entry {
 		char const *name;
 		std::size_t name_sz;
-		void (*func)(
-			ucpf::zivug::io::descriptor &d,
-			char const *val_first, char const *val_last
-		);
+		option_base const *sock_option;
 	};
 
 	constexpr static std::array<
 		entry, (std::size_t(1) << order)
 	> symbols = {{
-#include "symbols/socket_common_options.hpp"
+#include "symbols/sol_socket_options.hpp"
 	}};
 
-	static void set(
-		ucpf::zivug::io::descriptor &d,
-		char const *val_first, char const *val_last
-	)
+	virtual void set(
+		descriptor const &d, char const *first, char const *last
+	) const
 	{
 		/* option = val */
-		auto *last(val_first);
-		for (; last != val_last; ++last)
-			if (*last == '=')
+		auto name_last(first);
+		for (; name_last != last; ++name_last)
+			if (*name_last == '=')
 				break;
 
-		auto x_last(last);
-		for (; x_last != val_first; --x_last)
-			if (!std::isspace(*x_last)) {
-				++x_last;
+		if (name_last == last)
+			throw std::system_error(
+				EINVAL, std::system_category()
+			);
+
+		auto val_first(name_last + 1);
+		for (; val_first != last; ++val_first)
+			if (!std::isspace(*val_first))
 				break;
-			}
+
+		if (val_first == last)
+			throw std::system_error(
+				EINVAL, std::system_category()
+			);
+
+		for (; name_last > first; --name_last)
+			if (!std::isspace(*(name_last - 1)))
+				break;
+
+		if (name_last == first)
+			throw std::system_error(
+				EINVAL, std::system_category()
+			);
 
 		ucpf::yesod::coder::xxhash<> h(seed);
-		h.update(val_first, x_last);
+		h.update(first, name_last);
 		auto key(h.digest() & mask);
 		auto const &e(symbols[key]);
 
-		if (!std::equal(
-			e.name, e.name + e.name_sz, val_first, last
-		) || (last == val_last))
+		if (!(e.name && std::equal(
+			e.name, e.name + e.name_sz, first, name_last
+		)))
 			throw std::system_error(
 				ENOPROTOOPT, std::system_category()
 			);
-			return;
 
-		e.func(d, last + 1, val_last);
+		e.sock_option->set(d, val_first, last);
 	}
 };
+
+template <int Level>
+struct option_level_entry {
+	constexpr static option_level<Level> sock_option_level = {};
+	constexpr static option_level_base const *impl = &sock_option_level;
+};
+
+template <int Level>
+constexpr option_level<Level> option_level_entry<Level>::sock_option_level;
 
 struct level_symbols {
 	constexpr static uint32_t seed = 0x97cc1370;
@@ -139,10 +202,7 @@ struct level_symbols {
 	struct entry {
 		char const *name;
 		std::size_t name_sz;
-		void (*func)(
-			ucpf::zivug::io::descriptor &d,
-			char const *val_first, char const *val_last
-		);
+		option_level_base const *sock_level;
 	};
 
 	constexpr static std::array<
@@ -152,33 +212,34 @@ struct level_symbols {
 	}};
 
 	static void set(
-		ucpf::zivug::io::descriptor &d,
-		char const *val_first, char const *val_last
+		ucpf::zivug::io::descriptor const &d,
+		char const *first, char const *last
 	)
 	{
 		/* socket_level.option = val */
-		for (; val_first != val_last; ++val_first)
-			if (!std::isspace(*val_first))
+		auto pref_last(first);
+		for (; pref_last != last; ++pref_last)
+			if (*pref_last == '.')
 				break;
 
-		char const *last(val_first);
-		for (; last != val_last; ++last)
-			if (*last == '.')
-				break;
-
+		if ((last - pref_last) < 3)
+			throw std::system_error(
+				EINVAL, std::system_category()
+			);
+		
 		ucpf::yesod::coder::xxhash<> h(seed);
-		h.update(val_first, last);
+		h.update(first, pref_last);
 		auto key(h.digest() & mask);
 		auto const &e(symbols[key]);
-		if (!std::equal(
+		if (!(e.name && std::equal(
 			e.name, e.name + e.name_sz,
-			val_first, last
-		) || (last == val_last))
+			first, pref_last
+		)))
 			throw std::system_error(
 				ENOPROTOOPT, std::system_category()
 			);
 
-		e.func(d, last, val_last);
+		e.sock_level->set(d, pref_last + 1, last);
 	}
 };
 
@@ -313,12 +374,55 @@ descriptor socket_configurator::make_descriptor(
 }
 
 void socket_configurator::apply_setting(
-	descriptor &d, char const *s_first, char const *s_last,
+	descriptor const &d, char const *first, char const *last,
 	void const *ctx
 )
 {
 	/* option: socket_level.option = val */
-	/* bind: socket_level.option = val */
+	/* bind: val */
+	auto cmd_last(first);
+	for (; cmd_last != last; ++cmd_last)
+		if (*cmd_last == ':')
+			break;
+
+	if ((last - cmd_last) < 5)
+		throw std::system_error(EINVAL, std::system_category());
+
+	auto val_first(cmd_last + 1);
+	for (; val_first != last; ++val_first)
+		if (!std::isspace(*val_first))
+			break;
+
+	if (val_first == last)
+		throw std::system_error(EINVAL, std::system_category());
+
+	for (; cmd_last > first; --cmd_last)
+		if (!std::isspace(*(cmd_last - 1)))
+			break;
+
+	switch (*first) {
+	case 'b': {
+		constexpr static char const *name = "bind";
+		if (std::equal(name, name + 4, first, cmd_last)) {
+			auto fb(reinterpret_cast<detail::family_base const *>(
+				ctx
+			));
+			fb->bind(d.native(), val_first, last);
+			return;
+		} else
+			break;
+	}
+	case 'o': {
+		constexpr static char const *name = "option";
+		if (std::equal(name, name + 6, first, cmd_last)) {
+			detail::level_symbols::set(d, val_first, last);
+			return;
+		} else
+			break;
+	}
+	}
+
+	throw std::system_error(EINVAL, std::system_category());
 }
 
 }}}

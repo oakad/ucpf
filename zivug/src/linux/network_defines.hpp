@@ -1,6 +1,15 @@
 #if !defined(HPP_49CCD79CD323F9AC789FFA98751F1F37)
 #define HPP_49CCD79CD323F9AC789FFA98751F1F37
 
+#if !defined(BPF_MAJOR_VERSION)
+
+struct sock_fprog {
+	unsigned short len;
+	void *filter;
+};
+
+#endif
+
 #if !defined(AF_IB)
 #define AF_IB 27
 #endif

@@ -45,39 +45,35 @@ static int inet_protocol_id(char const *proto_first, char const *proto_last)
 }
 
 int family<AF_INET>::create(
-	int type, char const *proto_first, char const *proto_last
+	int type, char const *first, char const *last
 ) const
 {
-	int proto(
-		(proto_first != proto_last)
-		? inet_protocol_id(proto_first, proto_last) : 0
-	);
+	int proto((first != last) ? inet_protocol_id(first, last) : 0);
 
 	return ::socket(AF_INET, type, proto);
 }
 
 void family<AF_INET>::bind(
-	int fd, char const *proto_first, char const *proto_last
+	int fd, char const *first, char const *last
 ) const
 {
+	
 }
 
 int family<AF_INET6>::create(
-	int type, char const *proto_first, char const *proto_last
+	int type, char const *first, char const *last
 ) const
 {
-	int proto(
-		(proto_first != proto_last)
-		? inet_protocol_id(proto_first, proto_last) : 0
-	);
+	int proto((first != last) ? inet_protocol_id(first, last) : 0);
 
 	return ::socket(AF_INET6, type, proto);
 }
 
 void family<AF_INET6>::bind(
-	int fd, char const *proto_first, char const *proto_last
+	int fd, char const *first, char const *last
 ) const
 {
+	
 }
 
 }}}}

@@ -39,7 +39,7 @@ private:
 	);
 
 	static void apply_setting(
-		descriptor &d, char const *first, char const *last,
+		descriptor const &d, char const *first, char const *last,
 		void const *ctx
 	);
 };

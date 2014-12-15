@@ -25,7 +25,7 @@ namespace ucpf { namespace zivug { namespace io { namespace detail {
 
 struct family_base {
 	virtual int create(
-		int type, char const *proto_first, char const *proto_last
+		int type, char const *first, char const *last
 	) const = 0;
 
 	virtual void bind(
@@ -36,7 +36,7 @@ struct family_base {
 template <int AddrFamily>
 struct family : family_base {
 	virtual int create(
-		int type, char const *proto_first, char const *proto_last
+		int type, char const *first, char const *last
 	) const
 	{
 		throw std::system_error(
@@ -53,7 +53,7 @@ struct family : family_base {
 template <>
 struct family<AF_INET> : family_base {
 	virtual int create(
-		int type, char const *proto_first, char const *proto_last
+		int type, char const *first, char const *last
 	) const;
 
 	virtual void bind(
@@ -64,7 +64,7 @@ struct family<AF_INET> : family_base {
 template <>
 struct family<AF_INET6> : family_base {
 	virtual int create(
-		int type, char const *proto_first, char const *proto_last
+		int type, char const *first, char const *last
 	) const;
 
 	virtual void bind(
