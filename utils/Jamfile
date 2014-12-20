@@ -1,0 +1,5 @@
+
+exe nomenclate : nomenclate.cpp
+               : <cxxflags>-std=gnu++14 <include>../zivug <include>../yesod ;
+
+install . : nomenclate ;
