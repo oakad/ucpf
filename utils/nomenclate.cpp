@@ -253,6 +253,42 @@ struct fixed_map {
 		}
 	}
 
+	int find(std::vector<uint8_t> const &in) const
+	{
+		auto first(in.begin());
+		auto last(in.end());
+		auto base(base_vec[0].first);
+		auto l_pos(0), n_pos(0);
+
+		for (; first != last; ++first) {
+			n_pos = base + *first - char_off;
+			if (base_vec[n_pos].second != l_pos)
+				return 0;
+			else if (base_vec[n_pos].first < 0) {
+				auto r_idx(-base_vec[n_pos].first);
+				auto &r(ref_vec[r_idx - 1]);
+				if (std::equal(
+					first, last,
+					tail_vec.begin() + r.tail_pos,
+					tail_vec.end() + r.tail_pos + r.tail_sz
+				))
+					return r_idx;
+				else
+					return 0;
+			} else {
+				l_pos = n_pos;
+				base = base_vec[n_pos].first;
+			}
+		}
+		n_pos = base + term_char - char_off;
+		if (n_pos < int(base_vec.size())) {
+			if ((base_vec[n_pos].second == l_pos)
+			    && (base_vec[n_pos].first < 0))
+				return -base_vec[n_pos].first;
+		}
+		return 0;
+	}
+
 	void compact_tails()
 	{
 		decltype(tail_vec) t_vec;
@@ -282,10 +318,10 @@ struct fixed_map {
 	int term_char;
 };
 
-void emit_tails(fixed_map &fm)
+void emit_tail(fixed_map const &fm)
 {
 	printf(
-		"\tconstexpr static std::array<uint8_t, %zd> tails = {\n",
+		"\tconstexpr static std::array<uint8_t, %zd> tail = {\n",
 		fm.tail_vec.size()
 	);
 
@@ -317,9 +353,72 @@ void emit_tails(fixed_map &fm)
 	printf("\n\t};\n");
 }
 
-void emit_map(fixed_map &fm)
+void emit_tail_ref(fixed_map const &fm)
 {
-	emit_tails(fm);
+	std::string off_type("std::pair<uint32_t, uint32_t>");
+
+	if (fm.tail_vec.size() < 256)
+		off_type = "std::pair<uint8_t, uint8_t>";
+	else if (fm.tail_vec.size() < 65536)
+		off_type = "std::pair<uint16_t, uint16_t>";
+
+	printf("\tconstexpr static std::array<\n");
+	printf("\t\t%s, %zd\n", off_type.c_str(), fm.ref_vec.size());
+	printf("\t> tail_ref = {");
+	int c(0);
+	if (!fm.ref_vec.empty()) {
+		printf(
+			"\n\t\t{%zd, %zd}", fm.ref_vec[c].tail_pos,
+			fm.ref_vec[c].tail_sz
+		);
+		++c;
+	}
+
+	for (; c < int(fm.ref_vec.size()); ++c) {
+		printf(",\n\t\t{%zd, %zd}", fm.ref_vec[c].tail_pos,
+			fm.ref_vec[c].tail_sz
+		);
+	}
+	printf("\n\t};\n");
+}
+
+void emit_base_ref(fixed_map const &fm)
+{
+	std::string off_type("std::pair<int32_t, int32_t>");
+	auto m_sz(std::max(fm.ref_vec.size(), fm.base_vec.size()));
+
+	if (m_sz < 128)
+		off_type = "std::pair<int8_t, int8_t>";
+	else if (m_sz < 32768)
+		off_type = "std::pair<int16_t, int16_t>";
+
+	printf("\tconstexpr static std::array<\n");
+	printf("\t\t%s, %zd\n", off_type.c_str(), fm.base_vec.size());
+	printf("\t> base_ref = {");
+	int c(0);
+	if (!fm.ref_vec.empty()) {
+		printf(
+			"\n\t\t{%d, %d}", fm.base_vec[c].first,
+			fm.base_vec[c].second
+		);
+		++c;
+	}
+
+	for (; c < int(fm.ref_vec.size()); ++c) {
+		printf(",\n\t\t{%d, %d}", fm.base_vec[c].first,
+			fm.base_vec[c].second
+		);
+	}
+	printf("\n\t};\n");
+}
+
+void emit_map(fixed_map const &fm)
+{
+	emit_tail(fm);
+	printf("\n");
+	emit_tail_ref(fm);
+	printf("\n");
+	emit_base_ref(fm);
 }
 
 int main(int argc, char **argv)
@@ -378,6 +477,20 @@ int main(int argc, char **argv)
 		fm.append(v);
 
 	fm.compact_tails();
+
+	int l_cnt(1);
+	for (auto &v: l_in) {
+		if (fm.find(v) != l_cnt) {
+			v.push_back(0);
+			fprintf(
+				stderr,
+				"Validation failed, value %s, cnt %d\n",
+				&v.front(), l_cnt
+			);
+			return -1;
+		}
+		++l_cnt;
+	}
 
 	printf("struct fixed_string_map {\n");
 	emit_map(fm);
