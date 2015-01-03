@@ -70,6 +70,11 @@ struct fixed_map {
 
 	int get_vacant_set(std::vector<int> const &c_set)
 	{
+		printf("r --4- c_set %zd\n", c_set.size());
+		for (auto xx: c_set) {
+			printf("r -x4- %d\n", xx);
+		}
+
 		auto base(get_vacant(c_set[0]) - c_set[0]);
 		auto iter(c_set.begin());
 
@@ -89,7 +94,8 @@ struct fixed_map {
 
 	void update_children(int base, int old_ppos, int new_ppos)
 	{
-		for (int c(1); c < char_cnt; ++c) {
+		printf("r --3- c_cnt %d b %d old %d new %d\n", char_cnt, base, old_ppos, new_ppos);
+		for (int c(1); c <= char_cnt; ++c) {
 			if (base_vec[base + c].second == old_ppos)
 				base_vec[base + c].second = new_ppos;
 		}
@@ -103,6 +109,8 @@ struct fixed_map {
 		std::vector<int> c_set;
 		int c;
 
+		printf("r --0- pos %d, other %d, base %d, n_char %d\n", pos, other_ppos, base, n_char);
+
 		for (c = 1; c < n_char; ++c) {
 			if (base_vec[base + c].second == other_ppos)
 				c_set.push_back(c);
@@ -110,8 +118,11 @@ struct fixed_map {
 
 		int n_char_pos(c_set.size());
 		c_set.push_back(n_char);
+		auto x_char_cnt(std::min(
+			int(base_vec.size()) - base, char_cnt
+		));
 
-		for (c = n_char + 1; c < char_cnt; ++c) {
+		for (c = n_char + 1; c < x_char_cnt; ++c) {
 			if (base_vec[base + c].second == other_ppos)
 				c_set.push_back(c);
 		}
@@ -122,6 +133,7 @@ struct fixed_map {
 			auto l_pos(base + c_set[c]);
 			auto n_pos(n_base + c_set[c]);
 
+			printf("r --1- l_pos %d n_pos %d\n", l_pos, n_pos);
 			base_vec[n_pos] = base_vec[l_pos];
 
 			if (base_vec[l_pos].first >= 0)
@@ -136,10 +148,11 @@ struct fixed_map {
 		base_vec[n_base + c_set[c++]]
 		= std::make_pair(leaf_idx, other_ppos);
 
-		for (; c < char_cnt; ++c) {
+		for (; c < int(c_set.size()); ++c) {
 			auto l_pos(base + c_set[c]);
 			auto n_pos(n_base + c_set[c]);
 
+			printf("r --2- l_pos %d n_pos %d\n", l_pos, n_pos);
 			base_vec[n_pos] = base_vec[l_pos];
 
 			if (base_vec[l_pos].first >= 0)
@@ -150,6 +163,8 @@ struct fixed_map {
 
 			base_vec[l_pos] = std::make_pair(0, -1);
 		}
+
+		base_vec[other_ppos].first = n_base;
 	}
 
 	void unroll_suffix(
@@ -170,6 +185,7 @@ struct fixed_map {
 			pos = n_pos;
 		}
 
+		printf("u --2- pos %zd, sz %zd\n", cur_leaf.tail_pos, cur_leaf.tail_sz);
 		int min_char(term_char);
 		int max_char(other_char);
 
@@ -179,10 +195,12 @@ struct fixed_map {
 		if (min_char > max_char)
 			std::swap(min_char, max_char);
 
+		printf("u --0- min %c max %c\n", min_char, max_char);
 		min_char -= char_off;
 		max_char -= char_off;
 		int base(min_char);
 
+		printf("u --1- min %d max %d\n", min_char, max_char);
 		while (true) {
 			base = get_vacant(base);
 			auto max_pos(base + max_char - min_char);
@@ -201,37 +219,42 @@ struct fixed_map {
 
 		base_vec[base + min_char] = std::make_pair(cur_leaf_idx, pos);
 		base_vec[pos].first = base;
-		++cur_leaf.tail_pos;
-		--cur_leaf.tail_sz;
+		if (cur_leaf.tail_sz) {
+			++cur_leaf.tail_pos;
+			--cur_leaf.tail_sz;
+		}
 	}
 
 	void append(std::vector<uint8_t> const &in)
 	{
-		auto c_base(base_vec[0].first);
+		auto base(base_vec[0].first);
 		int l_pos(0);
 		auto first(in.begin());
 		auto last(in.end());
 
+		printf("a --0- %s\n", std::string(first, last).c_str());
 		while (first != last) {
-			auto n_pos(c_base + *first - char_off);
+			auto n_pos(base + *first - char_off);
+			printf("a --1- %d (%c), base %d, n_pos %d\n", *first, *first, base, n_pos);
+			++first;
+
 			if (is_vacant(n_pos)) {
+				printf("a --2- leaf\n");
 				get_vacant(n_pos);
-				++first;
 				base_vec[n_pos] = std::make_pair(
-					append_leaf(first, last),
-					l_pos
+					append_leaf(first, last), l_pos
 				);
 				return;
 			} else if (base_vec[n_pos].second != l_pos) {
-				++first;
+				printf("a --3- conflict\n");
 				relocate(
 					n_pos, l_pos, append_leaf(first, last)
 				);
 				return;
 			} else if (base_vec[n_pos].first < 0) {
-				++first;
 				auto n_char(term_char);
 				auto c_len(common_length(n_pos, first, last));
+				printf("a --4- unroll len %d\n", c_len);
 				if (std::distance(first, last) == c_len)
 					first = last;
 				else {
@@ -246,9 +269,8 @@ struct fixed_map {
 				);
 				return;
 			} else {
-				c_base = base_vec[n_pos].first;
+				base = base_vec[n_pos].first;
 				l_pos = n_pos;
-				++first;
 			}
 		}
 	}
@@ -262,20 +284,33 @@ struct fixed_map {
 
 		for (; first != last; ++first) {
 			n_pos = base + *first - char_off;
-			if (base_vec[n_pos].second != l_pos)
+			printf("f --0- %d (%c), base %d, n_pos %d\n", *first, *first, base, n_pos);
+			if (base_vec[n_pos].second != l_pos) {
+				printf("f --1- bad l_pos %d - %d\n", base_vec[n_pos].second, l_pos);
 				return 0;
-			else if (base_vec[n_pos].first < 0) {
+			} else if (base_vec[n_pos].first < 0) {
+				printf("f --2- leaf %d\n", base_vec[n_pos].first);
+				++first;
 				auto r_idx(-base_vec[n_pos].first);
 				auto &r(ref_vec[r_idx - 1]);
+				std::string x_tmp(
+					tail_vec.begin() + r.tail_pos,
+					tail_vec.begin() + r.tail_pos + r.tail_sz
+				);
+				std::string y_tmp(first, last);
+				printf("f -a2- %zd, %zd: %s\n", r.tail_pos, r.tail_sz, x_tmp.c_str());
+				printf("f -b2- %s\n", y_tmp.c_str());
+
 				if (std::equal(
 					first, last,
 					tail_vec.begin() + r.tail_pos,
-					tail_vec.end() + r.tail_pos + r.tail_sz
+					tail_vec.begin() + r.tail_pos + r.tail_sz
 				))
 					return r_idx;
 				else
 					return 0;
 			} else {
+				printf("f --3- node\n");
 				l_pos = n_pos;
 				base = base_vec[n_pos].first;
 			}
@@ -295,6 +330,10 @@ struct fixed_map {
 
 		for (auto &r: ref_vec) {
 			auto n_pos(t_vec.size());
+			printf(
+				"c --0- n_pos %zd, pos %zd, sz %zd\n",
+				n_pos, r.tail_pos, r.tail_sz
+			);
 			t_vec.insert(
 				t_vec.end(), tail_vec.begin() + r.tail_pos,
 				tail_vec.begin() + r.tail_pos + r.tail_sz
@@ -302,6 +341,38 @@ struct fixed_map {
 			r.tail_pos = n_pos;
 		}
 		tail_vec = std::move(t_vec);
+	}
+
+	void dump() const
+	{
+		printf("root: %d, %d\n", base_vec[0].first, base_vec[0].second);
+
+		for (std::size_t pos(1); pos < base_vec.size(); ++pos) {
+			auto v(base_vec[pos]);
+
+			printf("%zd: %d, %d", pos, v.first, v.second);
+			if (v.second < 0) {
+				printf("\n");
+				continue;
+			}
+
+			auto nc(pos - base_vec[v.second].first);
+			if (int(nc + char_off) != term_char)
+				printf(": %zd (%c)", nc, int(nc + char_off));
+			else
+				printf(": %zd (term)", nc);
+
+			if (v.first >= 0) {
+				printf("\n");
+				continue;
+			}
+
+			auto r(ref_vec[-1 - v.first]);
+			printf(" -> %s\n", std::string(
+				tail_vec.begin() + r.tail_pos,
+				tail_vec.begin() + r.tail_pos + r.tail_sz
+			).c_str());
+		}
 	}
 
 	struct tail_ref {
@@ -318,6 +389,41 @@ struct fixed_map {
 	int term_char;
 };
 
+template <typename Seq, typename Printer>
+void emit_sep(
+	Seq const &s, std::size_t step, Printer &&p
+)
+{
+	std::size_t c(0);
+	auto lc(std::min(s.size(), c + step));
+
+	if (lc) {
+		auto xc(c);
+		printf("\t\t");
+		p(s[xc]);
+		for (++xc; xc < lc; ++xc) {
+			printf(", ");
+			p(s[xc]);
+		}
+	}
+	c += lc;
+
+	for (; c < s.size(); c += step) {
+		printf(",\n");
+		lc = std::min(s.size(), c + step);
+		if (!lc)
+			break;
+
+		auto xc(c);
+		printf("\t\t");
+		p(s[xc]);
+		for (++xc; xc < lc; ++xc) {
+			printf(", ");
+			p(s[xc]);
+		}
+	}
+}
+
 void emit_tail(fixed_map const &fm)
 {
 	printf(
@@ -325,30 +431,9 @@ void emit_tail(fixed_map const &fm)
 		fm.tail_vec.size()
 	);
 
-	int c(0);
-	{
-		int lc(std::min(int(fm.tail_vec.size()), c + 8));
-		if (lc) {
-			int xc(c);
-			printf("\t\t0x%02x", fm.tail_vec[xc]);
-			for (; xc < lc; ++xc)
-				printf(", 0x%02x", fm.tail_vec[xc]);
-		}
-		c += lc;
-
-	}
-
-	for (; c < int(fm.tail_vec.size()); c += 8) {
-		printf(",\n");
-		int lc(std::min(int(fm.tail_vec.size()), c + 8));
-		if (!lc)
-			continue;
-
-		int xc(c);
-		printf("\t\t0x%02x", fm.tail_vec[xc]);
-		for (; xc < lc; ++xc)
-			printf(", 0x%02x", fm.tail_vec[xc]);
-	}
+	emit_sep(fm.tail_vec, 8, [](auto v) -> void {
+		printf("0x%02x", v);
+	});
 
 	printf("\n\t};\n");
 }
@@ -364,21 +449,12 @@ void emit_tail_ref(fixed_map const &fm)
 
 	printf("\tconstexpr static std::array<\n");
 	printf("\t\t%s, %zd\n", off_type.c_str(), fm.ref_vec.size());
-	printf("\t> tail_ref = {");
-	int c(0);
-	if (!fm.ref_vec.empty()) {
-		printf(
-			"\n\t\t{%zd, %zd}", fm.ref_vec[c].tail_pos,
-			fm.ref_vec[c].tail_sz
-		);
-		++c;
-	}
+	printf("\t> tail_ref = {\n");
 
-	for (; c < int(fm.ref_vec.size()); ++c) {
-		printf(",\n\t\t{%zd, %zd}", fm.ref_vec[c].tail_pos,
-			fm.ref_vec[c].tail_sz
-		);
-	}
+	emit_sep(fm.ref_vec, 4, [](auto v) -> void {
+		printf("{%zd, %zd}", v.tail_pos, v.tail_sz);
+	});
+
 	printf("\n\t};\n");
 }
 
@@ -394,21 +470,12 @@ void emit_base_ref(fixed_map const &fm)
 
 	printf("\tconstexpr static std::array<\n");
 	printf("\t\t%s, %zd\n", off_type.c_str(), fm.base_vec.size());
-	printf("\t> base_ref = {");
-	int c(0);
-	if (!fm.ref_vec.empty()) {
-		printf(
-			"\n\t\t{%d, %d}", fm.base_vec[c].first,
-			fm.base_vec[c].second
-		);
-		++c;
-	}
+	printf("\t> base_ref = {\n");
 
-	for (; c < int(fm.ref_vec.size()); ++c) {
-		printf(",\n\t\t{%d, %d}", fm.base_vec[c].first,
-			fm.base_vec[c].second
-		);
-	}
+	emit_sep(fm.base_vec, 4, [](auto v) -> void {
+		printf("{%d, %d}", v.first, v.second);
+	});
+
 	printf("\n\t};\n");
 }
 
@@ -449,7 +516,7 @@ int main(int argc, char **argv)
 	}
 
 	int c_low(*ab.begin());
-	int c_high(*ab.end());
+	int c_high(*ab.rbegin());
 	int c_term(-1);
 
 	if (c_low > 1) {
@@ -470,13 +537,19 @@ int main(int argc, char **argv)
 		}
 	}
 
-	int char_off(c_low > 0 ? c_low : -1);
-	fixed_map fm(char_off, c_high - c_low + 1, c_term);
+	fixed_map fm(c_low - 1, c_high - c_low + 1, c_term);
 
-	for (auto const &v: l_in)
+	for (auto const &v: l_in) {
 		fm.append(v);
+		fm.dump();
+		printf("====================\n");
+	}
+
+	printf("---- after append\n");
 
 	fm.compact_tails();
+
+	printf("---- after compact\n");
 
 	int l_cnt(1);
 	for (auto &v: l_in) {
