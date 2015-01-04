@@ -1,5 +1,16 @@
 
+exe bin2cstr : bin2cstr.c : <variant>release ;
+
+make nomenclate_tmpl_p.hpp : .//bin2cstr nomenclate_tmpl.hpp
+                           : @apply-util ;
+
+actions apply-util
+{
+	$(>[1]) < $(>[2]) > $(<)
+}
+
 exe nomenclate : nomenclate.cpp
-               : <cxxflags>-std=gnu++14 <include>../zivug <include>../yesod ;
+               : <cxxflags>-std=gnu++14 <include>../zivug <include>../yesod
+                 <implicit-dependency>nomenclate_tmpl_p.hpp <variant>release ;
 
 install . : nomenclate ;

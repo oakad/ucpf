@@ -80,7 +80,7 @@ bool unescape_c(
 	};
 
 	uint8_t esc_sel(NONE);
-	std::size_t esc_pos(0), esc_lim;
+	std::size_t esc_pos(0), esc_lim(0);
 	uint32_t esc_val(0);
 
 	for (; first != last; ++first) {
