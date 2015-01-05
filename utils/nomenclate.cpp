@@ -8,10 +8,12 @@
 
 #include <set>
 #include <list>
+#include <regex>
 #include <string>
 #include <vector>
-#include <regex>
 #include <iostream>
+#include <cinttypes>
+#include <unordered_map>
 #include <zivug/detail/unescape_c.hpp>
 
 #include <unistd.h>
@@ -284,10 +286,6 @@ struct fixed_map {
 				++first;
 				auto r_idx(-base_vec[n_pos].first);
 				auto &r(ref_vec[r_idx - 1]);
-				std::string x_tmp(
-					tail_vec.begin() + r.tail_pos,
-					tail_vec.begin() + r.tail_pos + r.tail_sz
-				);
 
 				if (std::equal(
 					first, last,
@@ -459,16 +457,41 @@ void emit_base_ref(int out_fd, fixed_map const &fm)
 		dprintf(out_fd, "{%d, %d}", v.first, v.second);
 	});
 
-	dprintf(out_fd, "\n\t};\n");
+	dprintf(out_fd, "\n\t};");
 }
 
 void emit_map(int out_fd, fixed_map const &fm)
 {
+	dprintf(
+		out_fd, "\tconstexpr static int char_offset = %d;\n",
+		fm.char_off
+	);
+	dprintf(
+		out_fd, "\tconstexpr static int char_count = %d;\n",
+		fm.char_cnt
+	);
+	dprintf(
+		out_fd, "\tconstexpr static int term_char = %d;\n\n",
+		fm.term_char
+	);
+
 	emit_tail(out_fd, fm);
 	dprintf(out_fd, "\n");
 	emit_tail_ref(out_fd, fm);
 	dprintf(out_fd, "\n");
 	emit_base_ref(out_fd, fm);
+}
+
+std::vector<char> gen_random_str128()
+{
+	static std::random_device src;
+	std::mt19937 gen(src());
+	std::uniform_int_distribution<uint64_t> dis;
+
+	std::vector<char> rv(32, 0);
+	sprintf(rv.data(), "%016" PRIX64, dis(gen));
+	sprintf(rv.data() + 16, "%016" PRIX64, dis(gen));
+	return rv;
 }
 
 int main(int argc, char **argv)
@@ -537,8 +560,62 @@ int main(int argc, char **argv)
 
 	std::regex tag_rx(R"(\{\{[[:alnum:]]+\}\})");
 
-	dprintf(out_fd, "struct %s {\n", r_name.c_str());
-	emit_map(out_fd, fm);
-	dprintf(out_fd, "};\n");
+	std::regex_token_iterator<decltype(outp_template.text)> tag_iter(
+		outp_template.text, outp_template.text + outp_template.size,
+		tag_rx
+	), tag_iter_end;
+
+	auto text_pos(outp_template.text);
+	auto guard_val(gen_random_str128());
+
+	static const std::unordered_map<
+		std::string, std::function<void ()>
+	> cmd_map = {
+		{"guard", [out_fd, &guard_val]() -> void {
+			if (write(out_fd, guard_val.data(), guard_val.size()));
+		}},
+		{"name", [out_fd, &r_name]() -> void {
+			if (write(out_fd, r_name.c_str(), r_name.size()));
+		}},
+		{"roster", [out_fd, &l_in]() -> void {
+			dprintf(out_fd, "\t/*\n");
+			int l_cnt(1);
+			for (auto const &v: l_in) {
+				dprintf(out_fd, "\t * %4d ", l_cnt++);
+				if (write(out_fd, v.data(), v.size()));
+				dprintf(out_fd, "\n");
+			}
+			dprintf(out_fd, "\t */");
+		}},
+		{"tables", [out_fd, &fm]() -> void {
+			emit_map(out_fd, fm);
+		}}
+	};
+
+	while (tag_iter != tag_iter_end) {
+		for (; tag_iter != tag_iter_end; ++tag_iter) {
+			if (write(out_fd, text_pos, tag_iter->first - text_pos));
+
+			auto cmd_iter(cmd_map.find(std::string(
+				tag_iter->first + 2, tag_iter->second - 2
+			)));
+
+			if (cmd_iter != cmd_map.end())
+				cmd_iter->second();
+
+			text_pos = tag_iter->second;
+		}
+
+		tag_iter = decltype(tag_iter)(
+			text_pos, outp_template.text + outp_template.size,
+			tag_rx
+		);
+	}
+
+	if (write(
+		out_fd, text_pos,
+		outp_template.text + outp_template.size - text_pos
+	));
+
 	return 0;
 }

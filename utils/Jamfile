@@ -2,7 +2,7 @@
 exe bin2cstr : bin2cstr.c : <variant>release ;
 
 make nomenclate_tmpl_p.hpp : .//bin2cstr nomenclate_tmpl.hpp
-                           : @apply-util ;
+                           : @apply-util : <variant>release ;
 
 actions apply-util
 {
