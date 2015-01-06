@@ -13,9 +13,16 @@ struct {{name}} {
 {{roster}}
 
 	template <typename Iterator>
+	static int find(Iterator &&first, Iterator &&last)
+	{
+		auto x_first(first);
+		return find(x_first, last);
+	}
+
+	template <typename Iterator>
 	static int find(Iterator &first, Iterator last)
 	{
-		int base(base_ref[0].first);
+		int base(base_ref[0].base);
 		int l_pos(0), n_pos(0);
 
 		for (; first != last; ++first) {
@@ -24,32 +31,44 @@ struct {{name}} {
 
 			n_pos = base + *first - char_offset;
 
-			if (int(base_ref[n_pos].second) != l_pos)
+			if (n_pos >= int(base_ref_size))
 				return 0;
-			else if (base_ref[n_pos].first < 0) {
-				++first;
-				int r_idx(-base_ref[n_pos].first);
-				auto &r(tail_ref[r_idx - 1]);
 
-				if (std::equal(
-					first, last,
-					tail.begin() + r.first,
-					tail.begin() + r.first + r.second
-				))
+			if (int(base_ref[n_pos].check) != l_pos)
+				return 0;
+			else if (base_ref[n_pos].base < 0) {
+				++first;
+				int r_idx(-base_ref[n_pos].base);
+				auto &r(tail_ref[r_idx - 1]);
+				auto r_first(tail + r.offset);
+				auto r_last(r_first + r.size);
+
+				while (first != last) {
+					if (r_first == r_last)
+						break;
+
+					if (*first != *r_first)
+						break;
+
+					++first;
+					++r_first;
+				}
+
+				if ((first == last) && (r_first == r_last))
 					return r_idx;
 				else
 					return 0;
 			} else {
 				l_pos = n_pos;
-				base = base_vec[n_pos].first;
+				base = base_ref[n_pos].base;
 			}
 		}
 
 		n_pos = base + term_char - char_offset;
-		if (n_pos < int(base_ref.size())) {
-			if ((int(base_ref[n_pos].second) == l_pos)
-			    && (base_ref[n_pos].first < 0))
-				return -base_ref[n_pos].first;
+		if (n_pos < int(base_ref_size)) {
+			if ((int(base_ref[n_pos].check) == l_pos)
+			    && (base_ref[n_pos].base < 0))
+				return -base_ref[n_pos].base;
 		}
 
 		return 0;
@@ -66,4 +85,5 @@ private:
 {{tables}}
 };
 
+{{table_defs}}
 #endif

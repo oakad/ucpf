@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <zivug/detail/unescape_c.hpp>
 
+#include <fcntl.h>
 #include <unistd.h>
 
 constexpr static struct {
@@ -24,6 +25,41 @@ constexpr static struct {
 } outp_template = {
 #include "nomenclate_tmpl_p.hpp"
 };
+
+template <typename Seq, typename Printer>
+void emit_sep(
+	int out_fd, Seq const &s, std::size_t step, Printer &&p
+)
+{
+	std::size_t c(0);
+	auto lc(std::min(s.size(), c + step));
+
+	if (lc) {
+		auto xc(c);
+		dprintf(out_fd, "\t\t");
+		p(s[xc]);
+		for (++xc; xc < lc; ++xc) {
+			dprintf(out_fd, ", ");
+			p(s[xc]);
+		}
+	}
+	c += lc;
+
+	for (; c < s.size(); c += step) {
+		dprintf(out_fd, ",\n");
+		lc = std::min(s.size(), c + step);
+		if (!lc)
+			break;
+
+		auto xc(c);
+		dprintf(out_fd, "\t\t");
+		p(s[xc]);
+		for (++xc; xc < lc; ++xc) {
+			dprintf(out_fd, ", ");
+			p(s[xc]);
+		}
+	}
+}
 
 struct fixed_map {
 	fixed_map(int char_off_, int char_cnt_, int term_char_)
@@ -356,6 +392,126 @@ struct fixed_map {
 		}
 	}
 
+	void emit_tail(int out_fd) const
+	{
+		dprintf(
+			out_fd,
+			"\tconstexpr static std::size_t tail_size = %zd;\n\n",
+			tail_vec.size()
+		);
+		dprintf(
+			out_fd,
+			"\tconstexpr static uint8_t tail[tail_size] = {\n"
+		);
+
+		emit_sep(out_fd, tail_vec, 8, [out_fd](auto v) -> void {
+			dprintf(out_fd, "0x%02x", v);
+		});
+
+		dprintf(out_fd, "\n\t};\n");
+	}
+
+	void emit_tail_ref(int out_fd)
+	{
+		tail_ref_type = "uint32_t";
+
+		if (tail_vec.size() < 256)
+			tail_ref_type = "uint8_t";
+		else if (tail_vec.size() < 65536)
+			tail_ref_type = "uint16_t";
+
+		dprintf(out_fd, "\tstruct tail_ref_type {\n");
+		dprintf(out_fd, "\t\t%s offset;\n", tail_ref_type.c_str());
+		dprintf(out_fd, "\t\t%s size;\n", tail_ref_type.c_str());
+		dprintf(out_fd, "\t};\n\n");
+		dprintf(
+			out_fd, "\tconstexpr static std::size_t "
+			"tail_ref_size = %zd;\n\n", ref_vec.size()
+		);
+		dprintf(
+			out_fd, "\tconstexpr static tail_ref_type "
+			"tail_ref[tail_ref_size] = {\n"
+		);
+
+		emit_sep(out_fd, ref_vec, 4, [out_fd](auto v) -> void {
+			dprintf(out_fd, "{%zd, %zd}", v.tail_pos, v.tail_sz);
+		});
+
+		dprintf(out_fd, "\n\t};\n");
+	}
+
+	void emit_base_ref(int out_fd)
+	{
+		base_ref_type = "int32_t";
+		auto m_sz(std::max(ref_vec.size(), base_vec.size()));
+
+		if (m_sz < 128)
+			base_ref_type = "int8_t";
+		else if (m_sz < 32768)
+			base_ref_type = "int16_t";
+
+		dprintf(out_fd, "\tstruct base_ref_type {\n");
+		dprintf(out_fd, "\t\t%s base;\n", base_ref_type.c_str());
+		dprintf(out_fd, "\t\t%s check;\n", base_ref_type.c_str());
+		dprintf(out_fd, "\t};\n\n");
+
+		dprintf(
+			out_fd, "\tconstexpr static std::size_t "
+			"base_ref_size = %zd;\n\n", base_vec.size()
+		);
+		dprintf(
+			out_fd, "\tconstexpr static base_ref_type "
+			"base_ref[base_ref_size] = {\n"
+		);
+
+		emit_sep(out_fd, base_vec, 4, [out_fd](auto v) -> void {
+			dprintf(out_fd, "{%d, %d}", v.first, v.second);
+		});
+
+		dprintf(out_fd, "\n\t};");
+	}
+
+	void emit_map(int out_fd)
+	{
+		dprintf(
+			out_fd, "\tconstexpr static int char_offset = %d;\n",
+			char_off
+		);
+		dprintf(
+			out_fd, "\tconstexpr static int char_count = %d;\n",
+			char_cnt
+		);
+		dprintf(
+			out_fd, "\tconstexpr static int term_char = %d;\n\n",
+			term_char
+		);
+
+		emit_tail(out_fd);
+		dprintf(out_fd, "\n");
+		emit_tail_ref(out_fd);
+		dprintf(out_fd, "\n");
+		emit_base_ref(out_fd);
+	}
+
+	void emit_map_def(int out_fd, std::string const &r_name)
+	{
+		dprintf(
+			out_fd, "constexpr uint8_t "
+			"%s::tail[%s::tail_size];\n",
+			r_name.c_str(), r_name.c_str()
+		);
+		dprintf(
+			out_fd, "constexpr %s::tail_ref_type "
+			"%s::tail_ref[%s::tail_ref_size];\n",
+			r_name.c_str(), r_name.c_str(), r_name.c_str()
+		);
+		dprintf(
+			out_fd, "constexpr %s::base_ref_type "
+			"%s::base_ref[%s::base_ref_size];\n",
+			r_name.c_str(), r_name.c_str(), r_name.c_str()
+		);
+	}
+
 	struct tail_ref {
 		std::size_t tail_pos;
 		std::size_t tail_sz;
@@ -364,123 +520,14 @@ struct fixed_map {
 	std::vector<uint8_t> tail_vec;
 	std::vector<tail_ref> ref_vec;
 	std::vector<std::pair<int, int>> base_vec;
+	std::string tail_ref_type;
+	std::string base_ref_type;
 
 	int char_off;
 	int char_cnt;
 	int term_char;
 };
 
-template <typename Seq, typename Printer>
-void emit_sep(
-	int out_fd, Seq const &s, std::size_t step, Printer &&p
-)
-{
-	std::size_t c(0);
-	auto lc(std::min(s.size(), c + step));
-
-	if (lc) {
-		auto xc(c);
-		dprintf(out_fd, "\t\t");
-		p(s[xc]);
-		for (++xc; xc < lc; ++xc) {
-			dprintf(out_fd, ", ");
-			p(s[xc]);
-		}
-	}
-	c += lc;
-
-	for (; c < s.size(); c += step) {
-		dprintf(out_fd, ",\n");
-		lc = std::min(s.size(), c + step);
-		if (!lc)
-			break;
-
-		auto xc(c);
-		dprintf(out_fd, "\t\t");
-		p(s[xc]);
-		for (++xc; xc < lc; ++xc) {
-			dprintf(out_fd, ", ");
-			p(s[xc]);
-		}
-	}
-}
-
-void emit_tail(int out_fd, fixed_map const &fm)
-{
-	dprintf(out_fd, 
-		"\tconstexpr static std::array<uint8_t, %zd> tail = {\n",
-		fm.tail_vec.size()
-	);
-
-	emit_sep(out_fd, fm.tail_vec, 8, [out_fd](auto v) -> void {
-		dprintf(out_fd, "0x%02x", v);
-	});
-
-	dprintf(out_fd, "\n\t};\n");
-}
-
-void emit_tail_ref(int out_fd, fixed_map const &fm)
-{
-	std::string off_type("std::pair<uint32_t, uint32_t>");
-
-	if (fm.tail_vec.size() < 256)
-		off_type = "std::pair<uint8_t, uint8_t>";
-	else if (fm.tail_vec.size() < 65536)
-		off_type = "std::pair<uint16_t, uint16_t>";
-
-	dprintf(out_fd, "\tconstexpr static std::array<\n");
-	dprintf(out_fd, "\t\t%s, %zd\n", off_type.c_str(), fm.ref_vec.size());
-	dprintf(out_fd, "\t> tail_ref = {\n");
-
-	emit_sep(out_fd, fm.ref_vec, 4, [out_fd](auto v) -> void {
-		dprintf(out_fd, "{%zd, %zd}", v.tail_pos, v.tail_sz);
-	});
-
-	dprintf(out_fd, "\n\t};\n");
-}
-
-void emit_base_ref(int out_fd, fixed_map const &fm)
-{
-	std::string off_type("std::pair<int32_t, int32_t>");
-	auto m_sz(std::max(fm.ref_vec.size(), fm.base_vec.size()));
-
-	if (m_sz < 128)
-		off_type = "std::pair<int8_t, int8_t>";
-	else if (m_sz < 32768)
-		off_type = "std::pair<int16_t, int16_t>";
-
-	dprintf(out_fd, "\tconstexpr static std::array<\n");
-	dprintf(out_fd, "\t\t%s, %zd\n", off_type.c_str(), fm.base_vec.size());
-	dprintf(out_fd, "\t> base_ref = {\n");
-
-	emit_sep(out_fd, fm.base_vec, 4, [out_fd](auto v) -> void {
-		dprintf(out_fd, "{%d, %d}", v.first, v.second);
-	});
-
-	dprintf(out_fd, "\n\t};");
-}
-
-void emit_map(int out_fd, fixed_map const &fm)
-{
-	dprintf(
-		out_fd, "\tconstexpr static int char_offset = %d;\n",
-		fm.char_off
-	);
-	dprintf(
-		out_fd, "\tconstexpr static int char_count = %d;\n",
-		fm.char_cnt
-	);
-	dprintf(
-		out_fd, "\tconstexpr static int term_char = %d;\n\n",
-		fm.term_char
-	);
-
-	emit_tail(out_fd, fm);
-	dprintf(out_fd, "\n");
-	emit_tail_ref(out_fd, fm);
-	dprintf(out_fd, "\n");
-	emit_base_ref(out_fd, fm);
-}
 
 std::vector<char> gen_random_str128()
 {
@@ -506,8 +553,22 @@ int main(int argc, char **argv)
 	std::set<uint8_t> ab;
 	std::vector<std::pair<int, int>> v_out;
 
-	if (argc > 1)
+	if (argc > 1) {
 		r_name.assign(argv[1]);
+		auto f_name(r_name + ".hpp");
+		out_fd = open(
+			f_name.c_str(), O_WRONLY | O_CREAT,
+			S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH
+		);
+		if (out_fd < 0) {
+			dprintf(
+				STDERR_FILENO, "Error %d creating file %s\n",
+				errno, f_name.c_str()
+			);
+			return -1;
+
+		}
+	}
 
 	while (std::getline(std::cin, s_in)) {
 		if (s_in.empty())
@@ -558,7 +619,7 @@ int main(int argc, char **argv)
 		++l_cnt;
 	}
 
-	std::regex tag_rx(R"(\{\{[[:alnum:]]+\}\})");
+	std::regex tag_rx(R"(\{\{[[:alnum:]_]+\}\})");
 
 	std::regex_token_iterator<decltype(outp_template.text)> tag_iter(
 		outp_template.text, outp_template.text + outp_template.size,
@@ -588,7 +649,10 @@ int main(int argc, char **argv)
 			dprintf(out_fd, "\t */");
 		}},
 		{"tables", [out_fd, &fm]() -> void {
-			emit_map(out_fd, fm);
+			fm.emit_map(out_fd);
+		}},
+		{"table_defs", [out_fd, &fm, &r_name]() -> void {
+			fm.emit_map_def(out_fd, r_name);
 		}}
 	};
 
