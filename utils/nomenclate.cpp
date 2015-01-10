@@ -65,37 +65,40 @@ struct fixed_map {
 	fixed_map(int char_off_, int char_cnt_, int term_char_)
 	: char_off(char_off_), char_cnt(char_cnt_), term_char(term_char_)
 	{
-		base_vec.emplace_back(0, 0);
+		base_ref.emplace_back(base_ref_type{0, 0});
 	}
 
 	bool is_vacant(int pos) const
 	{
-		return (int(base_vec.size()) <= pos)
-		       || (base_vec[pos].second < 0);
+		return (int(base_ref.size()) <= pos)
+		       || (base_ref[pos].check < 0);
 	}
 
 	template <typename Iter>
 	int append_leaf(Iter first, Iter last)
 	{
-		tail_ref r{0, std::size_t(std::distance(first, last))};
-		if (r.tail_sz) {
-			r.tail_pos = tail_vec.size();
+		tail_ref_type r{
+			0, std::size_t(std::distance(first, last))
+		};
+
+		if (r.size) {
+			r.offset = tail.size();
 			for (; first != last; ++first)
-				tail_vec.push_back(*first);
+				tail.push_back(*first);
 		}
 
-		ref_vec.push_back(r);
-		return -ref_vec.size();
+		tail_ref.push_back(r);
+		return -tail_ref.size();
 	}
 
 	template <typename Iter>
 	int common_length(int pos, Iter first, Iter last)
 	{
-		auto r(ref_vec[-1 - base_vec[pos].first]);
-		auto s_ptr(&tail_vec[r.tail_pos]);
+		auto r(tail_ref[-1 - base_ref[pos].base]);
+		auto s_ptr(&tail[r.offset]);
 		auto s_pos(0);
 
-		while ((s_pos < int(r.tail_sz)) && (first != last)) {
+		while ((s_pos < int(r.size)) && (first != last)) {
 			if (s_ptr[s_pos] != *first)
 				break;
 
@@ -107,12 +110,12 @@ struct fixed_map {
 
 	int get_vacant(int first)
 	{
-		for (; first < int(base_vec.size()); ++first) {
-			if (base_vec[first].second < 0)
+		for (; first < int(base_ref.size()); ++first) {
+			if (base_ref[first].check < 0)
 				return first;
 		}
 
-		base_vec.resize(first + 1, std::make_pair(0, -1));
+		base_ref.resize(first + 1, base_ref_type{0, -1});
 		return first;
 	}
 
@@ -138,32 +141,32 @@ struct fixed_map {
 	void update_children(int base, int old_ppos, int new_ppos)
 	{
 		for (int c(1); c <= char_cnt; ++c) {
-			if (base_vec[base + c].second == old_ppos)
-				base_vec[base + c].second = new_ppos;
+			if (base_ref[base + c].check == old_ppos)
+				base_ref[base + c].check = new_ppos;
 		}
 	}
 
 	void relocate(int pos, int other_ppos, int leaf_idx)
 	{
-		auto base(base_vec[other_ppos].first);
+		auto base(base_ref[other_ppos].base);
 		auto n_char(pos - base);
 
 		std::vector<int> c_set;
 		int c;
 
 		for (c = 1; c < n_char; ++c) {
-			if (base_vec[base + c].second == other_ppos)
+			if (base_ref[base + c].check == other_ppos)
 				c_set.push_back(c);
 		}
 
 		int n_char_pos(c_set.size());
 		c_set.push_back(n_char);
 		auto x_char_cnt(std::min(
-			int(base_vec.size()) - base, char_cnt
+			int(base_ref.size()) - base, char_cnt + char_off
 		));
 
 		for (c = n_char + 1; c < x_char_cnt; ++c) {
-			if (base_vec[base + c].second == other_ppos)
+			if (base_ref[base + c].check == other_ppos)
 				c_set.push_back(c);
 		}
 
@@ -173,52 +176,53 @@ struct fixed_map {
 			auto l_pos(base + c_set[c]);
 			auto n_pos(n_base + c_set[c]);
 
-			base_vec[n_pos] = base_vec[l_pos];
+			base_ref[n_pos] = base_ref[l_pos];
 
-			if (base_vec[l_pos].first >= 0)
+			if (base_ref[l_pos].base >= 0)
 				update_children(
-					base_vec[l_pos].first,
+					base_ref[l_pos].base,
 					l_pos, n_pos
 				);
 
-			base_vec[l_pos] = std::make_pair(0, -1);
+			base_ref[l_pos] = base_ref_type{0, -1};
 		}
 
-		base_vec[n_base + c_set[c++]]
-		= std::make_pair(leaf_idx, other_ppos);
+		base_ref[n_base + c_set[c++]] = base_ref_type{
+			leaf_idx, other_ppos
+		};
 
 		for (; c < int(c_set.size()); ++c) {
 			auto l_pos(base + c_set[c]);
 			auto n_pos(n_base + c_set[c]);
 
-			base_vec[n_pos] = base_vec[l_pos];
+			base_ref[n_pos] = base_ref[l_pos];
 
-			if (base_vec[l_pos].first >= 0)
+			if (base_ref[l_pos].base >= 0)
 				update_children(
-					base_vec[l_pos].first,
+					base_ref[l_pos].base,
 					l_pos, n_pos
 				);
 
-			base_vec[l_pos] = std::make_pair(0, -1);
+			base_ref[l_pos] = base_ref_type{0, -1};
 		}
 
-		base_vec[other_ppos].first = n_base;
+		base_ref[other_ppos].base = n_base;
 	}
 
 	void unroll_suffix(
 		int pos, std::size_t count, int other_char, int leaf_idx
 	)
 	{
-		auto cur_leaf_idx(base_vec[pos].first);
-		auto &cur_leaf(ref_vec[-1 - cur_leaf_idx]);
+		auto cur_leaf_idx(base_ref[pos].base);
+		auto &cur_leaf(tail_ref[-1 - cur_leaf_idx]);
 
 		while (count) {
-			auto n_idx(tail_vec[cur_leaf.tail_pos] - char_off);
+			auto n_idx(tail[cur_leaf.offset] - char_off);
 			auto n_pos(get_vacant(n_idx));
-			base_vec[n_pos] = std::make_pair(cur_leaf_idx, pos);
-			base_vec[pos].first = n_pos - n_idx;
-			++cur_leaf.tail_pos;
-			--cur_leaf.tail_sz;
+			base_ref[n_pos] = base_ref_type{cur_leaf_idx, pos};
+			base_ref[pos].base = n_pos - n_idx;
+			++cur_leaf.offset;
+			--cur_leaf.size;
 			--count;
 			pos = n_pos;
 		}
@@ -226,8 +230,8 @@ struct fixed_map {
 		int min_char(term_char);
 		int max_char(other_char);
 
-		if (cur_leaf.tail_sz)
-			min_char = tail_vec[cur_leaf.tail_pos];
+		if (cur_leaf.size)
+			min_char = tail[cur_leaf.offset];
 
 		if (min_char > max_char)
 			std::swap(min_char, max_char);
@@ -248,21 +252,21 @@ struct fixed_map {
 		base -= min_char;
 		other_char -= char_off;
 
-		base_vec[base + other_char] = std::make_pair(leaf_idx, pos);
+		base_ref[base + other_char] = base_ref_type{leaf_idx, pos};
 		if (min_char == other_char)
 			min_char = max_char;
 
-		base_vec[base + min_char] = std::make_pair(cur_leaf_idx, pos);
-		base_vec[pos].first = base;
-		if (cur_leaf.tail_sz) {
-			++cur_leaf.tail_pos;
-			--cur_leaf.tail_sz;
+		base_ref[base + min_char] = base_ref_type{cur_leaf_idx, pos};
+		base_ref[pos].base = base;
+		if (cur_leaf.size) {
+			++cur_leaf.offset;
+			--cur_leaf.size;
 		}
 	}
 
 	void append(std::vector<uint8_t> const &in)
 	{
-		auto base(base_vec[0].first);
+		auto base(base_ref[0].base);
 		int l_pos(0);
 		auto first(in.begin());
 		auto last(in.end());
@@ -273,16 +277,16 @@ struct fixed_map {
 
 			if (is_vacant(n_pos)) {
 				get_vacant(n_pos);
-				base_vec[n_pos] = std::make_pair(
+				base_ref[n_pos] = base_ref_type{
 					append_leaf(first, last), l_pos
-				);
+				};
 				return;
-			} else if (base_vec[n_pos].second != l_pos) {
+			} else if (base_ref[n_pos].check != l_pos) {
 				relocate(
 					n_pos, l_pos, append_leaf(first, last)
 				);
 				return;
-			} else if (base_vec[n_pos].first < 0) {
+			} else if (base_ref[n_pos].base < 0) {
 				auto n_char(term_char);
 				auto c_len(common_length(n_pos, first, last));
 
@@ -300,7 +304,7 @@ struct fixed_map {
 				);
 				return;
 			} else {
-				base = base_vec[n_pos].first;
+				base = base_ref[n_pos].base;
 				l_pos = n_pos;
 			}
 		}
@@ -310,84 +314,83 @@ struct fixed_map {
 	{
 		auto first(in.begin());
 		auto last(in.end());
-		auto base(base_vec[0].first);
+		auto base(base_ref[0].base);
 		auto l_pos(0), n_pos(0);
 
 		for (; first != last; ++first) {
 			n_pos = base + *first - char_off;
 
-			if (base_vec[n_pos].second != l_pos)
+			if (base_ref[n_pos].check != l_pos)
 				return 0;
-			else if (base_vec[n_pos].first < 0) {
+			else if (base_ref[n_pos].base < 0) {
 				++first;
-				auto r_idx(-base_vec[n_pos].first);
-				auto &r(ref_vec[r_idx - 1]);
+				auto r_idx(-base_ref[n_pos].base);
+				auto &r(tail_ref[r_idx - 1]);
 
 				if (std::equal(
 					first, last,
-					tail_vec.begin() + r.tail_pos,
-					tail_vec.begin() + r.tail_pos + r.tail_sz
+					tail.begin() + r.offset,
+					tail.begin() + r.offset + r.size
 				))
 					return r_idx;
 				else
 					return 0;
 			} else {
 				l_pos = n_pos;
-				base = base_vec[n_pos].first;
+				base = base_ref[n_pos].base;
 			}
 		}
 		n_pos = base + term_char - char_off;
-		if (n_pos < int(base_vec.size())) {
-			if ((base_vec[n_pos].second == l_pos)
-			    && (base_vec[n_pos].first < 0))
-				return -base_vec[n_pos].first;
+		if (n_pos < int(base_ref.size())) {
+			if ((base_ref[n_pos].check == l_pos)
+			    && (base_ref[n_pos].base < 0))
+				return -base_ref[n_pos].base;
 		}
 		return 0;
 	}
 
 	void compact_tails()
 	{
-		decltype(tail_vec) t_vec;
+		decltype(tail) t_vec;
 
-		for (auto &r: ref_vec) {
+		for (auto &r: tail_ref) {
 			auto n_pos(t_vec.size());
 			t_vec.insert(
-				t_vec.end(), tail_vec.begin() + r.tail_pos,
-				tail_vec.begin() + r.tail_pos + r.tail_sz
+				t_vec.end(), tail.begin() + r.offset,
+				tail.begin() + r.offset + r.size
 			);
-			r.tail_pos = n_pos;
+			r.offset = n_pos;
 		}
-		tail_vec = std::move(t_vec);
+		tail = std::move(t_vec);
 	}
 
 	void dump(int out_fd) const
 	{
-		dprintf(out_fd, "root: %d, %d\n", base_vec[0].first, base_vec[0].second);
+		dprintf(out_fd, "root: %d, %d\n", base_ref[0].base, base_ref[0].check);
 
-		for (std::size_t pos(1); pos < base_vec.size(); ++pos) {
-			auto v(base_vec[pos]);
+		for (std::size_t pos(1); pos < base_ref.size(); ++pos) {
+			auto v(base_ref[pos]);
 
-			dprintf(out_fd, "%zd: %d, %d", pos, v.first, v.second);
-			if (v.second < 0) {
-				dprintf(out_fd, "\n");
+			if (v.check < 0)
 				continue;
-			}
 
-			auto nc(pos - base_vec[v.second].first);
+			dprintf(out_fd, "%zd: %d, %d", pos, v.base, v.check);
+
+			auto nc(pos - base_ref[v.check].base);
 			if (int(nc + char_off) != term_char)
 				dprintf(out_fd, ": %zd (%c)", nc, int(nc + char_off));
 			else
 				dprintf(out_fd, ": %zd (term)", nc);
 
-			if (v.first >= 0) {
+			if (v.base >= 0) {
 				dprintf(out_fd, "\n");
 				continue;
 			}
 
-			auto r(ref_vec[-1 - v.first]);
+			auto r(tail_ref[-1 - v.base]);
 			dprintf(out_fd, " -> %s\n", std::string(
-				tail_vec.begin() + r.tail_pos,
-				tail_vec.begin() + r.tail_pos + r.tail_sz
+				tail.begin() + r.offset,
+				tail.begin() + r.offset + r.size
 			).c_str());
 		}
 	}
@@ -397,14 +400,14 @@ struct fixed_map {
 		dprintf(
 			out_fd,
 			"\tconstexpr static std::size_t tail_size = %zd;\n\n",
-			tail_vec.size()
+			tail.size()
 		);
 		dprintf(
 			out_fd,
 			"\tconstexpr static uint8_t tail[tail_size] = {\n"
 		);
 
-		emit_sep(out_fd, tail_vec, 8, [out_fd](auto v) -> void {
+		emit_sep(out_fd, tail, 8, [out_fd](auto v) -> void {
 			dprintf(out_fd, "0x%02x", v);
 		});
 
@@ -413,28 +416,28 @@ struct fixed_map {
 
 	void emit_tail_ref(int out_fd)
 	{
-		tail_ref_type = "uint32_t";
+		tail_offset_type = "uint32_t";
 
-		if (tail_vec.size() < 256)
-			tail_ref_type = "uint8_t";
-		else if (tail_vec.size() < 65536)
-			tail_ref_type = "uint16_t";
+		if (tail.size() < 256)
+			tail_offset_type = "uint8_t";
+		else if (tail.size() < 65536)
+			tail_offset_type = "uint16_t";
 
 		dprintf(out_fd, "\tstruct tail_ref_type {\n");
-		dprintf(out_fd, "\t\t%s offset;\n", tail_ref_type.c_str());
-		dprintf(out_fd, "\t\t%s size;\n", tail_ref_type.c_str());
+		dprintf(out_fd, "\t\t%s offset;\n", tail_offset_type.c_str());
+		dprintf(out_fd, "\t\t%s size;\n", tail_offset_type.c_str());
 		dprintf(out_fd, "\t};\n\n");
 		dprintf(
 			out_fd, "\tconstexpr static std::size_t "
-			"tail_ref_size = %zd;\n\n", ref_vec.size()
+			"tail_ref_size = %zd;\n\n", tail_ref.size()
 		);
 		dprintf(
 			out_fd, "\tconstexpr static tail_ref_type "
 			"tail_ref[tail_ref_size] = {\n"
 		);
 
-		emit_sep(out_fd, ref_vec, 4, [out_fd](auto v) -> void {
-			dprintf(out_fd, "{%zd, %zd}", v.tail_pos, v.tail_sz);
+		emit_sep(out_fd, tail_ref, 4, [out_fd](auto v) -> void {
+			dprintf(out_fd, "{%zd, %zd}", v.offset, v.size);
 		});
 
 		dprintf(out_fd, "\n\t};\n");
@@ -442,30 +445,30 @@ struct fixed_map {
 
 	void emit_base_ref(int out_fd)
 	{
-		base_ref_type = "int32_t";
-		auto m_sz(std::max(ref_vec.size(), base_vec.size()));
+		base_offset_type = "int32_t";
+		auto m_sz(std::max(tail_ref.size(), base_ref.size()));
 
 		if (m_sz < 128)
-			base_ref_type = "int8_t";
+			base_offset_type = "int8_t";
 		else if (m_sz < 32768)
-			base_ref_type = "int16_t";
+			base_offset_type = "int16_t";
 
 		dprintf(out_fd, "\tstruct base_ref_type {\n");
-		dprintf(out_fd, "\t\t%s base;\n", base_ref_type.c_str());
-		dprintf(out_fd, "\t\t%s check;\n", base_ref_type.c_str());
+		dprintf(out_fd, "\t\t%s base;\n", base_offset_type.c_str());
+		dprintf(out_fd, "\t\t%s check;\n", base_offset_type.c_str());
 		dprintf(out_fd, "\t};\n\n");
 
 		dprintf(
 			out_fd, "\tconstexpr static std::size_t "
-			"base_ref_size = %zd;\n\n", base_vec.size()
+			"base_ref_size = %zd;\n\n", base_ref.size()
 		);
 		dprintf(
 			out_fd, "\tconstexpr static base_ref_type "
 			"base_ref[base_ref_size] = {\n"
 		);
 
-		emit_sep(out_fd, base_vec, 4, [out_fd](auto v) -> void {
-			dprintf(out_fd, "{%d, %d}", v.first, v.second);
+		emit_sep(out_fd, base_ref, 4, [out_fd](auto v) -> void {
+			dprintf(out_fd, "{%d, %d}", v.base, v.check);
 		});
 
 		dprintf(out_fd, "\n\t};");
@@ -512,16 +515,21 @@ struct fixed_map {
 		);
 	}
 
-	struct tail_ref {
-		std::size_t tail_pos;
-		std::size_t tail_sz;
+	struct tail_ref_type {
+		std::size_t offset;
+		std::size_t size;
 	};
 
-	std::vector<uint8_t> tail_vec;
-	std::vector<tail_ref> ref_vec;
-	std::vector<std::pair<int, int>> base_vec;
-	std::string tail_ref_type;
-	std::string base_ref_type;
+	struct base_ref_type {
+		int base;
+		int check;
+	};
+
+	std::vector<uint8_t> tail;
+	std::vector<tail_ref_type> tail_ref;
+	std::vector<base_ref_type> base_ref;
+	std::string tail_offset_type;
+	std::string base_offset_type;
 
 	int char_off;
 	int char_cnt;
@@ -551,7 +559,6 @@ int main(int argc, char **argv)
 	std::vector<uint8_t> v_in;
 	std::list<decltype(v_in)> l_in;
 	std::set<uint8_t> ab;
-	std::vector<std::pair<int, int>> v_out;
 
 	if (argc > 1) {
 		r_name.assign(argv[1]);
