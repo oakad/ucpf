@@ -308,6 +308,15 @@ struct fixed_map {
 				l_pos = n_pos;
 			}
 		}
+
+		auto n_pos(base + term_char - char_off);
+		if (is_vacant(n_pos)) {
+			get_vacant(n_pos);
+			base_ref[n_pos] = base_ref_type{
+				append_leaf(first, last), l_pos
+			};
+		} else if (base_ref[n_pos].check != l_pos)
+			relocate(n_pos, l_pos, append_leaf(first, last));
 	}
 
 	int find(std::vector<uint8_t> const &in) const
@@ -564,7 +573,7 @@ int main(int argc, char **argv)
 		r_name.assign(argv[1]);
 		auto f_name(r_name + ".hpp");
 		out_fd = open(
-			f_name.c_str(), O_WRONLY | O_CREAT,
+			f_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC,
 			S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH
 		);
 		if (out_fd < 0) {
@@ -621,6 +630,7 @@ int main(int argc, char **argv)
 				"Validation failed, value %s, cnt %d\n",
 				&v.front(), l_cnt
 			);
+			fm.dump(STDERR_FILENO);
 			return -1;
 		}
 		++l_cnt;
