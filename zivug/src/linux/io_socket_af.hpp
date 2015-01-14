@@ -9,14 +9,6 @@
 #if !defined(HPP_DBA7740ACA4573C0D286564BC18115E2)
 #define HPP_DBA7740ACA4573C0D286564BC18115E2
 
-extern "C" {
-
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-
-}
-
 #include <system_error>
 
 #include "network_defines.hpp"
@@ -48,28 +40,6 @@ struct family : family_base {
 		int fd, char const *first, char const *last
 	) const
 	{}
-};
-
-template <>
-struct family<AF_INET> : family_base {
-	virtual int create(
-		int type, char const *first, char const *last
-	) const;
-
-	virtual void bind(
-		int fd, char const *first, char const *last
-	) const;
-};
-
-template <>
-struct family<AF_INET6> : family_base {
-	virtual int create(
-		int type, char const *first, char const *last
-	) const;
-
-	virtual void bind(
-		int fd, char const *first, char const *last
-	) const;
 };
 
 }}}}
