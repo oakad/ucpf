@@ -6,8 +6,8 @@
  * shed by the Free Software Foundation.
  */
 
-#if !defined(HPP_F619E36FAFFE1B86F123CAE8AF566A96)
-#define HPP_F619E36FAFFE1B86F123CAE8AF566A96
+#if !defined(HPP_3C750D15FD87935E09DE05F1458F626C)
+#define HPP_3C750D15FD87935E09DE05F1458F626C
 
 struct socket_type_map {
 	/*
@@ -20,66 +20,108 @@ struct socket_type_map {
 	 *    7 packet
 	 */
 
-	template <typename Iterator>
-	static int find(Iterator &&first, Iterator &&last)
+	struct locus {
+		locus()
+		: offset(-1), tail_pos(0)
+		{}
+
+		explicit operator bool() const
+		{
+			return offset >= 0;
+		}
+
+	private:
+		friend struct socket_type_map;
+
+		locus(int offset_, int tail_pos_)
+		: offset(offset_), tail_pos(tail_pos_)
+		{}
+
+		int offset;
+		int tail_pos;
+	};
+
+	static locus search_root()
 	{
-		auto x_first(first);
-		return find(x_first, last);
+		return locus(0, 0);
 	}
 
 	template <typename Iterator>
-	static int find(Iterator &first, Iterator last)
+	static locus locate_rel(locus loc, Iterator first, Iterator last)
 	{
-		int base(base_ref[0].base);
-		int l_pos(0), n_pos(0);
+		int l_pos(loc.offset), n_pos(l_pos);		
 
-		for (; first != last; ++first) {
-			if (!is_valid(*first))
-				return 0;
+		if (base_ref[l_pos].base >= 0) {
+			for (; first != last; ++first) {
+				if (!is_valid(*first))
+					return locus();
 
-			n_pos = base + *first - char_offset;
+				n_pos = base_ref[l_pos].base + *first
+					- char_offset;
 
-			if (n_pos >= int(base_ref_size))
-				return 0;
+				if (n_pos >= int(base_ref_size))
+					return locus();
 
-			if (int(base_ref[n_pos].check) != l_pos)
-				return 0;
-			else if (base_ref[n_pos].base < 0) {
-				++first;
-				int r_idx(-base_ref[n_pos].base);
-				auto &r(tail_ref[r_idx - 1]);
-				auto r_first(tail + r.offset);
-				auto r_last(r_first + r.size);
+				if (int(base_ref[n_pos].check) != l_pos)
+					return locus();
 
-				while (first != last) {
-					if (r_first == r_last)
-						break;
+				if (int(base_ref[n_pos].base) < 0)
+					break;
 
-					if (*first != *r_first)
-						break;
-
-					++first;
-					++r_first;
-				}
-
-				if ((first == last) && (r_first == r_last))
-					return r_idx;
-				else
-					return 0;
-			} else {
 				l_pos = n_pos;
-				base = base_ref[n_pos].base;
 			}
+
+			if (first == last)
+				return locus(n_pos, 0);
+			else
+				++first;
 		}
 
-		n_pos = base + term_char - char_offset;
-		if (n_pos < int(base_ref_size)) {
-			if ((int(base_ref[n_pos].check) == l_pos)
-			    && (base_ref[n_pos].base < 0))
+		
+		auto &r(tail_ref[-1 - base_ref[n_pos].base]);
+		auto r_first(&tail[r.offset]);
+		auto d(std::distance(first, last));
+
+		if (d > (r.size - loc.tail_pos))
+			return locus();
+
+		while (first != last) {
+			if (*first != r_first[loc.tail_pos])
+				return locus();
+
+			++first;
+			++loc.tail_pos;
+		}
+		return locus(n_pos, loc.tail_pos);
+	}
+
+	template <typename Iterator>
+	static int find_rel(locus loc, Iterator first, Iterator last)
+	{
+		loc = locate_rel(loc, first, last);
+		if (!loc)
+			return 0;
+
+		auto b(base_ref[loc.offset].base);
+		if (b >= 0) {
+			auto n_pos(b + term_char - char_offset);
+			if (base_ref[n_pos].check != loc.offset)
+				return 0;
+			else
 				return -base_ref[n_pos].base;
-		}
+		} else {
+			auto &r(tail_ref[-1 - b]);
+			if (r.size == loc.tail_pos)
+				return -b;
+			else
+				return 0;
+		} 
+	}
 
-		return 0;
+	template <typename Iterator>
+	static int find(Iterator first, Iterator last)
+	{
+		return find_rel(search_root(), first, last);
 	}
 
 private:
