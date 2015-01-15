@@ -24,12 +24,12 @@ namespace {
 
 template <int AddrFamily>
 struct family_entry {
-	constexpr static family<AddrFamily> addr_family = {};
-	constexpr static family_base const *impl = &addr_family;
+	constexpr static family<AddrFamily> af = {};
+	constexpr static family_base const *impl = &af;
 };
 
 template <int AddrFamily>
-constexpr family<AddrFamily> family_entry<AddrFamily>::addr_family;
+constexpr family<AddrFamily> family_entry<AddrFamily>::af;
 
 constexpr static family_base const *registry[] = {
 	family_entry<AF_UNIX>::impl,
@@ -85,7 +85,9 @@ family_base const *from_string(char const *first, char const *last)
 	if (idx)
 		return registry[idx - 1];
 	else
-		return nullptr;
+		throw std::system_error(
+			EAFNOSUPPORT, std::system_category()
+		);
 }
 
 }}}}

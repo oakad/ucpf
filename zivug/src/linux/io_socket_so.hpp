@@ -14,15 +14,12 @@ namespace ucpf { namespace zivug { namespace io { namespace detail {
 struct string_tag {
 };
 
-template <typename ValueType>
-struct ro_tag {
-	typedef ValueType value_type;
-};
-
 struct option_base {
 	virtual void set(
 		descriptor const &d, char const *first, char const *last
 	) const = 0;
+
+	virtual int get_int(descriptor const &d) const = 0;
 };
 
 template <typename ValueType, int Level, int OptName>
@@ -33,6 +30,13 @@ struct option : option_base {
 	{
 		throw std::system_error(
 			ENOPROTOOPT, std::system_category()
+		);
+	}
+
+	virtual int get_int(descriptor const &d) const
+	{
+		throw std::system_error(
+			EINVAL, std::system_category()
 		);
 	}
 };
@@ -61,6 +65,22 @@ struct option<int, Level, OptName> : option_base {
 			throw std::system_error(
 				errno, std::system_category()
 			);
+	}
+
+	virtual int get_int(descriptor const &d) const
+	{
+		int x_val(0);
+		::socklen_t x_len(sizeof(x_val));
+		auto rc(::getsockopt(
+			d.native(), Level, OptName, &x_val, &x_len
+		));
+
+		if (rc < 0)
+			throw std::system_error(
+				errno, std::system_category()
+			);
+
+		return x_val;
 	}
 };
 
@@ -92,14 +112,14 @@ constexpr option<ValueType, Level, OptName> option_entry<
 	ValueType, Level, OptName
 >::sock_option;
 
-struct option_level_base {
+struct socket_level_base {
 	virtual void set(
 		descriptor const &d, char const *first, char const *last
 	) const = 0;
 };
 
 template <int Level>
-struct option_level : option_level_base {
+struct socket_level : socket_level_base {
 	virtual void set(
 		descriptor const &d, char const *first, char const *last
 	) const
@@ -109,16 +129,6 @@ struct option_level : option_level_base {
 		);
 	}
 };
-
-
-template <int Level>
-struct option_level_entry {
-	constexpr static option_level<Level> sock_option_level = {};
-	constexpr static option_level_base const *impl = &sock_option_level;
-};
-
-template <int Level>
-constexpr option_level<Level> option_level_entry<Level>::sock_option_level;
 
 }}}}
 #endif

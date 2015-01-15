@@ -6,11 +6,9 @@
  * shed by the Free Software Foundation.
  */
 
-#include "io_socket_option_base.hpp"
+#include "io_socket_so.hpp"
 
 namespace ucpf { namespace zivug { namespace io { namespace detail {
-
-#include "symbols/sol_socket_option_map.hpp"
 
 template <>
 struct option_level<SOL_SOCKET> : option_level_base {
@@ -63,8 +61,8 @@ private:
 	constexpr static option_base *sock_option[] = {
 		option_entry<bool, level, SO_DEBUG>::impl,
 		option_entry<bool, level, SO_REUSEADDR>::impl,
-		option_entry<ro_tag<int>, level, SO_TYPE>::impl,
-		option_entry<ro_tag<int>, level, SO_ERROR>::impl,
+		option_entry<int, level, SO_TYPE>::impl,
+		option_entry<int, level, SO_ERROR>::impl,
 		option_entry<bool, level, SO_DONTROUTE>::impl,
 		option_entry<bool, level, SO_BROADCAST>::impl,
 		option_entry<int, level, SO_SNDBUF>::impl,
@@ -81,7 +79,7 @@ private:
 		option_entry<bool, level, SO_PASSCRED>::impl,
 		option_entry<::ucred, level, SO_PEERCRED>::impl,
 		option_entry<int, level, SO_RCVLOWAT>::impl,
-		option_entry<ro_tag<int>, level, SO_SNDLOWAT>::impl,
+		option_entry<int, level, SO_SNDLOWAT>::impl,
 		option_entry<::timeval, level, SO_RCVTIMEO>::impl,
 		option_entry<::timeval, level, SO_SNDTIMEO>::impl,
 		option_entry<void, level, SO_SECURITY_AUTHENTICATION>::impl,
@@ -90,16 +88,17 @@ private:
 		option_entry<string_tag, level, SO_BINDTODEVICE>::impl,
 		option_entry<::sock_fprog, level, SO_ATTACH_FILTER>::impl,
 		option_entry<bool, level, SO_DETACH_FILTER>::impl,
-		option_entry<ro_tag<string_tag>, level, SO_PEERNAME>::impl,
+		option_entry<::sock_fprog, level, SO_GET_FILTER>::impl,
+		option_entry<string_tag, level, SO_PEERNAME>::impl,
 		option_entry<bool, level, SO_TIMESTAMP>::impl,
-		option_entry<ro_tag<int>, level, SO_ACCEPTCONN>::impl,
-		option_entry<ro_tag<string_tag>, level, SO_PEERSEC>::impl,
+		option_entry<int, level, SO_ACCEPTCONN>::impl,
+		option_entry<string_tag, level, SO_PEERSEC>::impl,
 		option_entry<bool, level, SO_PASSSEC>::impl,
 		option_entry<bool, level, SO_TIMESTAMPNS>::impl,
 		option_entry<int, level, SO_MARK>::impl,
 		option_entry<int, level, SO_TIMESTAMPING>::impl,
-		option_entry<ro_tag<int>, level, SO_PROTOCOL>::impl,
-		option_entry<ro_tag<int>, level, SO_DOMAIN>::impl,
+		option_entry<int, level, SO_PROTOCOL>::impl,
+		option_entry<int, level, SO_DOMAIN>::impl,
 		option_entry<bool, level, SO_RXQ_OVFL>::impl,
 		option_entry<bool, level, SO_WIFI_STATUS>::impl,
 		option_entry<int, level, SO_PEEK_OFF>::impl,
@@ -108,7 +107,10 @@ private:
 		option_entry<bool, level, SO_SELECT_ERR_QUEUE>::impl,
 		option_entry<int, level, SO_BUSY_POLL>::impl,
 		option_entry<int, level, SO_MAX_PACING_RATE>::impl,
-		option_entry<ro_tag<int>, level, SO_BPF_EXTENSIONS>::impl
+		option_entry<int, level, SO_BPF_EXTENSIONS>::impl,
+		option_entry<int, level, SO_INCOMING_CPU>::impl,
+		option_entry<int, level, SO_ATTACH_BPF>::impl,
+		option_entry<bool, level, SO_DETACH_BPF>::impl
 	};
 };
 

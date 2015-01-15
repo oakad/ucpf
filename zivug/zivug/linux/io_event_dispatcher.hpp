@@ -10,48 +10,14 @@
 
 extern "C" {
 
-#include <unistd.h>
 #include <sys/epoll.h>
 
 }
 
 #include <system_error>
+#include <zivug/linux/descriptor.hpp>
 
 namespace ucpf { namespace zivug { namespace io {
-
-struct descriptor {
-	descriptor()
-	: fd(-1)
-	{}
-
-	template <typename OpenFunc>
-	descriptor(OpenFunc &&func)
-	: fd(func())
-	{}
-
-	descriptor(descriptor &&other)
-	: fd(-1)
-	{
-		std::swap(fd, other.fd);
-	}
-
-	descriptor(descriptor const &other) = delete;
-	descriptor &operator=(descriptor const &other) = delete;
-
-	~descriptor()
-	{
-		if (fd >= 0)
-			close(fd);
-	}
-
-	int native() const
-	{
-		return fd;
-	}
-
-private:
-	int fd;
-};
 
 struct notification {
 	virtual ~notification()
