@@ -6,11 +6,19 @@
  * shed by the Free Software Foundation.
  */
 
+extern "C" {
+
+#include <sys/socket.h>
+
+}
+
+#include <system_error>
+
 namespace {
 
-#include "socket_type_map.hpp"
+#include "symbols/socket_type_map.hpp"
 
-constexpr static int registry[] = {
+constexpr int registry[] = {
 	SOCK_STREAM,
 	SOCK_DGRAM,
 	SOCK_RAW,

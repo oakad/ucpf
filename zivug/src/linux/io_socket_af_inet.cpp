@@ -58,17 +58,19 @@ namespace ucpf { namespace zivug { namespace io { namespace detail {
 
 template <>
 struct family<AF_INET> : family_base {
-	virtual int create(
+	virtual descriptor create(
 		int type, char const *first, char const *last
 	) const
 	{
 		int proto((first != last) ? inet_protocol_id(first, last) : 0);
 
-		return ::socket(AF_INET, type, proto);
+		return descriptor([type, proto]() -> int {
+			return ::socket(AF_INET, type, proto);
+		});
 	}
 
 	virtual void bind(
-		int fd, char const *first, char const *last
+		descriptor const &d, char const *first, char const *last
 	) const
 	{
 	}
@@ -76,17 +78,19 @@ struct family<AF_INET> : family_base {
 
 template <>
 struct family<AF_INET6> : family_base {
-	virtual int create(
+	virtual descriptor create(
 		int type, char const *first, char const *last
 	) const
 	{
 		int proto((first != last) ? inet_protocol_id(first, last) : 0);
 
-		return ::socket(AF_INET6, type, proto);
+		return descriptor([type, proto]() -> int {
+			return ::socket(AF_INET6, type, proto);
+		});
 	}
 
 	virtual void bind(
-		int fd, char const *first, char const *last
+		descriptor const &d, char const *first, char const *last
 	) const
 	{
 	}

@@ -11,23 +11,21 @@
 
 #include <system_error>
 
-#include "network_defines.hpp"
-
 namespace ucpf { namespace zivug { namespace io { namespace detail {
 
 struct family_base {
-	virtual int create(
+	virtual descriptor create(
 		int type, char const *first, char const *last
 	) const = 0;
 
 	virtual void bind(
-		int fd, char const *first, char const *last
+		descriptor const &d, char const *first, char const *last
 	) const = 0;
 };
 
 template <int AddrFamily>
 struct family : family_base {
-	virtual int create(
+	virtual descriptor create(
 		int type, char const *first, char const *last
 	) const
 	{
@@ -37,7 +35,7 @@ struct family : family_base {
 	}
 
 	virtual void bind(
-		int fd, char const *first, char const *last
+		descriptor const &d, char const *first, char const *last
 	) const
 	{}
 };

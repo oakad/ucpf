@@ -15,6 +15,8 @@ extern "C" {
 
 }
 
+#include <utility>
+
 namespace ucpf { namespace zivug { namespace io {
 
 struct descriptor {

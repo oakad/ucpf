@@ -9,6 +9,16 @@
 #if !defined(HPP_CB93DAD73A115C2F9BF3383000F84803)
 #define HPP_CB93DAD73A115C2F9BF3383000F84803
 
+extern "C" {
+
+#include <sys/socket.h>
+
+}
+
+#include <system_error>
+#include <mina/from_ascii_decimal.hpp>
+#include <zivug/linux/io_descriptor.hpp>
+
 namespace ucpf { namespace zivug { namespace io { namespace detail {
 
 struct string_tag {
