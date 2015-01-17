@@ -19,7 +19,22 @@ extern "C" {
 #include <mina/from_ascii_decimal.hpp>
 #include <zivug/linux/io_descriptor.hpp>
 
-namespace ucpf { namespace zivug { namespace io { namespace detail {
+#if !defined(BPF_MAJOR_VERSION)
+struct sock_filter {
+	uint16_t code;
+	uint8_t jt;
+	uint8_t jf;
+	uint32_t k;
+};
+
+struct sock_fprog {
+	unsigned short len;
+	struct sock_filter *filter;
+};
+#endif
+
+namespace ucpf { namespace zivug { namespace io {
+namespace detail {
 
 struct string_tag {
 };
@@ -109,6 +124,13 @@ struct option<string_tag, Level, OptName> : option_base {
 				errno, std::system_category()
 			);
 	}
+
+	virtual int get_int(descriptor const &d) const
+	{
+		throw std::system_error(
+			EINVAL, std::system_category()
+		);
+	}
 };
 
 template <typename ValueType, int Level, int OptName>
@@ -123,22 +145,25 @@ constexpr option<ValueType, Level, OptName> option_entry<
 >::sock_option;
 
 struct socket_level_base {
-	virtual void set(
-		descriptor const &d, char const *first, char const *last
+	virtual option_base const *option_from_string(
+		char const *first, char const *last
 	) const = 0;
 };
 
 template <int Level>
 struct socket_level : socket_level_base {
-	virtual void set(
-		descriptor const &d, char const *first, char const *last
-	) const
-	{
-		throw std::system_error(
-			ENOPROTOOPT, std::system_category()
-		);
-	}
+	virtual option_base const *option_from_string(
+		char const *first, char const *last
+	) const;
 };
+}
 
-}}}}
+namespace socket_level {
+
+detail::socket_level_base const *from_string(
+	char const *first, char const *last
+);
+
+}
+}}}
 #endif

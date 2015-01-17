@@ -10,6 +10,7 @@
 #define HPP_DBA7740ACA4573C0D286564BC18115E2
 
 #include <system_error>
+#include <zivug/linux/io_descriptor.hpp>
 
 namespace ucpf { namespace zivug { namespace io { namespace detail {
 
@@ -37,7 +38,11 @@ struct family : family_base {
 	virtual void bind(
 		descriptor const &d, char const *first, char const *last
 	) const
-	{}
+	{
+		throw std::system_error(
+			EADDRNOTAVAIL, std::system_category()
+		);
+	}
 };
 
 }}}}

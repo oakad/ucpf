@@ -6,32 +6,62 @@
  * shed by the Free Software Foundation.
  */
 
+#include "io_socket_af.hpp"
+#include "io_socket_so.hpp"
+
+namespace io = ucpf::zivug::io;
+
 namespace {
 
 #include "symbols/socket_cmd_map.hpp"
 
 void socket_cmd_bind(
-	descriptor const &, char const *first, char const *last,
+	io::descriptor const &d, char const *first, char const *last,
 	void const *ctx
 )
 {
-	auto af(reinterpret_cast<detail::family_base const *>(ctx));
+	auto af(reinterpret_cast<io::detail::family_base const *>(ctx));
 	af->bind(d.native(), first, last);
 }
 
 void socket_cmd_option(
-	descriptor const &, char const *first, char const *last,
+	io::descriptor const &d, char const *first, char const *last,
 	void const *ctx
 )
 {
 	/* socket_level.option = val */
-	
+	auto sol_last(first);
+	while ((sol_last != last) && (*sol_last != '.'))
+		++sol_last;
+	auto sol(io::socket_level::from_string(first, sol_last));
+
+	auto opt_first(sol_last);
+	if (opt_first != last)
+		++opt_first;
+
+	auto opt_last(opt_first);
+	while (
+		(opt_last != last)
+		&& !std::isspace(*opt_last)
+		&& (*opt_last != '=')
+	)
+		++opt_last;
+	auto opt(sol->option_from_string(opt_first, opt_last));
+
+	auto val_first(opt_last);
+	if (val_first != last)
+		++val_first;
+
+	while ((val_first != last) && std::isspace(*val_first))
+		++val_first;
+
+	opt->set(d, val_first, last);
 }
 
-constexpr void (*registry)(
-	descriptor const &, char const *first, char const *last,
+constexpr void (*registry[])(
+	io::descriptor const &, char const *first, char const *last,
 	void const *ctx
-) const = {
+) = {
 	socket_cmd_bind,
 	socket_cmd_option
 };

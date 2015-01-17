@@ -6,7 +6,17 @@
  * shed by the Free Software Foundation.
  */
 
+extern "C" {
+
+#include <sys/socket.h>
+
+}
+
 #include "io_socket_af.hpp"
+
+#if !defined(AF_IB)
+#define AF_IB 27
+#endif
 
 namespace ucpf { namespace zivug { namespace io { namespace detail {
 
@@ -31,7 +41,7 @@ struct family_entry {
 template <int AddrFamily>
 constexpr family<AddrFamily> family_entry<AddrFamily>::af;
 
-constexpr static family_base const *registry[] = {
+constexpr family_base const *registry[] = {
 	family_entry<AF_UNIX>::impl,
 	family_entry<AF_LOCAL>::impl,
 	family_entry<AF_INET>::impl,
@@ -44,7 +54,7 @@ constexpr static family_base const *registry[] = {
 	family_entry<AF_X25>::impl,
 	family_entry<AF_INET6>::impl,
 	family_entry<AF_ROSE>::impl,
-	family_entry<AF_DECNET>::impl,
+	family_entry<AF_DECnet>::impl,
 	family_entry<AF_NETBEUI>::impl,
 	family_entry<AF_SECURITY>::impl,
 	family_entry<AF_KEY>::impl,
