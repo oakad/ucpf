@@ -6,6 +6,8 @@
  * shed by the Free Software Foundation.
  */
 
+#include <zivug/linux/io_socket_configurator.hpp>
+
 #include "io_socket_af.hpp"
 #include "io_socket_so.hpp"
 
@@ -21,7 +23,7 @@ void socket_cmd_bind(
 )
 {
 	auto af(reinterpret_cast<io::detail::family_base const *>(ctx));
-	af->bind(d.native(), first, last);
+	af->bind(d, first, last);
 }
 
 void socket_cmd_option(
@@ -75,34 +77,31 @@ descriptor socket_configurator::make_descriptor(
 )
 {
 	/* family.type || family.type.protocol */
-	for (; first != last; ++first)
-		if (!std::isspace(*first))
-			break;
+	auto af_last(first);
+	while ((af_last != last) && (*af_last != '.'))
+		++af_last;
 
-	auto x_s0(first);
-	for (; x_s0 != last; ++x_s0)
-		if (*x_s0 == '.')
-			break;
+	auto af(address_family::from_string(first, af_last));
 
-	if (x_s0 == last)
+	auto type_first(af_last);
+	if (af_last != last)
+		++type_first;
+	else
 		throw std::system_error(EINVAL, std::system_category());
 
-	auto x_s1(x_s0 + 1);
-	for (; x_s1 != last; ++x_s1)
-		if (*x_s1 == '.')
-			break;
+	auto type_last(type_first);
+	while ((type_last != last) && (*type_last != '.'))
+		++type_last;
 
-	auto af(address_family::from_string(first, x_s0));
+	auto s_type(socket_type::from_string(type_first, type_last));
 
-	++x_s0;
-	auto s_type(socket_type::from_string(x_s0, x_s1));
+	auto proto_first(type_last);
+	if (proto_first != last)
+		++proto_first;
 
 	*ctx = reinterpret_cast<void const *>(af);
 
-	if (x_s1 != last)
-		++x_s1;
-
-	return af->create(s_type, x_s1, last);
+	return af->create(s_type, proto_first, last);
 }
 
 void socket_configurator::apply_setting(
@@ -110,48 +109,33 @@ void socket_configurator::apply_setting(
 	void const *ctx
 )
 {
-
 	auto cmd_last(first);
-	for (; cmd_last != last; ++cmd_last)
-		if (*cmd_last == ':')
-			break;
+	while (
+		(cmd_last != last)
+		&& !std::isspace(*cmd_last)
+		&& (*cmd_last != ':')
+	)
+		++cmd_last;
 
-	if ((last - cmd_last) < 5)
+	auto idx(socket_cmd_map::find(first, cmd_last));
+	if (!idx)
 		throw std::system_error(EINVAL, std::system_category());
 
-	auto val_first(cmd_last + 1);
-	for (; val_first != last; ++val_first)
-		if (!std::isspace(*val_first))
-			break;
+	auto cmd(registry[idx - 1]);
 
-	if (val_first == last)
+	auto arg_first(cmd_last);
+	while ((arg_first != last) && std::isspace(*arg_first))
+		++arg_first;
+
+	if ((arg_first != last) && (*arg_first == ':'))
+		++arg_first;
+	else
 		throw std::system_error(EINVAL, std::system_category());
 
-	for (; cmd_last > first; --cmd_last)
-		if (!std::isspace(*(cmd_last - 1)))
-			break;
+	while ((arg_first != last) && std::isspace(*arg_first))
+		++arg_first;
 
-	switch (*first) {
-	case 'b': {
-		constexpr static char const *name = "bind";
-		if (std::equal(name, name + 4, first, cmd_last)) {
-			
-			
-			return;
-		} else
-			break;
-	}
-	case 'o': {
-		constexpr static char const *name = "option";
-		if (std::equal(name, name + 6, first, cmd_last)) {
-			detail::level_symbols::set(d, val_first, last);
-			return;
-		} else
-			break;
-	}
-	}
-
-	throw std::system_error(EINVAL, std::system_category());
+	cmd(d, arg_first, last, ctx);
 }
 
 }}}

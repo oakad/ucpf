@@ -39,6 +39,9 @@ std::pair<int, bool> inet_protocol_id_impl(
 int inet_protocol_id(char const *proto_first, char const *proto_last)
 {
 	auto p_sz(proto_last - proto_first);
+	if (!p_sz)
+		return 0;
+
 	char p_name[p_sz + 1];
 	__builtin_memcpy(p_name, proto_first, p_sz);
 	p_name[p_sz] = 0;
@@ -59,10 +62,10 @@ namespace ucpf { namespace zivug { namespace io { namespace detail {
 template <>
 struct family<AF_INET> : family_base {
 	virtual descriptor create(
-		int type, char const *first, char const *last
+		int type, char const *proto_first, char const *proto_last
 	) const
 	{
-		int proto((first != last) ? inet_protocol_id(first, last) : 0);
+		int proto(inet_protocol_id(proto_first, proto_last));
 
 		return descriptor([type, proto]() -> int {
 			return ::socket(AF_INET, type, proto);
@@ -70,19 +73,23 @@ struct family<AF_INET> : family_base {
 	}
 
 	virtual void bind(
-		descriptor const &d, char const *first, char const *last
+		descriptor const &d, char const *addr_first,
+		char const *addr_last
 	) const
 	{
+		::sockaddr_in addr = {0};
+		addr.sin_port = ::htons(port);
+		addr.sin_addr = ipv4_addr_parse(addr_first, addr_last));
 	}
 };
 
 template <>
 struct family<AF_INET6> : family_base {
 	virtual descriptor create(
-		int type, char const *first, char const *last
+		int type, char const *proto_first, char const *proto_last
 	) const
 	{
-		int proto((first != last) ? inet_protocol_id(first, last) : 0);
+		int proto(inet_protocol_id(proto_first, proto_last));
 
 		return descriptor([type, proto]() -> int {
 			return ::socket(AF_INET6, type, proto);
@@ -90,9 +97,13 @@ struct family<AF_INET6> : family_base {
 	}
 
 	virtual void bind(
-		descriptor const &d, char const *first, char const *last
+		descriptor const &d, char const *addr_first,
+		char const *addr_last
 	) const
 	{
+		::sockaddr_in6 addr = {0};
+		addr.sin6_port = ::htons(port);
+		addr.sin6_addr = ipv6_addr_parse(addr_first, addr_last);
 	}
 };
 
