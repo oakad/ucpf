@@ -28,7 +28,6 @@ BOOST_AUTO_TEST_CASE(ipv4_addr_parse_0)
 	for (auto a_in: addr_in) {
 		::in_addr out;
 		auto first(a_in.begin());
-		printf("test %s\n", a_in.c_str());
 		BOOST_CHECK(ipv4_addr_parse(out, first, a_in.end()));
 		BOOST_CHECK_EQUAL(ref.s_addr, out.s_addr);
 	}

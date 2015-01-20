@@ -6,3 +6,4 @@ alias test_case : : : : <define>BOOST_TEST_DYN_LINK
                         <library>../../..//test_exec_monitor ;
 
 run ipv4_addr_parse.cpp : : test_case ;
+run ipv6_addr_parse.cpp : : test_case ;

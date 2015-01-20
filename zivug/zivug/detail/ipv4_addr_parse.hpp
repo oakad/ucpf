@@ -29,12 +29,12 @@ bool ipv4_addr_parse(
 
 	enum {
 		NEXT = 0,
-		NEXT_DIG = 1,
-		START = 2,
-		BASE_DETECT = 3,
+		NEXT_DIG,
+		START,
+		BASE_DETECT,
 	};
 
-	int base(10), r_pos(24), state(START);
+	int base(10), r_pos(0), state(START);
 	uint32_t octet(0), rv(0);
 	bool dotted(false);
 
@@ -74,15 +74,33 @@ bool ipv4_addr_parse(
 				if (base < 10)
 					return false;
 			case 0 ... 7:
-				octet = octet * base + c;
+				if (dotted) {
+					octet = octet * base + c;
+					if (octet > 255)
+						return false;
+				} else {
+#if 0
+					if (__builtin_umul_overflow(
+						octet, base, &octet
+					))
+						return false;
+
+					if (__builtin_uadd_overflow(
+						octet, base, &octet
+					))
+						return false;
+#else
+					octet = octet * base + c;
+#endif
+				}
 				break;
 			case DOT:
 				dotted = true;
-				if (!r_pos || (octet > 255))
+				if ((r_pos > 3) || (octet > 255))
 					return false;
 
-				rv |= octet << r_pos;
-				r_pos -= 8;
+				rv = (rv << 8) | octet;
+				++r_pos;
 				state = START;
 				break;
 			default:
@@ -113,10 +131,11 @@ bool ipv4_addr_parse(
 				return false;
 			case DOT:
 				dotted = true;
-				if (!r_pos)
+				if (r_pos > 3)
 					return false;
 
-				r_pos -= 8;
+				++r_pos;
+				rv <<= 8;
 				state = START;
 				break;
 			case EX:
@@ -125,14 +144,14 @@ bool ipv4_addr_parse(
 				break;
 			};
 			break;
-		};
+		}
 	}
 
 	if (dotted) {
-		if (r_pos || (octet > 255))
+		if ((r_pos < 3) || (octet > 255))
 			return false;
 
-		rv |= octet;
+		rv = (rv << 8) | octet;
 	} else
 		rv = octet;
 
