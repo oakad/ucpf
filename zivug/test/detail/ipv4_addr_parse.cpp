@@ -25,7 +25,7 @@ BOOST_AUTO_TEST_CASE(ipv4_addr_parse_0)
 	}};
 
 	::in_addr ref{htonl(0xc00002eb)};
-	for (auto a_in: addr_in) {
+	for (auto &a_in: addr_in) {
 		::in_addr out;
 		auto first(a_in.begin());
 		BOOST_CHECK(ipv4_addr_parse(out, first, a_in.end()));

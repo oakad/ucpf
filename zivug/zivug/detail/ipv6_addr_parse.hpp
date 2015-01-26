@@ -90,6 +90,7 @@ bool ipv6_addr_parse(
 			if (c > 15)
 				return false;
 
+			++last_pos;
 			groups[last_pos] = c;
 			state = NEXT;
 			break;
@@ -111,7 +112,6 @@ bool ipv6_addr_parse(
 
 				groups[last_pos] = 0;
 				skip_pos = last_pos;
-				++last_pos;
 				state = NEXT_DIG;
 				break;
 			case DOT:
@@ -128,7 +128,6 @@ bool ipv6_addr_parse(
 
 			groups[last_pos] = 0;
 			skip_pos = last_pos;
-			++last_pos;
 			state = NEXT_DIG;
 			break;
 		case START:
@@ -159,8 +158,8 @@ bool ipv6_addr_parse(
 				return false;
 
 			auto octet(groups[pos] & 0xf);
-			octet += 10 * ((groups[pos] >> 16) & 0xf);
-			octet += 100 * (groups[pos] >> 16);
+			octet += 10 * ((groups[pos] >> 4) & 0xf);
+			octet += 100 * (groups[pos] >> 8);
 
 			if (octet > 255)
 				return false;
@@ -183,18 +182,18 @@ bool ipv6_addr_parse(
 		if (last_pos < 7)
 			return false;
 	} else
-		diff = 8 - (last_pos - skip_pos);
+		diff = 14 - 2 * last_pos;
 
 	__builtin_memset(out.s6_addr, 0, 16);
 
 	for (auto pos(0); pos < skip_pos; ++pos) {
 		out.s6_addr[2 * pos] = groups[pos] >> 8;
-		out.s6_addr[2 * pos + 1] = groups[pos] & 0xf;
+		out.s6_addr[2 * pos + 1] = groups[pos] & 0xff;
 	}
 
 	for (auto pos(skip_pos + 1); pos <= last_pos; ++pos) {
 		out.s6_addr[2 * pos + diff] = groups[pos] >> 8;
-		out.s6_addr[2 * pos + diff + 1] = groups[pos] & 0xf;
+		out.s6_addr[2 * pos + diff + 1] = groups[pos] & 0xff;
 	}
 
 	return true;
