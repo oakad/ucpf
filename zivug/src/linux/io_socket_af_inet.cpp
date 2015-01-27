@@ -77,7 +77,27 @@ struct family<AF_INET> : family_base {
 		char const *addr_last
 	) const
 	{
+		auto ip_last(addr_first);
+		for (; ip_last != last; ++ip_last) {
+			if (*ip_last == ':')
+				break;
+		}
+
+		auto port_first(ip_last);
+		if (port_first == last)
+			throw std::system_error(
+				EINVAL, std::system_category()
+			);
+
+
+		++port_first;
+
 		::sockaddr_in addr = {0};
+		if (!ipv4_addr_parse(addr.sin6_port, first, addr_last))
+			throw std::system_error(
+				EINVAL, std::system_category()
+			);
+
 		addr.sin_port = ::htons(port);
 		addr.sin_addr = ipv4_addr_parse(addr_first, addr_last));
 	}

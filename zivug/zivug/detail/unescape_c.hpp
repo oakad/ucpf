@@ -14,9 +14,9 @@
 
 namespace ucpf { namespace zivug { namespace detail {
 
-template <typename OutStrType, typename InputIterator>
+template <typename OutStrType, typename FirstIterator, typename LastIterator>
 bool unescape_c(
-	OutStrType &out, InputIterator &first, InputIterator const &last
+	OutStrType &out, FirstIterator &&first, LastIterator const &last
 )
 {
 	enum esc_type {

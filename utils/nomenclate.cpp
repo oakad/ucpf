@@ -590,8 +590,7 @@ int main(int argc, char **argv)
 		if (s_in.empty())
 			continue;
 
-		auto s_iter(s_in.begin());
-		if (!unescape_c(v_in, s_iter, s_in.end()))
+		if (!unescape_c(v_in, s_in.begin(), s_in.end()))
 			return -1;
 
 		for (auto c: v_in)

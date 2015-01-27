@@ -43,28 +43,28 @@ BOOST_AUTO_TEST_CASE(from_ascii_decimal2_2)
 		char const *first = "+0.0";
 		char const *last = first + strlen(first);
 		float v;
-		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK(from_ascii_decimal(v, first, last));
 		BOOST_CHECK_EQUAL(v, 0.0);
 	}
 	{
 		char const *first = "-0e34";
 		char const *last = first + strlen(first);
 		float v;
-		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK(from_ascii_decimal(v, first, last));
 		BOOST_CHECK_EQUAL(v, 0.0);
 	}
 	{
 		char const *first = "234e-60";
 		char const *last = first + strlen(first);
 		float v;
-		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK(from_ascii_decimal(v, first, last));
 		BOOST_CHECK_EQUAL(v, 0.0);
 	}
 	{
 		char const *first = "123e60";
 		char const *last = first + strlen(first);
 		float v;
-		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK(from_ascii_decimal(v, first, last));
 		BOOST_CHECK_EQUAL(v, std::numeric_limits<float>::infinity());
 	}
 
@@ -76,7 +76,7 @@ BOOST_AUTO_TEST_CASE(from_ascii_decimal2_2)
 				const_cast<char const *>(first), nullptr
 			));
 			float v;
-			BOOST_CHECK(from_ascii_decimal(first, last, v));
+			BOOST_CHECK(from_ascii_decimal(v, first, last));
 			BOOST_WARN_EQUAL(v, xv);
 			if (v != xv) {
 				if (v >= 0)
@@ -102,28 +102,28 @@ BOOST_AUTO_TEST_CASE(from_ascii_decimal2_3)
 		char const *first = "+0.0";
 		char const *last = first + strlen(first);
 		double v;
-		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK(from_ascii_decimal(v, first, last));
 		BOOST_CHECK_EQUAL(v, 0.0);
 	}
 	{
 		char const *first = "-0e34";
 		char const *last = first + strlen(first);
 		double v;
-		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK(from_ascii_decimal(v, first, last));
 		BOOST_CHECK_EQUAL(v, 0.0);
 	}
 	{
 		char const *first = "234e-340";
 		char const *last = first + strlen(first);
 		double v;
-		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK(from_ascii_decimal(v, first, last));
 		BOOST_CHECK_EQUAL(v, 0.0);
 	}
 	{
 		char const *first = "123e340";
 		char const *last = first + strlen(first);
 		double v;
-		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK(from_ascii_decimal(v, first, last));
 		BOOST_CHECK_EQUAL(v, std::numeric_limits<double>::infinity());
 	}
 
@@ -135,7 +135,7 @@ BOOST_AUTO_TEST_CASE(from_ascii_decimal2_3)
 				const_cast<char const *>(first), nullptr
 			));
 			double v;
-			BOOST_CHECK(from_ascii_decimal(first, last, v));
+			BOOST_CHECK(from_ascii_decimal(v, first, last));
 			BOOST_WARN_EQUAL(v, xv);
 			if (v != xv) {
 				if (v >= 0)
@@ -161,28 +161,28 @@ BOOST_AUTO_TEST_CASE(from_ascii_decimal2_4)
 		char const *first = "+0.0";
 		char const *last = first + strlen(first);
 		yesod::float128 v;
-		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK(from_ascii_decimal(v, first, last));
 		BOOST_CHECK_EQUAL(v, 0.0);
 	}
 	{
 		char const *first = "-0e34";
 		char const *last = first + strlen(first);
 		yesod::float128 v;
-		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK(from_ascii_decimal(v, first, last));
 		BOOST_CHECK_EQUAL(v, 0.0);
 	}
 	{
 		char const *first = "234e-5100";
 		char const *last = first + strlen(first);
 		yesod::float128 v;
-		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK(from_ascii_decimal(v, first, last));
 		BOOST_CHECK_EQUAL(v, 0.0);
 	}
 	{
 		char const *first = "123e5050";
 		char const *last = first + strlen(first);
 		yesod::float128 v;
-		BOOST_CHECK(from_ascii_decimal(first, last, v));
+		BOOST_CHECK(from_ascii_decimal(v, first, last));
 		BOOST_CHECK_EQUAL(
 			v, std::numeric_limits<yesod::float128>::infinity()
 		);
@@ -196,7 +196,7 @@ BOOST_AUTO_TEST_CASE(from_ascii_decimal2_4)
 				const_cast<char const *>(first), nullptr
 			));
 			yesod::float128 v;
-			BOOST_CHECK(from_ascii_decimal(first, last, v));
+			BOOST_CHECK(from_ascii_decimal(v, first, last));
 			BOOST_WARN_EQUAL(v, xv);
 			if (v != xv) {
 				if (v >= 0)

@@ -75,8 +75,7 @@ BOOST_AUTO_TEST_CASE(ipv6_addr_parse_0)
 		in6_addr out;
 		in6_addr ref;
 
-		auto first(a_in.begin());
-		BOOST_CHECK(ipv6_addr_parse(out, first, a_in.end()));
+		BOOST_CHECK(ipv6_addr_parse(out, a_in.begin(), a_in.end()));
 		inet_pton(AF_INET6, a_in.c_str(), &ref);
 		BOOST_CHECK_EQUAL(out, ref);
 	}

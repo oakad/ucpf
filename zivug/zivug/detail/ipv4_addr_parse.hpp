@@ -17,9 +17,9 @@ extern "C" {
 
 namespace ucpf { namespace zivug { namespace detail {
 
-template <typename InputIterator>
+template <typename FirstIterator, typename LastIterator>
 bool ipv4_addr_parse(
-	::in_addr &out, InputIterator &first, InputIterator const &last
+	::in_addr &out, FirstIterator &&first, LastIterator const &last
 )
 {
 	enum {

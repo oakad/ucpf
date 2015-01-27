@@ -1,13 +1,13 @@
 /*
- * Copyright (c) 2014 Alex Dubov <oakad@yahoo.com>
+ * Copyright (c) 2014-2015 Alex Dubov <oakad@yahoo.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
 
-#if !defined(UCPF_MINA_DETAIL_FROM_ASCII_DECIMAL_F_20140721T2300)
-#define UCPF_MINA_DETAIL_FROM_ASCII_DECIMAL_F_20140721T2300
+#if !defined(HPP_674AA4CF202FEB22F46159B96D612245)
+#define HPP_674AA4CF202FEB22F46159B96D612245
 
 #include <mina/detail/float.hpp>
 #include <mina/detail/bigint.hpp>
@@ -15,8 +15,10 @@
 
 namespace ucpf { namespace mina { namespace detail {
 
-template <typename T>
-struct from_ascii_decimal_f {
+template <
+	typename T, typename FirstIterator, typename LastIterator,
+	typename Alloc
+> struct from_ascii_decimal_f_helper {
 	typedef T value_type;
 	typedef typename yesod::fp_adapter_type<value_type>::type wrapper_type;
 	typedef float_t<wrapper_type::bit_size> adapter_type;
@@ -41,8 +43,7 @@ struct from_ascii_decimal_f {
 		: digits(digits_), pos(0)
 		{}
 
-		template <typename ForwardIterator>
-		size_t append(ForwardIterator &first, ForwardIterator last)
+		size_t append(FirstIterator &&first, LastIterator const &last)
 		{
 			size_t rv(0);
 			while ((first != last) && std::isdigit(*first)) {
@@ -59,9 +60,8 @@ struct from_ascii_decimal_f {
 			return rv;
 		}
 
-		template <typename ForwardIterator>
 		size_t append_trailing(
-			ForwardIterator &first, ForwardIterator last
+			FirstIterator &&first, LastIterator const &last
 		)
 		{
 			size_t rv(0);
@@ -96,8 +96,10 @@ struct from_ascii_decimal_f {
 		size_t pos;
 	};
 
-	template <typename ForwardIterator>
-	bool parse_special(ForwardIterator &first, ForwardIterator last)
+	static bool parse_special(
+		value_type &value, FirstIterator &&first,
+		LastIterator const &last
+	)
 	{
 		auto x_first(first);
 
@@ -166,10 +168,10 @@ struct from_ascii_decimal_f {
 		return true;
 	}
 
-	template <typename Vector, typename ForwardIterator>
+	template <typename Vector>
 	static void parse_exponent(
-		Vector &digits, bool &sign, ForwardIterator &first,
-		ForwardIterator last
+		Vector &digits, bool &sign, FirstIterator &&first,
+		LastIterator const &last
 	)
 	{
 		if (first == last)
@@ -281,7 +283,10 @@ struct from_ascii_decimal_f {
 		return ld;
 	}
 
-	bool compute_guess(adapter_type &xv, int32_t &error, int32_t exp_10)
+	static bool compute_guess(
+		value_type &value, adapter_type &xv, int32_t &error,
+		int32_t exp_10
+	)
 	{
 		xv.normalize();
 		error <<= -xv.exp;
@@ -353,8 +358,9 @@ struct from_ascii_decimal_f {
 	}
 
 	template <typename Vector>
-	void adjust_guess(
-		adapter_type &xv, Vector &digits, int32_t exp_10
+	static void adjust_guess(
+		value_type &value, adapter_type &xv, Vector &digits,
+		int32_t exp_10
 	)
 	{
 		exp_10 -= bigdec_to_bigint(digits);
@@ -389,10 +395,10 @@ struct from_ascii_decimal_f {
 		}
 	}
 
-	template <typename ForwardIterator, typename Alloc>
-	from_ascii_decimal_f(
-		ForwardIterator &first, ForwardIterator last, Alloc const &a
-	) : value(std::numeric_limits<value_type>::quiet_NaN()), valid(false)
+	static bool apply(
+		value_type &value, FirstIterator &&first,
+		LastIterator const &last, Alloc const &a
+	)
 	{
 		typedef std::vector<
 			bigint::limb_type, typename std::allocator_traits<
@@ -401,28 +407,29 @@ struct from_ascii_decimal_f {
 		> bigint_type;
 
 		if (first == last)
-			return;
+			return false;
 
+		value = std::numeric_limits<value_type>::quiet_NaN();
 		auto x_first(first);
 		bool sign(*x_first == '-');
 
 		if (sign || (*x_first == '+'))
 			++x_first;
 
-		valid = parse_special(x_first, last);
+		auto valid(parse_special(value, x_first, last));
 		if (valid) {
 			if (sign)
 				value = -value;
 
 			first = x_first;
-			return;
+			return true;
 		}
 
 		bigint_type digits(a);
 		num_reader<bigint_type> m_r(digits);
 		if (!m_r.append_trailing(x_first, last)) {
 			if ((x_first != last) && *x_first != '.')
-				return;
+				return false;
 		} else {
 			first = x_first;
 			valid = true;
@@ -453,7 +460,7 @@ struct from_ascii_decimal_f {
 		}
 
 		if (!valid)
-			return;
+			return valid;
 
 		storage_type m(0);
 		auto tail_exp(m_r.adjust_tail());
@@ -486,7 +493,7 @@ struct from_ascii_decimal_f {
 					if (sign)
 						value = -value;
 
-					return;
+					return valid;
 				}
 				if (exp_sign) {
 					d_exp_10 -= exp_digits.back();
@@ -500,11 +507,11 @@ struct from_ascii_decimal_f {
 
 		if (!m_r.pos) {
 			value = sign ? -value_type(0) : value_type(0);
-			return;
+			return valid;
 		}
 
 		adapter_type xv(m, 0);
-		if (!compute_guess(xv, error, exp_10 - m_exp)) {
+		if (!compute_guess(value, xv, error, exp_10 - m_exp)) {
 			if (int_pos > m_r.pos)
 				d_exp_10 += int_pos - m_r.pos;
 			else
@@ -512,16 +519,27 @@ struct from_ascii_decimal_f {
 
 			d_exp_10 += tail_exp;
 
-			adjust_guess(xv, digits, d_exp_10);
+			adjust_guess(value, xv, digits, d_exp_10);
 		}
 
 		if (sign)
 			value = -value;
-	}
 
-	value_type value;
-	bool valid;
+		return valid;
+	}
 };
+
+template <
+	typename T, typename FirstIterator, typename LastIterator,
+	typename Alloc
+> bool from_ascii_decimal_f(
+	T &v, FirstIterator &&first, LastIterator const &last, Alloc const &a
+)
+{
+	return from_ascii_decimal_f_helper<
+		T, FirstIterator, LastIterator, Alloc
+	>::apply(v, std::forward<FirstIterator>(first), last, a);
+}
 
 }}}
 #endif
