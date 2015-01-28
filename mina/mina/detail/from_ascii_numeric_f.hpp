@@ -18,7 +18,7 @@ namespace ucpf { namespace mina { namespace detail {
 template <
 	typename T, typename FirstIterator, typename LastIterator,
 	typename Alloc
-> struct from_ascii_decimal_f_helper {
+> struct from_ascii_numeric_f_helper {
 	typedef T value_type;
 	typedef typename yesod::fp_adapter_type<value_type>::type wrapper_type;
 	typedef float_t<wrapper_type::bit_size> adapter_type;
@@ -532,11 +532,11 @@ template <
 template <
 	typename T, typename FirstIterator, typename LastIterator,
 	typename Alloc
-> bool from_ascii_decimal_f(
+> bool from_ascii_numeric_f(
 	T &v, FirstIterator &&first, LastIterator const &last, Alloc const &a
 )
 {
-	return from_ascii_decimal_f_helper<
+	return from_ascii_numeric_f_helper<
 		T, FirstIterator, LastIterator, Alloc
 	>::apply(v, std::forward<FirstIterator>(first), last, a);
 }

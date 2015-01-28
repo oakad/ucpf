@@ -93,13 +93,25 @@ struct family<AF_INET> : family_base {
 		++port_first;
 
 		::sockaddr_in addr = {0};
-		if (!ipv4_addr_parse(addr.sin6_port, first, addr_last))
+		addr.sin_family = AF_INET;
+		if (!(
+			ipv4_addr_parse(addr.sin_addr, first, addr_last)
+			&& mina::detail::from_ascii_decimal_u(
+				addr.sin_port, port_first, last
+			)
+		))
 			throw std::system_error(
 				EINVAL, std::system_category()
 			);
 
-		addr.sin_port = ::htons(port);
-		addr.sin_addr = ipv4_addr_parse(addr_first, addr_last));
+		addr.sin_port = ::htons(addr.sin_port);
+		if (0 > ::bind(
+			d.native(), reinterpret_cast<::sockaddr *>(&addr),
+			sizeof(addr)
+		))
+			throw std::system_error(
+				::errno, std::system_category()
+			);
 	}
 };
 
