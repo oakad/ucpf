@@ -22,7 +22,6 @@ struct float_generator_r {
 
 	template <typename Func>
 	auto operator()(Func &&f)
-	-> typename std::result_of<Func(value_type)>::type
 	{
 		
 		while (true) {
@@ -48,7 +47,6 @@ struct float_generator_e {
 
 	template <typename Func>
 	auto operator()(Func &&f)
-	-> typename std::result_of<Func(value_type)>::type
 	{
 		while (true) {
 			auto x(wrapper_type(dist(dev)).get_mantissa());
@@ -87,7 +85,6 @@ struct dec_float_generator {
 
 	template <typename Func>
 	auto operator()(Func &&f)
-	-> typename std::result_of<Func(char *, char *)>::type
 	{
 		size_t i_cnt(0), f_cnt(0);
 		bool m_sign(false), e_exp(false), e_sign(false);
@@ -169,6 +166,114 @@ struct dec_float_generator {
 	int32_t max_exponent_div;
 };
 
+template <size_t MaxDigits, uint32_t MaxNegExponent, uint32_t MaxPosExponent>
+struct hex_float_generator {
+	constexpr static size_t exponent_digits = (yesod::order_base_2(
+		MaxNegExponent > MaxPosExponent
+		? MaxNegExponent : MaxPosExponent
+	) * 1233) >> 12;
+	constexpr static size_t buffer_size
+	= 7 + MaxDigits + exponent_digits;
+	constexpr static size_t digits_per_word = 16;
+
+	hex_float_generator()
+	: max_exponent_div(10)
+	{
+		for (size_t c(1); c < exponent_digits; ++c)
+			max_exponent_div *= 10;
+	}
+
+	template <typename Func>
+	auto operator()(Func &&f)
+	{
+		size_t i_cnt(0), f_cnt(0);
+		bool m_sign(false), e_exp(false), e_sign(false);
+
+		while (true) {
+			auto r(dist(dev));
+			m_sign = r & 1;
+			e_exp = r & 2;
+			e_sign = r & 4;
+			r >>= 3;
+			i_cnt = r % (MaxDigits + 1);
+			if (i_cnt) {
+				r /= (MaxDigits + 1);
+				f_cnt = r % (i_cnt + 1);
+				i_cnt -= f_cnt;
+				break;
+			}
+		}
+
+		auto last(buf);
+		*last++ = m_sign ? '-' : '+';
+		*last++ = '0';
+		*last++ = 'x';
+		auto r(dist(dev));
+		auto r_digits(digits_per_word);
+
+		while (i_cnt) {
+			if (!r_digits) {
+				r = dist(dev);
+				r_digits = digits_per_word;
+			}
+			*last = '0' + (r & 0xf);
+			if (*last > '9')
+				*last += 39;
+			last++;
+			r >>= 4;
+			--r_digits;
+			--i_cnt;
+		}
+
+		if (f_cnt)
+			*last++ = '.';
+
+		while (f_cnt) {
+			if (!r_digits) {
+				r = dist(dev);
+				r_digits = digits_per_word;
+			}
+			*last = '0' + (r & 0xf);
+			if (*last > '9')
+				*last += 39;
+			++last;
+			r >>= 4;
+			--r_digits;
+			--f_cnt;
+		}
+
+		if (e_exp) {
+			*last++ = 'p';
+			*last++ = e_sign ? '-' : '+';
+
+			int32_t exp(dist(dev) % (
+				e_sign ? MaxNegExponent : MaxPosExponent
+			));
+
+			if (exp) {
+				auto exp_div(max_exponent_div);
+				while (exp_div > exp)
+					exp_div /= 10;
+
+				while (exp_div) {
+					*last++ = '0' + (exp / exp_div);
+					exp %= exp_div;
+					exp_div /= 10;
+				}
+			} else
+				*last++ = '0';
+		}
+
+		*last = 0;
+		return f(buf, last);
+	}
+
+	std::random_device dev;
+	std::uniform_int_distribution<uint64_t> dist;
+	char buf[buffer_size];
+	int32_t max_exponent_div;
+};
+
 #if !defined(_GLIBCXX_USE_INT128)
 
 template <>
@@ -179,7 +284,6 @@ struct float_generator_r<128> {
 
 	template <typename Func>
 	auto operator()(Func &&f)
-	-> typename std::result_of<Func(value_type)>::type
 	{
 		
 		while (true) {
@@ -207,7 +311,6 @@ struct float_generator_e<128> {
 
 	template <typename Func>
 	auto operator()(Func &&f)
-	-> typename std::result_of<Func(value_type)>::type
 	{
 		while (true) {
 			auto xl(dist(dev));

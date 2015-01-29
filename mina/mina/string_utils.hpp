@@ -13,7 +13,7 @@
 #include <mina/fixed_string.hpp>
 #include <mina/detail/classify.hpp>
 #include <mina/to_ascii_decimal.hpp>
-#include <mina/from_ascii_decimal.hpp>
+#include <mina/from_ascii_numeric.hpp>
 
 namespace ucpf { namespace mina {
 namespace detail {
@@ -58,10 +58,7 @@ struct string_cvt_scalar {
 	template <typename StringType, typename Alloc>
 	static bool parse(T &v, StringType const &s, Alloc const &a)
 	{
-		auto first(s.begin());
-		return from_ascii_decimal_converter<T, IsFloat>::apply(
-			first, s.end(), v, a
-		);
+		return from_ascii_numeric(v, s.begin(), s.end(), a);
 	}
 };
 
@@ -118,9 +115,7 @@ struct string_cvt_sequence {
 		if (!skip_space(first, last))
 			return false;
 
-		if (!from_ascii_decimal_converter<Tv, IsFloat>::apply(
-			first, last, vv, a
-		))
+		if (!from_ascii_numeric(vv, first, last, a))
 			return false;
 
 		v.emplace_back(vv);
@@ -135,9 +130,7 @@ struct string_cvt_sequence {
 			if (!skip_space(first, last))
 				break;
 
-			if (!from_ascii_decimal_converter<Tv, IsFloat>::apply(
-				first, last, vv, a
-			))
+			if (!from_ascii_numeric(vv, first, last, a))
 				break;
 
 			v.emplace_back(vv);
