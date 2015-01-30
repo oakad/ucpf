@@ -191,126 +191,127 @@ template <
 			return false;
 		++x_first;
 
-		storage_type m(0);
-		int dot_pos(-1);
-		int bit_pos(mantissa_bits);
-		int digit_cnt(0);
-
-		while (x_first != last) {
-			if (std::isxdigit(*x_first)) {
-				++digit_cnt;
-
-				storage_type d(std::toupper(*x_first) - '0');
-				if (!d && (bit_pos == mantissa_bits)) {
-					if (dot_pos >= 0)
-						dot_pos += 4;
-
-					++x_first;
-					continue;
-				}
-
-				if (d > 9)
-					d -= 7;
-
-				if (bit_pos >=4) {
-					bit_pos -= 4;
-					m |= d << bit_pos;
-				} else if (bit_pos) {
-					m |= d >> (4 - bit_pos);
-					if (1 & (d >> (3 - bit_pos)))
-						++m;
-
-					break;
-				} else {
-					if (d > 7)
-						++m;
-
-					break;
-				}
-			} else if (*x_first == '.') {
-				if (dot_pos > 0)
-					break;
-				dot_pos = bit_pos;
-			} else
-				break;
-
-			++x_first;
-		}
-
-		while ((x_first != last) && std::isxdigit(*x_first))
-			++x_first;
-
-		printf("--1- m %08x, bit_pos %d, dot_pos %d\n", m, bit_pos, dot_pos);
-		int32_t exp_2(0);
-
-		if (m & (storage_type(1) << mantissa_bits)) {
-			m = 0;
-			++exp_2;
-		}
-
-		if (dot_pos > 0)
-			exp_2 -= mantissa_bits - dot_pos;
-
-		if (digit_cnt) {
-			bigint_type exp_digits(a);
-			bool exp_sign(false);
-			parse_exponent<'P'>(
-				exp_digits, exp_sign, x_first, last
-			);
-			printf("--3- %zd\n", exp_digits.size());
-			if (!m) {
-				value = value_type(0);
-				return true;
-			}
-
-			if (!exp_digits.empty()) {
-				if (
-					(exp_digits.size() > 1)
-					|| (
-						exp_digits.back()
-						> bin_exponent_bound
-					)
-				) {
-					printf("xxx\n");
-					if (exp_sign)
-						value = value_type(0);
-					else
-						value = std::numeric_limits<
-							value_type
-						>::infinity();
-
-					return true;
-				}
-
-				if (exp_sign)
-					exp_2 -= exp_digits.back();
-				else
-					exp_2 += exp_digits.back();
-			}
-		} else
-			return false;
-
-		printf("--2- exp %d\n", exp_2);
-		exp_2 += wrapper_type::traits_type::exponent_bias;
-		if (exp_2 > (bin_exponent_bound - 1)) {
-			value = std::numeric_limits<
-				value_type
-			>::infinity();
+		if ((x_first == last) || !std::isxdigit(*x_first)) {
+			value = std::numeric_limits<value_type>::quiet_NaN();
+			first = x_first;
 			return true;
-		} else if (exp_2 < 0) {
-			if ((-exp_2) >= mantissa_bits) {
-				value = value_type(0);
-				return true;
-			}
-
-			m >>= -exp_2;
-			exp_2 = 0;
 		}
 
-		value = wrapper_type(
-			m | (storage_type(exp_2) << mantissa_bits)
-		).get();
+		enum {
+			NOTHING = 0,
+			FINISHED,
+			FRAC_NEXT,
+			EXP_NEXT,
+			OVERFULL
+		};
 
+		int state(NOTHING);
+		storage_type m_int(0), m_frac(0);
+		int32_t exp_2(0), exp_frac(0);
+		int bit_pos(mantissa_bits);
+
+		auto align_first = [&bit_pos](storage_type &m, uint32_t d) {
+			bit_pos -= yesod::fls(d) + 1;
+			m = d;
+			m <<= bit_pos;
+		};
+
+		auto align_last = [&bit_pos](
+			storage_type &m, int32_t &exp, uint32_t d
+		) {
+			m |= storage_type(d) >> (4 - bit_pos);
+			m += storage_type(1) & (d >> (3 - bit_pos));
+			if (m & (storage_type(1) << mantissa_bits)) {
+				m >>= 1;
+				exp += 1;
+			}
+			bit_pos = 0;
+		};
+
+		uint32_t d(*x_first);
+
+		while (d == '0') {
+			++x_first;
+			if (x_first == last) {
+				value = value_type(0);
+				first = x_first;
+				return true;
+			}
+			d = *x_first;
+		}
+
+		if (std::isxdigit(d)) {
+			d = (d <= '9') ? (d - '0')
+				       : (std::toupper(d) - 'A'  + 10);
+
+			align_first(m_int, d);
+			exp_2 = mantissa_bits - bit_pos - 1;
+			++x_first;
+		}
+
+		for (; x_first != last; ++x_first) {
+			d = *x_first;
+			if (!std::isxdigit(d)) {
+				if (d == '.')
+					state = FRAC_NEXT;
+				else if (std::toupper(d) == 'P')
+					state = EXP_NEXT;
+				else
+					state = FINISHED;
+				break;
+			}
+
+			if (state == OVERFULL) {
+				exp_2 += 4;
+				continue;
+			}
+
+			d = (d <= '9') ? (d - '0')
+				       : (std::toupper(d) - 'A'  + 10);
+
+			if (bit_pos >= 4) {
+				bit_pos -= 4;
+				m_int |= storage_type(d) << bit_pos;
+				exp_2 += 4;
+			} else {
+				align_last(m_int, exp_2, d);
+				state = OVERFULL;
+			}
+		}
+
+		if (state == NOTHING)
+			state = FINISHED;
+
+		if (state == FRAC_NEXT) {
+			++x_first;
+			if ((x_first == last) || !std::isxdigit(*x_first))
+				state = FINISHED;
+		}
+/*
+		if (state == FRAC_NEXT) {
+		}
+
+		if (state == EXP_NEXT) {
+		}
+*/
+		printf("--1- m %08x, exp %d\n", m_int, exp_2);
+		auto adj_exp(exp_2 + wrapper_type::traits_type::exponent_bias);
+		if (!m_int)
+			value = value_type(0);
+		else if (adj_exp <= 0) {
+			return true;
+		} else if (adj_exp >= (bin_exponent_bound - 1)) {
+			return true;
+		} else {
+			m_int ^= storage_type(1) << (mantissa_bits - 1);
+
+			printf("--2- m %08x, exp %d (%x)\n", m_int, adj_exp, adj_exp);
+			m_int |= storage_type(adj_exp) << (mantissa_bits - 1);
+			printf("--3- m %08x\n", m_int);
+			value = wrapper_type(m_int).get();
+		}
+
+		first = x_first;
 		return true;
 	}
 

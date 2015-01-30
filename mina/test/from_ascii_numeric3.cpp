@@ -76,7 +76,7 @@ BOOST_AUTO_TEST_CASE(from_ascii_numeric3_2)
 			auto xv(strtof(
 				const_cast<char const *>(first), nullptr
 			));
-			printf("-xv- %a\n", xv);
+			printf("-xv- %s\n", first);
 			float v;
 			BOOST_CHECK(from_ascii_numeric(v, first, last));
 			BOOST_WARN_EQUAL(v, xv);
