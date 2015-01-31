@@ -211,6 +211,9 @@ struct hex_float_generator {
 		auto r(dist(dev));
 		auto r_digits(digits_per_word);
 
+		if (!i_cnt)
+			*last++ = '0';
+
 		while (i_cnt) {
 			if (!r_digits) {
 				r = dist(dev);

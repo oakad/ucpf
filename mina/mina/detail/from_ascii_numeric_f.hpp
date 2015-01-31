@@ -178,36 +178,24 @@ template <
 
 	static bool parse_hex(
 		value_type &value, FirstIterator &first,
-		LastIterator const &last, Alloc const &a
+		LastIterator const &last
 	)
 	{
-		auto x_first(first);
-
-		if ((x_first == last) || (*x_first != '0'))
-			return false;
-		++x_first;
-
-		if ((x_first == last) || (std::toupper(*x_first) != 'X'))
-			return false;
-		++x_first;
-
-		if ((x_first == last) || !std::isxdigit(*x_first)) {
-			value = std::numeric_limits<value_type>::quiet_NaN();
-			first = x_first;
-			return true;
-		}
-
 		enum {
-			NOTHING = 0,
-			FINISHED,
-			FRAC_NEXT,
-			EXP_NEXT,
-			OVERFULL
-		};
+			LEAD_ZERO = 0,
+			LEAD_EX,
+			M_INT_BEGIN,
+			M_INT_SKIP_ZEROES,
+			M_INT_CONT,
+			M_FRAC_BEGIN,
+			M_FRAC_SKIP_ZEROES,
+			M_FRAC_SKIP_ALL,
+			M_FRAC_CONT,
+			FINISHED
+		} state(LEAD_ZERO);
 
-		int state(NOTHING);
-		storage_type m_int(0), m_frac(0);
-		int32_t exp_2(0), exp_frac(0);
+		storage_type m(0);
+		int32_t exp_2(0), exp_ind(0);
 		int bit_pos(mantissa_bits);
 
 		auto align_first = [&bit_pos](storage_type &m, uint32_t d) {
@@ -225,124 +213,332 @@ template <
 				m >>= 1;
 				exp += 1;
 			}
-			bit_pos = 0;
+			bit_pos = -1;
 		};
 
-		uint32_t d(*x_first);
+		auto x_first(first);
+		for (; (x_first != last) && (state != FINISHED); ++x_first) {
+			uint32_t d(*x_first);
+			switch (state) {
+			case LEAD_ZERO:
+				if (d != '0')
+					return false;
 
-		while (d == '0') {
-			++x_first;
-			if (x_first == last) {
-				value = value_type(0);
-				first = x_first;
-				return true;
-			}
-			d = *x_first;
-		}
+				state = LEAD_EX;
+				break;
+			case LEAD_EX:
+				if (std::toupper(d) != 'X')
+					return false;
 
-		if (std::isxdigit(d)) {
-			d = (d <= '9') ? (d - '0')
-				       : (std::toupper(d) - 'A'  + 10);
+				state = M_INT_BEGIN;
+				break;
+			case M_INT_BEGIN:
+				if (!std::isxdigit(d)) {
+					value = std::numeric_limits<
+						value_type
+					>::quiet_NaN();
+					first = x_first;
+					return true;
+				}
 
-			align_first(m_int, d);
-			exp_2 = mantissa_bits - bit_pos - 1;
-			++x_first;
-		}
+				if (d == '0') {
+					state = M_INT_SKIP_ZEROES;
+					break;
+				}
 
-		for (; x_first != last; ++x_first) {
-			d = *x_first;
-			if (!std::isxdigit(d)) {
-				if (d == '.')
-					state = FRAC_NEXT;
-				else if (std::toupper(d) == 'P')
-					state = EXP_NEXT;
-				else
+				d = (d <= '9') ? (d - '0') : (
+					std::toupper(d) - 'A'  + 10
+				);
+
+				align_first(m, d);
+				exp_2 = mantissa_bits - bit_pos - 1;
+				state = M_INT_CONT;
+				break;
+			case M_INT_SKIP_ZEROES:
+				switch (d) {
+				case '0':
+					break;
+				case 'a' ... 'f':
+					d -= 'a' - 'A';
+				case 'A' ... 'F':
+					d -= 'A' - '9' - 1;
+				case '1' ... '9':
+					d -= '0';
+					align_first(m, d);
+					exp_2 = mantissa_bits - bit_pos - 1;
+					state = M_INT_CONT;
+					break;
+				case '.':
+					state = M_FRAC_BEGIN;
+					break;
+				case 'P':
+				case 'p':
+					exp_ind = parse_exponent(
+						x_first, last
+					);
 					state = FINISHED;
+					break;
+				default:
+					state = FINISHED;
+				}
+				break;
+			case M_INT_CONT:
+				switch (d) {
+				case 'a' ... 'f':
+					d -= 'a' - 'A';
+				case 'A' ... 'F':
+					d -= 'A' - '9' - 1;
+				case '0' ... '9':
+					d -= '0';
+
+					if (bit_pos < 0)
+						exp_2 += 4;
+					else if (bit_pos >= 4) {
+						bit_pos -= 4;
+						m |= storage_type(d) << bit_pos;
+						exp_2 += 4;
+					} else
+						align_last(m, exp_2, d);
+
+					break;
+				case '.':
+					state = M_FRAC_BEGIN;
+					break;
+				case 'P':
+				case 'p':
+					exp_ind = parse_exponent(
+						x_first, last
+					);
+					state = FINISHED;
+					break;
+				default:
+					state = FINISHED;
+				}
+				break;
+			case M_FRAC_BEGIN:
+				if (!std::isxdigit(d))
+					state = FINISHED;
+				else if (bit_pos < 0)
+					state = M_FRAC_SKIP_ALL;
+				else if (!exp_2) {
+					if (d == '0') {
+						exp_2 -= 4;
+						state = M_FRAC_SKIP_ZEROES;
+					} else {
+						d = (d <= '9') ? (d - '0') : (
+							std::toupper(d)
+							- 'A'  + 10
+						);
+
+						align_first(m, d);
+						exp_2 = bit_pos + 1
+							- mantissa_bits;
+
+						state = M_FRAC_CONT;
+					}
+				} else {
+					d = (d <= '9') ? (d - '0') : (
+						std::toupper(d) - 'A'  + 10
+					);
+					if (bit_pos >= 4) {
+						bit_pos -= 4;
+						m |= storage_type(d) << bit_pos;
+					} else if (bit_pos >= 0)
+						align_last(m, exp_2, d);
+
+					state = M_FRAC_CONT;
+				}
+				break;
+			case M_FRAC_SKIP_ZEROES:
+				switch (d) {
+				case '0':
+					exp_2 -= 4;
+					break;
+				case 'a' ... 'f':
+					d -= 'a' - 'A';
+				case 'A' ... 'F':
+					d -= 'A' - '9' - 1;
+				case '1' ... '9':
+					d -= '0';
+					align_first(m, d);
+					exp_2 = bit_pos + 1 - mantissa_bits;
+					state = M_FRAC_CONT;
+					break;
+				case 'P':
+				case 'p':
+					exp_ind = parse_exponent(
+						x_first, last
+					);
+					state = FINISHED;
+					break;
+				default:
+					state = FINISHED;
+				}
+				break;
+			case M_FRAC_SKIP_ALL:
+				if (!std::isxdigit(d)) {
+					if (std::toupper(d) == 'P')
+						exp_ind = parse_exponent(
+							x_first, last
+						);
+
+					state = FINISHED;
+				}
+				break;
+			case M_FRAC_CONT:
+				if (std::isxdigit(d)) {
+					d = (d <= '9') ? (d - '0') : (
+						std::toupper(d) - 'A'  + 10
+					);
+					if (bit_pos >= 4) {
+						bit_pos -= 4;
+						m |= storage_type(d) << bit_pos;
+					} else if (bit_pos >= 0)
+						align_last(m, exp_2, d);
+				} else if (std::toupper(d) == 'P') {
+					exp_ind = parse_exponent(
+						x_first, last
+					);
+					state = FINISHED;
+				} else
+					state = FINISHED;
+
+				break;
+			case FINISHED:
 				break;
 			}
-
-			if (state == OVERFULL) {
-				exp_2 += 4;
-				continue;
-			}
-
-			d = (d <= '9') ? (d - '0')
-				       : (std::toupper(d) - 'A'  + 10);
-
-			if (bit_pos >= 4) {
-				bit_pos -= 4;
-				m_int |= storage_type(d) << bit_pos;
-				exp_2 += 4;
-			} else {
-				align_last(m_int, exp_2, d);
-				state = OVERFULL;
-			}
 		}
 
-		if (state == NOTHING)
-			state = FINISHED;
-
-		if (state == FRAC_NEXT) {
-			++x_first;
-			if ((x_first == last) || !std::isxdigit(*x_first))
-				state = FINISHED;
-		}
-/*
-		if (state == FRAC_NEXT) {
-		}
-
-		if (state == EXP_NEXT) {
-		}
-*/
-		printf("--1- m %08x, exp %d\n", m_int, exp_2);
-		auto adj_exp(exp_2 + wrapper_type::traits_type::exponent_bias);
-		if (!m_int)
+		printf("--1- m %08x, exp_2 %d, exp_ind %d\n", m, exp_2, exp_ind);
+		exp_ind += exp_2 + wrapper_type::traits_type::exponent_bias;
+		printf("-x1- exp_ind %d\n", exp_ind);
+		if (!m)
 			value = value_type(0);
-		else if (adj_exp <= 0) {
-			return true;
-		} else if (adj_exp >= (bin_exponent_bound - 1)) {
-			return true;
+		else if (exp_ind <= 0) {
+			if (mantissa_bits > (-exp_ind)) {
+				m >>= -exp_ind;
+				value = wrapper_type(m).get();
+			} else
+				value = value_type(0);
+		} else if (exp_ind >= (bin_exponent_bound - 1)) {
+			value = std::numeric_limits<value_type>::infinity();
 		} else {
-			m_int ^= storage_type(1) << (mantissa_bits - 1);
+			m ^= storage_type(1) << (mantissa_bits - 1);
 
-			printf("--2- m %08x, exp %d (%x)\n", m_int, adj_exp, adj_exp);
-			m_int |= storage_type(adj_exp) << (mantissa_bits - 1);
-			printf("--3- m %08x\n", m_int);
-			value = wrapper_type(m_int).get();
+			printf("--2- m %08x, exp %d (%x)\n", m, exp_ind, exp_ind);
+			m |= storage_type(exp_ind) << (mantissa_bits - 1);
+			printf("--3- m %08x\n", m);
+			value = wrapper_type(m).get();
 		}
 
 		first = x_first;
 		return true;
 	}
 
-	template <int Sep, typename Vector>
-	static void parse_exponent(
-		Vector &digits, bool &sign, FirstIterator &first,
-		LastIterator const &last
+	static int32_t parse_exponent(
+		FirstIterator &first, LastIterator const &last
 	)
 	{
-		if (first == last)
-			return;
-
-		if (std::toupper(*first) != Sep)
-			return;
+		bool neg(false);
+		bool valid(false);
+		int32_t rv(0);
 
 		auto x_first(first);
 		++x_first;
+		if (x_first != last) {
+			auto d(*x_first);
+			if (std::isdigit(d)) {
+				rv = d - '0';
+				valid = true;
+			} else if (d == '-')
+				neg = true;
+			else if (d != '+')
+				return rv;
+		} else
+			return rv;
 
-		if (x_first == last)
-			return;
+		++x_first;
+		if (x_first != last) {
+			auto d(*x_first);
+			if (std::isdigit(d)) {
+				valid = true;
+				d -= '0';
+				rv *= 10;
+				if (neg)
+					rv -= d;
+				else
+					rv += d;
+			} else {
+				if (valid)
+					first = x_first;
 
-		sign = *x_first == '-';
-		if (sign || (*x_first == '+')) {
-			++x_first;
-			if (x_first == last)
-				return;
+				return rv;
+			}
+		} else {
+			if (valid)
+				first = x_first;
+
+			return rv;
 		}
 
-		num_reader<Vector> r(digits);
-		if (r.append_trailing(x_first, last))
-			first = x_first;
+		first = x_first;
+		++first;
+		if (neg) {
+			constexpr static auto v_min(
+				std::numeric_limits<int32_t>::min()
+			);
+
+			while (first != last) {
+				auto d(*first);
+				if (!std::isdigit(d))
+					return rv;
+
+				if ((v_min / 10) > rv) {
+					rv = v_min;
+					break;
+				}
+
+				d -= '0';
+				auto v_next(rv * 10);
+				if ((v_min + d) > v_next) {
+					rv = v_min;
+					break;
+				}
+
+				rv = v_next - d;
+				++first;
+			}
+		} else {
+			constexpr static auto v_max(
+				std::numeric_limits<int32_t>::max()
+			);
+
+			while (first != last) {
+				auto d(*first);
+				if (!std::isdigit(d))
+					return rv;
+
+				if ((v_max / 10) < rv) {
+					rv = v_max;
+					break;
+				}
+
+				d -= '0';
+				auto v_next(rv * 10);
+				if ((v_max - d) < v_next) {
+					rv = v_max;
+					break;
+				}
+
+				rv = v_next + d;
+				++first;
+			}
+		}
+
+		while ((first != last) && std::isdigit(*first))
+			++first;
+
+		return rv;
 	}
 
 	template <typename U, typename Vector>
@@ -559,7 +755,7 @@ template <
 
 		auto valid(
 			parse_special(value, x_first, last)
-			|| parse_hex(value, x_first, last, a)
+			|| parse_hex(value, x_first, last)
 		);
 		if (valid) {
 			if (sign)
@@ -618,35 +814,28 @@ template <
 		auto d_exp_10(exp_10);
 		exp_10 -= m_cnt - int_pos;
 
-		if (check_for_exp) {
-			bigint_type exp_digits(a);
-			bool exp_sign(false);
-			parse_exponent<'E'>(exp_digits, exp_sign, first, last);
-			if (!exp_digits.empty()) {
-				if (
-					(exp_digits.size() > 1)
-					|| (exp_digits.back() >= exponent_bound)
-				) {
-					if (exp_sign)
-						value = value_type(0);
-					else
-						value = std::numeric_limits<
-							value_type
-						>::infinity();
+		if (
+			check_for_exp && (first != last)
+			&& (std::toupper(*first) == 'E')
+		) {
+			auto exp_ind(parse_exponent(first, last));
 
-					if (sign)
-						value = -value;
+			if (abs(exp_ind) > exponent_bound) {
+				if (exp_ind < 0)
+					value = value_type(0);
+				else
+					value = std::numeric_limits<
+						value_type
+					>::infinity();
 
-					return valid;
-				}
-				if (exp_sign) {
-					d_exp_10 -= exp_digits.back();
-					exp_10 -= exp_digits.back();
-				} else {
-					d_exp_10 += exp_digits.back();
-					exp_10 += exp_digits.back();
-				}
+				if (sign)
+					value = -value;
+
+				return valid;
 			}
+
+			d_exp_10 += exp_ind;
+			exp_10 += exp_ind;
 		}
 
 		if (!m_r.pos) {

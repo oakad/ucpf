@@ -14,7 +14,7 @@
 #include "float_generator.hpp"
 
 //#define CASE_COUNT 1000000
-#define CASE_COUNT 1
+#define CASE_COUNT 10
 
 namespace std {
 
@@ -55,14 +55,14 @@ BOOST_AUTO_TEST_CASE(from_ascii_numeric3_2)
 		BOOST_CHECK_EQUAL(v, 0.0);
 	}
 	{
-		char const *first = "0x234p-150";
+		char const *first = "0x234p-160";
 		char const *last = first + strlen(first);
 		float v;
 		BOOST_CHECK(from_ascii_numeric(v, first, last));
 		BOOST_CHECK_EQUAL(v, 0.0);
 	}
 	{
-		char const *first = "0x123p150";
+		char const *first = "0x123p160";
 		char const *last = first + strlen(first);
 		float v;
 		BOOST_CHECK(from_ascii_numeric(v, first, last));
