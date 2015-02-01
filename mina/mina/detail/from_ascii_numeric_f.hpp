@@ -291,15 +291,13 @@ template <
 				case '0' ... '9':
 					d -= '0';
 
-					if (bit_pos < 0)
-						exp_2 += 4;
-					else if (bit_pos >= 4) {
+					if (bit_pos >= 4) {
 						bit_pos -= 4;
 						m |= storage_type(d) << bit_pos;
-						exp_2 += 4;
-					} else
+					} else if (bit_pos >= 0)
 						align_last(m, exp_2, d);
 
+					exp_2 += 4;	
 					break;
 				case '.':
 					state = M_FRAC_BEGIN;
@@ -320,7 +318,7 @@ template <
 					state = FINISHED;
 				else if (bit_pos < 0)
 					state = M_FRAC_SKIP_ALL;
-				else if (!exp_2) {
+				else if (!m) {
 					if (d == '0') {
 						exp_2 -= 4;
 						state = M_FRAC_SKIP_ZEROES;
@@ -331,8 +329,9 @@ template <
 						);
 
 						align_first(m, d);
-						exp_2 = bit_pos + 1
-							- mantissa_bits;
+
+						exp_2 = mantissa_bits - bit_pos
+							- 5;
 
 						state = M_FRAC_CONT;
 					}
@@ -340,6 +339,7 @@ template <
 					d = (d <= '9') ? (d - '0') : (
 						std::toupper(d) - 'A'  + 10
 					);
+
 					if (bit_pos >= 4) {
 						bit_pos -= 4;
 						m |= storage_type(d) << bit_pos;
@@ -361,7 +361,7 @@ template <
 				case '1' ... '9':
 					d -= '0';
 					align_first(m, d);
-					exp_2 = bit_pos + 1 - mantissa_bits;
+					exp_2 += mantissa_bits - bit_pos - 5;
 					state = M_FRAC_CONT;
 					break;
 				case 'P':
@@ -409,14 +409,12 @@ template <
 			}
 		}
 
-		printf("--1- m %08x, exp_2 %d, exp_ind %d\n", m, exp_2, exp_ind);
 		exp_ind += exp_2 + wrapper_type::traits_type::exponent_bias;
-		printf("-x1- exp_ind %d\n", exp_ind);
 		if (!m)
 			value = value_type(0);
 		else if (exp_ind <= 0) {
-			if (mantissa_bits > (-exp_ind)) {
-				m >>= -exp_ind;
+			if (mantissa_bits > (1 - exp_ind)) {
+				m >>= 1 - exp_ind;
 				value = wrapper_type(m).get();
 			} else
 				value = value_type(0);
@@ -425,9 +423,7 @@ template <
 		} else {
 			m ^= storage_type(1) << (mantissa_bits - 1);
 
-			printf("--2- m %08x, exp %d (%x)\n", m, exp_ind, exp_ind);
 			m |= storage_type(exp_ind) << (mantissa_bits - 1);
-			printf("--3- m %08x\n", m);
 			value = wrapper_type(m).get();
 		}
 

@@ -1,6 +1,9 @@
 CC=g++
 CXXFLAGS+=-std=gnu++14 -I.. -I../../yesod
 
+t7 : t7.cpp
+	$(CC) $(CXXFLAGS) -O2 -o $@ $^
+
 t6 : t6.cpp
 	$(CC) $(CXXFLAGS) -O5 -fsanitize=undefined -o $@ $^
 

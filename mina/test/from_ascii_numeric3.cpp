@@ -14,7 +14,7 @@
 #include "float_generator.hpp"
 
 //#define CASE_COUNT 1000000
-#define CASE_COUNT 10
+#define CASE_COUNT 1000
 
 namespace std {
 

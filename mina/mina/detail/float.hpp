@@ -11,6 +11,8 @@
 
 #include <yesod/float.hpp>
 
+#include <algorithm>
+
 namespace ucpf { namespace mina { namespace detail {
 
 template <typename T>
