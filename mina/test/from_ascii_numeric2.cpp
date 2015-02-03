@@ -26,8 +26,8 @@ std::basic_ostream<CharType, TraitsType> &operator<<(
 	if (sz > 0) {
 		char str[sz + 1];
 		str[sz] = 0;
-		quadmath_snprintf(str, sz + 1, "%.40Qg", x);
-		for (decltype(sz) c(0); c <= sz; ++c)
+		quadmath_snprintf(str, sz, "%.40Qg", x);
+		for (decltype(sz) c(0); str[c] && (c < sz); ++c)
 			os << os.widen(str[c]);
 	}
 	return os;
@@ -77,20 +77,7 @@ BOOST_AUTO_TEST_CASE(from_ascii_numeric2_2)
 			));
 			float v;
 			BOOST_CHECK(from_ascii_numeric(v, first, last));
-			BOOST_WARN_EQUAL(v, xv);
-			if (v != xv) {
-				if (v >= 0)
-					v -= std::numeric_limits<
-						float
-					>::denorm_min();
-				else
-					v += std::numeric_limits<
-						float
-					>::denorm_min();
-
-				BOOST_CHECK_EQUAL(v, xv);
-			}
-
+			BOOST_CHECK_EQUAL(v, xv);
 			return true;
 		});
 	};
@@ -136,20 +123,7 @@ BOOST_AUTO_TEST_CASE(from_ascii_numeric2_3)
 			));
 			double v;
 			BOOST_CHECK(from_ascii_numeric(v, first, last));
-			BOOST_WARN_EQUAL(v, xv);
-			if (v != xv) {
-				if (v >= 0)
-					v -= std::numeric_limits<
-						double
-					>::denorm_min();
-				else
-					v += std::numeric_limits<
-						double
-					>::denorm_min();
-
-				BOOST_CHECK_EQUAL(v, xv);
-			}
-
+			BOOST_CHECK_EQUAL(v, xv);
 			return true;
 		});
 	};
@@ -197,20 +171,7 @@ BOOST_AUTO_TEST_CASE(from_ascii_numeric2_4)
 			));
 			yesod::float128 v;
 			BOOST_CHECK(from_ascii_numeric(v, first, last));
-			BOOST_WARN_EQUAL(v, xv);
-			if (v != xv) {
-				if (v >= 0)
-					v -= std::numeric_limits<
-						yesod::float128
-					>::denorm_min();
-				else
-					v += std::numeric_limits<
-						yesod::float128
-					>::denorm_min();
-
-				BOOST_CHECK_EQUAL(v, xv);
-			}
-
+			BOOST_CHECK_EQUAL(v, xv);
 			return true;
 		});
 	};

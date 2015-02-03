@@ -13,8 +13,7 @@
 #include <mina/from_ascii_numeric.hpp>
 #include "float_generator.hpp"
 
-//#define CASE_COUNT 1000000
-#define CASE_COUNT 1000
+#define CASE_COUNT 1000000
 
 namespace std {
 
@@ -27,8 +26,8 @@ std::basic_ostream<CharType, TraitsType> &operator<<(
 	if (sz > 0) {
 		char str[sz + 1];
 		str[sz] = 0;
-		quadmath_snprintf(str, sz + 1, "%.40Qa", x);
-		for (decltype(sz) c(0); c <= sz; ++c)
+		quadmath_snprintf(str, sz, "%.40Qa", x);
+		for (decltype(sz) c(0); str[c] && (c < sz); ++c)
 			os << os.widen(str[c]);
 	}
 	return os;
@@ -76,28 +75,19 @@ BOOST_AUTO_TEST_CASE(from_ascii_numeric3_2)
 			auto xv(strtof(
 				const_cast<char const *>(first), nullptr
 			));
-			printf("-xv- %s\n", first);
 			float v;
 			BOOST_CHECK(from_ascii_numeric(v, first, last));
-			BOOST_WARN_EQUAL(v, xv);
-			if (v != xv) {
-				if (v >= 0)
-					v -= std::numeric_limits<
-						float
-					>::denorm_min();
-				else
-					v += std::numeric_limits<
-						float
-					>::denorm_min();
-
-				BOOST_CHECK_EQUAL(v, xv);
+			if (std::isnan(xv)) {
+				BOOST_CHECK(std::isinf(v));
+				return true;
 			}
 
+			BOOST_CHECK_EQUAL(v, xv);
 			return true;
 		});
 	};
 }
-#if 0
+
 BOOST_AUTO_TEST_CASE(from_ascii_numeric3_3)
 {
 	{
@@ -138,20 +128,11 @@ BOOST_AUTO_TEST_CASE(from_ascii_numeric3_3)
 			));
 			double v;
 			BOOST_CHECK(from_ascii_numeric(v, first, last));
-			BOOST_WARN_EQUAL(v, xv);
-			if (v != xv) {
-				if (v >= 0)
-					v -= std::numeric_limits<
-						double
-					>::denorm_min();
-				else
-					v += std::numeric_limits<
-						double
-					>::denorm_min();
-
-				BOOST_CHECK_EQUAL(v, xv);
+			if (std::isnan(xv)) {
+				BOOST_CHECK(std::isinf(v));
+				return true;
 			}
-
+			BOOST_CHECK_EQUAL(v, xv);
 			return true;
 		});
 	};
@@ -181,7 +162,7 @@ BOOST_AUTO_TEST_CASE(from_ascii_numeric3_4)
 		BOOST_CHECK_EQUAL(v, 0.0);
 	}
 	{
-		char const *first = "0x123p2050";
+		char const *first = "0x123p20100";
 		char const *last = first + strlen(first);
 		yesod::float128 v;
 		BOOST_CHECK(from_ascii_numeric(v, first, last));
@@ -190,7 +171,7 @@ BOOST_AUTO_TEST_CASE(from_ascii_numeric3_4)
 		);
 	}
 
-	test::hex_float_generator<80, 16480, 16383> fg_r;
+	test::hex_float_generator<80, 16478, 16383> fg_r;
 
 	for (int c(0); c < CASE_COUNT; ++c) {
 		fg_r([](char *first, char *last) -> bool {
@@ -199,23 +180,10 @@ BOOST_AUTO_TEST_CASE(from_ascii_numeric3_4)
 			));
 			yesod::float128 v;
 			BOOST_CHECK(from_ascii_numeric(v, first, last));
-			BOOST_WARN_EQUAL(v, xv);
-			if (v != xv) {
-				if (v >= 0)
-					v -= std::numeric_limits<
-						yesod::float128
-					>::denorm_min();
-				else
-					v += std::numeric_limits<
-						yesod::float128
-					>::denorm_min();
-
-				BOOST_CHECK_EQUAL(v, xv);
-			}
-
+			BOOST_CHECK_EQUAL(v, xv);
 			return true;
 		});
 	};
 }
-#endif
+
 }}

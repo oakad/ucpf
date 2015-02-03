@@ -189,7 +189,6 @@ template <
 			M_INT_CONT,
 			M_FRAC_BEGIN,
 			M_FRAC_SKIP_ZEROES,
-			M_FRAC_SKIP_ALL,
 			M_FRAC_CONT,
 			FINISHED
 		} state(LEAD_ZERO);
@@ -197,23 +196,26 @@ template <
 		storage_type m(0);
 		int32_t exp_2(0), exp_ind(0);
 		int bit_pos(mantissa_bits);
+		int last_bit_pos(-1);
+		uint32_t last_digit(0);
 
-		auto align_first = [&bit_pos](storage_type &m, uint32_t d) {
+		auto align_first = [&bit_pos, &m](uint32_t d) {
 			bit_pos -= yesod::fls(d) + 1;
 			m = d;
 			m <<= bit_pos;
 		};
 
-		auto align_last = [&bit_pos](
-			storage_type &m, int32_t &exp, uint32_t d
-		) {
-			m |= storage_type(d) >> (4 - bit_pos);
-			m += storage_type(1) & (d >> (3 - bit_pos));
-			if (m & (storage_type(1) << mantissa_bits)) {
-				m >>= 1;
-				exp += 1;
+		auto append_digit = [
+			&bit_pos, &m, &last_bit_pos, &last_digit
+		](uint32_t d) {
+			if (bit_pos >= 4) {
+				bit_pos -= 4;
+				m |= storage_type(d) << bit_pos;
+			} else if (bit_pos >= 0) {
+				last_bit_pos = bit_pos;
+				last_digit = d;				
+				bit_pos = -1;
 			}
-			bit_pos = -1;
 		};
 
 		auto x_first(first);
@@ -250,7 +252,7 @@ template <
 					std::toupper(d) - 'A'  + 10
 				);
 
-				align_first(m, d);
+				align_first(d);
 				exp_2 = mantissa_bits - bit_pos - 1;
 				state = M_INT_CONT;
 				break;
@@ -264,7 +266,7 @@ template <
 					d -= 'A' - '9' - 1;
 				case '1' ... '9':
 					d -= '0';
-					align_first(m, d);
+					align_first(d);
 					exp_2 = mantissa_bits - bit_pos - 1;
 					state = M_INT_CONT;
 					break;
@@ -291,13 +293,8 @@ template <
 				case '0' ... '9':
 					d -= '0';
 
-					if (bit_pos >= 4) {
-						bit_pos -= 4;
-						m |= storage_type(d) << bit_pos;
-					} else if (bit_pos >= 0)
-						align_last(m, exp_2, d);
-
-					exp_2 += 4;	
+					exp_2 += 4;
+					append_digit(d);
 					break;
 				case '.':
 					state = M_FRAC_BEGIN;
@@ -316,8 +313,6 @@ template <
 			case M_FRAC_BEGIN:
 				if (!std::isxdigit(d))
 					state = FINISHED;
-				else if (bit_pos < 0)
-					state = M_FRAC_SKIP_ALL;
 				else if (!m) {
 					if (d == '0') {
 						exp_2 -= 4;
@@ -328,7 +323,7 @@ template <
 							- 'A'  + 10
 						);
 
-						align_first(m, d);
+						align_first(d);
 
 						exp_2 = mantissa_bits - bit_pos
 							- 5;
@@ -340,12 +335,7 @@ template <
 						std::toupper(d) - 'A'  + 10
 					);
 
-					if (bit_pos >= 4) {
-						bit_pos -= 4;
-						m |= storage_type(d) << bit_pos;
-					} else if (bit_pos >= 0)
-						align_last(m, exp_2, d);
-
+					append_digit(d);
 					state = M_FRAC_CONT;
 				}
 				break;
@@ -360,7 +350,7 @@ template <
 					d -= 'A' - '9' - 1;
 				case '1' ... '9':
 					d -= '0';
-					align_first(m, d);
+					align_first(d);
 					exp_2 += mantissa_bits - bit_pos - 5;
 					state = M_FRAC_CONT;
 					break;
@@ -375,26 +365,12 @@ template <
 					state = FINISHED;
 				}
 				break;
-			case M_FRAC_SKIP_ALL:
-				if (!std::isxdigit(d)) {
-					if (std::toupper(d) == 'P')
-						exp_ind = parse_exponent(
-							x_first, last
-						);
-
-					state = FINISHED;
-				}
-				break;
 			case M_FRAC_CONT:
 				if (std::isxdigit(d)) {
 					d = (d <= '9') ? (d - '0') : (
 						std::toupper(d) - 'A'  + 10
 					);
-					if (bit_pos >= 4) {
-						bit_pos -= 4;
-						m |= storage_type(d) << bit_pos;
-					} else if (bit_pos >= 0)
-						align_last(m, exp_2, d);
+					append_digit(d);
 				} else if (std::toupper(d) == 'P') {
 					exp_ind = parse_exponent(
 						x_first, last
@@ -410,17 +386,39 @@ template <
 		}
 
 		exp_ind += exp_2 + wrapper_type::traits_type::exponent_bias;
-		if (!m)
+
+		if (!m) {
 			value = value_type(0);
-		else if (exp_ind <= 0) {
-			if (mantissa_bits > (1 - exp_ind)) {
-				m >>= 1 - exp_ind;
+		} else if (exp_ind <= 0) {
+			if (mantissa_bits >= (1 - exp_ind)) {
+				if (last_bit_pos > 0)
+					m |= storage_type(last_digit) >> (
+						4 - last_bit_pos
+					);
+
+				m >>= -exp_ind;
+				auto c(m & 1);
+				m >>= 1;
+				m += c;
 				value = wrapper_type(m).get();
 			} else
 				value = value_type(0);
 		} else if (exp_ind >= (bin_exponent_bound - 1)) {
 			value = std::numeric_limits<value_type>::infinity();
 		} else {
+			if (last_bit_pos >= 0) {
+				m |= storage_type(last_digit) >> (
+					4 - last_bit_pos
+				);
+
+				m += storage_type(1) & (
+					last_digit >> (3 - last_bit_pos)
+				);
+				if ((m >> mantissa_bits) & 1) {
+					m >>= 1;
+					exp_2 += 1;
+				}
+			}
 			m ^= storage_type(1) << (mantissa_bits - 1);
 
 			m |= storage_type(exp_ind) << (mantissa_bits - 1);
