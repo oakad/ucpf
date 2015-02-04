@@ -197,7 +197,7 @@ template <
 		int32_t exp_2(0), exp_ind(0);
 		int bit_pos(mantissa_bits);
 		int last_bit_pos(-1);
-		uint32_t last_digit(0);
+		uint32_t digit_tail(0);
 
 		auto align_first = [&bit_pos, &m](uint32_t d) {
 			bit_pos -= yesod::fls(d) + 1;
@@ -206,16 +206,20 @@ template <
 		};
 
 		auto append_digit = [
-			&bit_pos, &m, &last_bit_pos, &last_digit
+			&bit_pos, &m, &last_bit_pos, &digit_tail
 		](uint32_t d) {
 			if (bit_pos >= 4) {
 				bit_pos -= 4;
 				m |= storage_type(d) << bit_pos;
 			} else if (bit_pos >= 0) {
 				last_bit_pos = bit_pos;
-				last_digit = d;				
-				bit_pos = -1;
-			}
+				digit_tail = d << 4;
+				bit_pos -= 4;
+			} else if (bit_pos > -4) {
+				digit_tail |= d;
+				bit_pos -= 4;
+			} else if (d)
+				digit_tail |= 1;
 		};
 
 		auto x_first(first);
@@ -390,16 +394,43 @@ template <
 		if (!m) {
 			value = value_type(0);
 		} else if (exp_ind <= 0) {
-			if (mantissa_bits >= (1 - exp_ind)) {
-				if (last_bit_pos > 0)
-					m |= storage_type(last_digit) >> (
-						4 - last_bit_pos
+			exp_ind = 1 - exp_ind;
+			if (mantissa_bits >= exp_ind) {
+				bool t_bit(false);
+
+				if (last_bit_pos > 0) {
+					m |= storage_type(digit_tail) >> (
+						8 - last_bit_pos
 					);
 
-				m >>= -exp_ind;
-				auto c(m & 1);
-				m >>= 1;
-				m += c;
+					digit_tail <<= last_bit_pos;
+					digit_tail &= 0xff;
+				}
+
+				if (exp_ind > 1) {
+					storage_type t_mask(1);
+					t_mask <<= exp_ind - 1;
+
+					t_bit = m & t_mask;
+					digit_tail = digit_tail || (
+						m & (t_mask - 1)
+					);
+				} else
+					t_bit = m & 1;
+
+				m >>= exp_ind;
+
+				if (t_bit) {
+					if (digit_tail || (m & 1)) {
+						++m;
+
+						if ((m >> mantissa_bits) & 1) {
+							m >>= 1;
+							exp_2 += 1;
+						}
+					}
+				}
+
 				value = wrapper_type(m).get();
 			} else
 				value = value_type(0);
@@ -407,16 +438,21 @@ template <
 			value = std::numeric_limits<value_type>::infinity();
 		} else {
 			if (last_bit_pos >= 0) {
-				m |= storage_type(last_digit) >> (
-					4 - last_bit_pos
+				m |= storage_type(digit_tail) >> (
+					8 - last_bit_pos
 				);
 
-				m += storage_type(1) & (
-					last_digit >> (3 - last_bit_pos)
-				);
-				if ((m >> mantissa_bits) & 1) {
-					m >>= 1;
-					exp_2 += 1;
+				digit_tail <<= last_bit_pos;
+
+				if (digit_tail & 0x80) {
+					if ((digit_tail & 0x7f) || (m & 1)) {
+						++m;
+
+						if ((m >> mantissa_bits) & 1) {
+							m >>= 1;
+							exp_2 += 1;
+						}
+					}
 				}
 			}
 			m ^= storage_type(1) << (mantissa_bits - 1);

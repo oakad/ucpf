@@ -81,7 +81,6 @@ BOOST_AUTO_TEST_CASE(from_ascii_numeric3_2)
 				BOOST_CHECK(std::isinf(v));
 				return true;
 			}
-
 			BOOST_CHECK_EQUAL(v, xv);
 			return true;
 		});
@@ -98,7 +97,7 @@ BOOST_AUTO_TEST_CASE(from_ascii_numeric3_3)
 		BOOST_CHECK_EQUAL(v, 0.0);
 	}
 	{
-		char const *first = "-0xp34";
+		char const *first = "-0x0p34";
 		char const *last = first + strlen(first);
 		double v;
 		BOOST_CHECK(from_ascii_numeric(v, first, last));
