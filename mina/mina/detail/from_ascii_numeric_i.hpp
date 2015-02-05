@@ -9,6 +9,10 @@
 #if !defined(HPP_42631AAF068DCF4D3FAB9C3C98E847BE)
 #define HPP_42631AAF068DCF4D3FAB9C3C98E847BE
 
+#include <limits>
+#include <cctype>
+#include <utility>
+
 namespace ucpf { namespace mina { namespace detail {
 
 template <typename T, typename FirstIterator, typename LastIterator>

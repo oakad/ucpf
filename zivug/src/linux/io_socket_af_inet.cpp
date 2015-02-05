@@ -6,13 +6,19 @@
  * shed by the Free Software Foundation.
  */
 
+#include <mina/detail/from_ascii_numeric_i.hpp>
+
+#include <zivug/detail/ipv4_addr_parse.hpp>
+#include <zivug/detail/ipv6_addr_parse.hpp>
+
 #include "io_socket_af.hpp"
 
 extern "C" {
 
+#include <netdb.h>
+#include <net/if.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netdb.h>
 
 }
 
@@ -77,14 +83,16 @@ struct family<AF_INET> : family_base {
 		char const *addr_last
 	) const
 	{
+		using zivug::detail::ipv4_addr_parse;
+
 		auto ip_last(addr_first);
-		for (; ip_last != last; ++ip_last) {
+		for (; ip_last != addr_last; ++ip_last) {
 			if (*ip_last == ':')
 				break;
 		}
 
 		auto port_first(ip_last);
-		if (port_first == last)
+		if (port_first == addr_last)
 			throw std::system_error(
 				EINVAL, std::system_category()
 			);
@@ -95,22 +103,22 @@ struct family<AF_INET> : family_base {
 		::sockaddr_in addr = {0};
 		addr.sin_family = AF_INET;
 		if (!(
-			ipv4_addr_parse(addr.sin_addr, first, addr_last)
-			&& mina::detail::from_ascii_decimal_u(
-				addr.sin_port, port_first, last
+			ipv4_addr_parse(addr.sin_addr, addr_first, ip_last)
+			&& mina::detail::from_ascii_numeric_u(
+				addr.sin_port, port_first, addr_last
 			)
 		))
 			throw std::system_error(
 				EINVAL, std::system_category()
 			);
 
-		addr.sin_port = ::htons(addr.sin_port);
+		addr.sin_port = htons(addr.sin_port);
 		if (0 > ::bind(
 			d.native(), reinterpret_cast<::sockaddr *>(&addr),
 			sizeof(addr)
 		))
 			throw std::system_error(
-				::errno, std::system_category()
+				errno, std::system_category()
 			);
 	}
 };
@@ -133,9 +141,103 @@ struct family<AF_INET6> : family_base {
 		char const *addr_last
 	) const
 	{
+		using zivug::detail::ipv6_addr_parse;
+
+		if ((addr_first == addr_last) || (*addr_first != '['))
+			throw std::system_error(
+				EINVAL, std::system_category()
+			);
+
+		++addr_first;
+
+		auto ip_last(addr_first);
+		for (; ip_last != addr_last; ++ip_last) {
+			if ((*ip_last == ']') || (*ip_last == '%'))
+				break;
+		}
+
 		::sockaddr_in6 addr = {0};
-		addr.sin6_port = ::htons(port);
-		addr.sin6_addr = ipv6_addr_parse(addr_first, addr_last);
+
+		if ((ip_last == addr_last) || !ipv6_addr_parse(
+			addr.sin6_addr, addr_first, ip_last
+		))
+			throw std::system_error(
+				EINVAL, std::system_category()
+			);
+
+		auto port_first(ip_last);
+		if (*port_first == '%') {
+			auto scope_first(port_first);
+			++scope_first;
+
+
+			auto scope_last(scope_first);
+			for (; scope_last != addr_last; ++scope_last)
+				if (*scope_last == ']')
+					break;
+
+			if (*scope_last != ']')
+				throw std::system_error(
+					EINVAL, std::system_category()
+				);
+
+			addr.sin6_scope_id = scope_parse(
+				scope_first, scope_last
+			);
+
+			port_first = scope_last;
+		}
+
+		if ((port_first == addr_last) || (*port_first != ']'))
+			throw std::system_error(
+				EINVAL, std::system_category()
+			);
+
+		++port_first;
+		if ((port_first == addr_last) || (*port_first != ':'))
+			throw std::system_error(
+				EINVAL, std::system_category()
+			);
+		
+		++port_first;
+
+		if (!mina::detail::from_ascii_numeric_u(
+			addr.sin6_port, port_first, addr_last
+		))
+			throw std::system_error(
+				EINVAL, std::system_category()
+			);
+
+		addr.sin6_port = htons(addr.sin6_port);
+	}
+private:
+	static uint32_t scope_parse(
+		char const *scope_first, char const *scope_last
+	) {
+		uint32_t scope_id(0);
+		auto x_first(scope_first);
+		if (mina::detail::from_ascii_numeric_u(
+			scope_id, x_first, scope_last
+		) && (x_first == scope_last))
+			return scope_id;
+
+		if (scope_first == scope_last)
+			throw std::system_error(
+				EINVAL, std::system_category()
+			);
+
+		auto s_len(scope_last - scope_first + 1);
+		char s_name[s_len];
+		__builtin_memcpy(s_name, scope_first, s_len - 1);
+		s_name[s_len - 1] = 0;
+
+		scope_id = ::if_nametoindex(s_name);
+		if (scope_id)
+			return scope_id;
+		else
+			throw std::system_error(
+				errno, std::system_category()
+			);
 	}
 };
 
