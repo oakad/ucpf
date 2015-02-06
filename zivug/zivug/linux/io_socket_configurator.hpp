@@ -9,7 +9,7 @@
 #define HPP_5AF9A5BAC9C9C8F182489F819FA23DCF
 
 #include <zivug/arch/io_event_dispatcher.hpp>
-	
+
 namespace ucpf { namespace zivug { namespace io {
 
 struct socket_configurator {
@@ -24,8 +24,19 @@ struct socket_configurator {
 			&ctx
 		));
 
-		for (auto &opt: config.settings)
-			apply_setting(
+		for (auto const &opt: config.pre_bind_options)
+			set_option(
+				d, std::begin(opt).base(),
+				std::end(opt).base(), ctx
+			);
+
+		bind(
+			d, std::begin(config.bind_address).base(),
+			std::end(config.bind_address).base(), ctx
+		);
+
+		for (auto const &opt: config.post_bind_options)
+			set_option(
 				d, std::begin(opt).base(),
 				std::end(opt).base(), ctx
 			);
@@ -38,7 +49,12 @@ private:
 		char const *first, char const *last, void const **ctx
 	);
 
-	static void apply_setting(
+	static void set_option(
+		descriptor const &d, char const *first, char const *last,
+		void const *ctx
+	);
+
+	static void bind(
 		descriptor const &d, char const *first, char const *last,
 		void const *ctx
 	);
