@@ -39,8 +39,8 @@ struct notification {
 struct event_dispatcher {
 	template <typename ConfigType>
 	event_dispatcher(ConfigType const &config)
-	: fd(::epoll_create1(0)), timeout(config.epoll.timeout_ms),
-	  event_count(config.epoll.event_count)
+	: fd(::epoll_create1(0)), timeout(config.timeout_ms),
+	  event_count(config.event_count)
 	{
 		if (fd < 0)
 			throw std::system_error(
@@ -129,10 +129,21 @@ struct event_dispatcher {
 		epoll_ctl(fd, EPOLL_CTL_DEL, d.native(), nullptr);
 	}
 
-	bool process_next()
+	bool poll_next()
+	{
+		return wait_impl(0);
+	}
+
+	bool wait_next()
+	{
+		return wait_impl(timeout);
+	}
+
+private:
+	bool wait_impl(int timeout_)
 	{
 		::epoll_event ev_buf[event_count];
-		auto rv(::epoll_wait(fd, ev_buf, event_count, timeout));
+		auto rv(::epoll_wait(fd, ev_buf, event_count, timeout_));
 
 		for (auto c(0); c < rv; ++c) {
 			auto n_ptr(reinterpret_cast<notification *>(
@@ -176,7 +187,6 @@ struct event_dispatcher {
 		return rv > 0;
 	}
 
-private:
 	constexpr static uint32_t read_event_mask
 	= EPOLLIN | EPOLLRDNORM | EPOLLRDBAND;
 	constexpr static uint32_t write_event_mask

@@ -12,30 +12,76 @@
 
 namespace ucpf { namespace zivug { namespace io {
 
-struct server : notification {
+struct server_base {
+	virtual ~server_base()
+	{}
+};
+
+struct server_socket : notification {
 	template <typename ConfigType>
-	struct server(
-		event_dispatcher &disp_, ConfigType const &config
+	struct server_socket(
+		server_base &server_, ConfigType const &config
 	)
 	: d(socket_configurator::create(config)),
-	  disp(disp_)
+	  server(server_)
 	{
-		src_disp.reset_read(d, *this);
+		auto rv(::fcntl(d.native(), F_SETFL, O_NONBLOCK));
+		if (!rv)
+			rv = ::listen(d.native(), config.listen_backlog);
 
-		auto rv(::listen(d.native(), config.listen_backlog));
 		if (rv < 0)
 			throw std::system_error(errno, std::system_category());
 	}
 
-	virtual void read_ready(bool out_of_band, bool priority);
+	void dispatch(event_dispatcher &disp)
+	{
+		disp.reset_read(d, *this);
+		waiting = true;
+	}
 
-	virtual void error(bool priority);
+	virtual void read_ready(bool out_of_band, bool priority)
+	{
 
-	virtual void hang_up(bool read_only);
+	}
+
+	virtual void error(bool priority)
+	{
+
+	}
+
+	virtual void hang_up(bool read_only)
+	{
+
+	}
 
 private:
 	descriptor d;
-	event_dispatcher &disp;
+	server_base &server;
+};
+
+template <typename Alloc>
+struct server {
+	template <typename ConfigType>
+	struct server(ConfigType const &config, Alloc const &a)
+	: disp(config.epoll), tup_count_alloc(config.sockets.size(), a)
+	{
+		for (auto const &c: config.sockets) {
+			sockets.emplace_back(*this, c);
+		}
+	}
+
+	void start()
+	{
+		for (auto &s: sockets)
+			disp.reset_read(
+	}
+
+private:
+	event_dispatcher disp;
+	std::tuple<std::size_t, Alloc> tup_count_alloc;
+	server_socket *sockets;
+	server_socket **ready_sockets;
+	std::size_t ready_head, ready_tail;
 };
 
 }}}
