@@ -1,16 +1,16 @@
 /*
- * Copyright (c) 2014 Alex Dubov <oakad@yahoo.com>
+ * Copyright (c) 2014-2015 Alex Dubov <oakad@yahoo.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
 
-#if !defined(UCPF_MINA_NP_PACKAGER_20140522T1620)
-#define UCPF_MINA_NP_PACKAGER_20140522T1620
+#if !defined(HPP_35A2E3288C1BA76568DA869A5DCA958A)
+#define HPP_35A2E3288C1BA76568DA869A5DCA958A
 
+#include <vector>
 #include <utility>
-#include <initializer_list>
 #include <yesod/is_sequence.hpp>
 #include <mina/detail/is_composite.hpp>
 
@@ -19,7 +19,7 @@ namespace detail {
 
 template <typename Td, typename T, typename Packager>
 struct pack_adaptor {
-	template <typename U, bool Composite = false>
+	template <typename U, int Composite = 0>
 	struct dispatch {
 		static void save_value(
 			Packager &p, char const *name, U &&value
@@ -37,7 +37,28 @@ struct pack_adaptor {
 	};
 
 	template <typename U>
-	struct dispatch<U, true> {
+	struct dispatch<U, 1> {
+		static void save_value(
+			Packager &p, char const *name, U &&value
+		)
+		{
+			p.descend(name);
+			value.mina_pack(p);
+			p.ascend();
+		}
+
+		static void restore_value(
+			Packager &p, char const *name, U &&value
+		)
+		{
+			p.descend(name);
+			value.mina_pack(p);
+			p.ascend();
+		}
+	};
+
+	template <typename U>
+	struct dispatch<U, 2> {
 		static void save_value(
 			Packager &p, char const *name, U &&value
 		)

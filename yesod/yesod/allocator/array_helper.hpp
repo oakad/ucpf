@@ -50,11 +50,13 @@ struct array_helper {
 		return storage_allocator_traits::allocate(x_alloc, n);
 	}
 
-	template <typename Alloc1>
-	static void free_s(Alloc1 const &a, storage_type *p, size_type n)
+	template <typename Alloc1, typename U>
+	static void free_s(Alloc1 const &a, U *p, size_type n)
 	{
 		storage_allocator_type x_alloc(a);
-		storage_allocator_traits::deallocate(x_alloc, p, n);
+		storage_allocator_traits::deallocate(
+			x_alloc, reinterpret_cast<storage_type *>(p), n
+		);
 	}
 
 	template <typename Alloc1, typename U, typename... Args>

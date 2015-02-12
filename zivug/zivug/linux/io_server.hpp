@@ -8,7 +8,7 @@
 #if !defined(HPP_DC2F14E6CDC5FC3F00E94D68412624CF)
 #define HPP_DC2F14E6CDC5FC3F00E94D68412624CF
 
-#include <zuvug/arch/io_event_dispatcher.hpp>
+#include <zivug/arch/io_event_dispatcher.hpp>
 
 namespace ucpf { namespace zivug { namespace io {
 

@@ -991,7 +991,7 @@ void string_map<CharType, ValueType, Policy>::value_pair::destroy(
 	ah_c::destroy(a, s, p->suffix_length, false);
 
 	if (p->suffix_length > Policy::short_suffix_length)
-		ah_c::free(
+		ah_c::free_s(
 			a, p->long_suffix.data,
 			p->suffix_length + p->long_suffix.offset
 		);
@@ -1015,7 +1015,7 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 				a, long_suffix.data + long_suffix.offset,
 				suffix_length, false
 			);
-			ah::free(
+			ah::free_s(
 				a, long_suffix.data,
 				long_suffix.offset + suffix_length
 			);
@@ -1048,7 +1048,7 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 			data + offset + count + next_length
 		);
 		ah::destroy(a, data + offset, suffix_length, false);
-		ah::free(a, data, offset + suffix_length);
+		ah::free_s(a, data, offset + suffix_length);
 		suffix_length = next_length;
 		break;
 	}
@@ -1070,7 +1070,7 @@ void string_map<CharType, ValueType, Policy>::value_pair::shrink_suffix(
 				suffix_length, false
 			);
 			std::swap(s_ptr, long_suffix.data);
-			ah::free(
+			ah::free_s(
 				a, s_ptr, long_suffix.offset + suffix_length
 			);
 			long_suffix.offset = 0;

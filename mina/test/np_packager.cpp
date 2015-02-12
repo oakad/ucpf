@@ -12,7 +12,7 @@
 #include <mina/np_packager.hpp>
 #include <mina/text_store_adaptor.hpp>
 
-#include <test/gdbm_store.hpp>
+#include <mina/store/gdbm.hpp>
 
 namespace ucpf { namespace mina {
 namespace test {
@@ -237,7 +237,7 @@ struct c_type_0 {
 
 BOOST_AUTO_TEST_CASE(np_packager_0)
 {
-	test::gdbm_store gs("ref/np_packager/gdbm_pack.00.in");
+	mina::store::gdbm gs("ref/np_packager/gdbm_pack.00.in");
 
 	np_packager<
 		text_store_adaptor<decltype(gs), std::allocator<void>>

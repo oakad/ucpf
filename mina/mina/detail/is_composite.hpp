@@ -18,15 +18,24 @@ struct is_composite {
 	template <typename U, U>
 	struct wrapper {};
 
+	typedef std::integral_constant<int, 0> none_type;
+	typedef std::integral_constant<int, 1> unary_type;
+	typedef std::integral_constant<int, 2> binary_type;
+
 	template <typename U>
-	static std::true_type test(
+	static binary_type test(
 		U *, wrapper<void (U::*)(P &, bool), &U::mina_pack> * = nullptr
 	);
 
-	static std::false_type test(...);
+	template <typename U>
+	static unary_type test(
+		U *, wrapper<void (U::*)(P &), &U::mina_pack> * = nullptr
+	);
+
+	static none_type test(...);
 
 	typedef decltype(test(static_cast<T *>(nullptr))) type;
-	static constexpr bool value = type::value;
+	static constexpr int value = type::value;
 };
 
 }}}

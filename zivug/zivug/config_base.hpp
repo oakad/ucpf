@@ -16,11 +16,18 @@
 
 namespace ucpf { namespace zivug { namespace config {
 
-template <typename Alloc>
-using string = std::basic_string<char, std::char_traits<char>, Alloc>;
+template <typename T, typename Alloc>
+using alloc_t = typename std::allocator_traits<Alloc>::template rebind_alloc<T>;
 
 template <typename Alloc>
-using string_vec = std::vector<string<Alloc>, Alloc>;
+using string = std::basic_string<
+	char, std::char_traits<char>, alloc_t<char, Alloc>
+>;
+
+template <typename Alloc>
+using string_vec = std::vector<
+	string<Alloc>, alloc_t<string<Alloc>, Alloc>
+>;
 
 }}}
 #endif

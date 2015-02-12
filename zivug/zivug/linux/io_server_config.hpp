@@ -57,7 +57,10 @@ struct io_server {
 		int timeout_ms;
 		int event_count;
 	} epoll;
-	std::vector<io_server_socket, Alloc> sockets;
+	std::vector<
+		io_server_socket<Alloc>,
+		alloc_t<io_server_socket<Alloc>, Alloc>
+	> sockets;
 };
 
 }}}

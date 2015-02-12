@@ -6,24 +6,28 @@
  * shed by the Free Software Foundation.
  */
 
-#if !defined(UCPF_MINA_TEST_GDBM_STORE_20141111T2100)
-#define UCPF_MINA_TEST_GDBM_STORE_20141111T2100
+#if !defined(HPP_89D34EC0D589F04125FBB3D65DD64168)
+#define HPP_89D34EC0D589F04125FBB3D65DD64168
+
+extern "C" {
 
 #include <gdbm.h>
 #include <fcntl.h>
 
+}
+
 #include <string>
 
-namespace ucpf { namespace mina { namespace test {
+namespace ucpf { namespace mina { namespace store {
 
-struct gdbm_store {
+struct gdbm {
 	typedef std::size_t size_type;
 
-	gdbm_store(char const *db_path_)
+	gdbm(char const *db_path_)
 	: db_path(db_path_), db(nullptr)
 	{}
 
-	~gdbm_store()
+	~gdbm()
 	{
 		if (db)
 			::gdbm_close(db);
@@ -31,10 +35,7 @@ struct gdbm_store {
 
 	void start_restore()
 	{
-		db = ::gdbm_open(
-			db_path.c_str(), sysconf(_SC_PAGESIZE),
-			GDBM_READER, O_RDONLY, nullptr
-		);
+		db = ::gdbm_open(db_path, 0, GDBM_READER, O_RDONLY, nullptr);
 	}
 
 	void end_restore()
@@ -45,10 +46,7 @@ struct gdbm_store {
 
 	void start_save()
 	{
-		db = ::gdbm_open(
-			db_path.c_str(), sysconf(_SC_PAGESIZE),
-			GDBM_WRITER, O_RDWR, nullptr
-		);
+		db = ::gdbm_open(db_path, 0, GDBM_WRITER, O_RDWR, nullptr);
 	}
 
 	void end_save()
@@ -74,8 +72,8 @@ struct gdbm_store {
 			}
 
 			auto n_key(::gdbm_nextkey(db, key));
-			free(key.dptr);
-			free(value.dptr);
+			::free(key.dptr);
+			::free(value.dptr);
 			key = n_key;
 		}
 
@@ -107,7 +105,7 @@ struct gdbm_store {
 		::gdbm_store(db, x_key, x_value, GDBM_REPLACE);
 	}
 
-	std::string db_path;
+	char const *db_path;
 	GDBM_FILE db;
 };
 
