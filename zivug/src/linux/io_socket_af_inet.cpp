@@ -11,7 +11,7 @@
 #include <zivug/detail/ipv4_addr_parse.hpp>
 #include <zivug/detail/ipv6_addr_parse.hpp>
 
-#include "io_socket_af.hpp"
+#include <zivug/arch/io/address_family.hpp>
 
 extern "C" {
 
@@ -66,17 +66,8 @@ int inet_protocol_id(char const *proto_first, char const *proto_last)
 namespace ucpf { namespace zivug { namespace io { namespace detail {
 
 template <>
-struct family<AF_INET> : family_base {
-	virtual descriptor create(
-		int type, char const *proto_first, char const *proto_last
-	) const
-	{
-		int proto(inet_protocol_id(proto_first, proto_last));
-
-		return descriptor([type, proto]() -> int {
-			return ::socket(AF_INET, type, proto);
-		});
-	}
+struct family<AF_INET> : address_family {
+	typedef ::sockaddr_in addr_type;
 
 	virtual void bind(
 		descriptor const &d, char const *addr_first,
@@ -121,10 +112,8 @@ struct family<AF_INET> : family_base {
 				errno, std::system_category()
 			);
 	}
-};
 
-template <>
-struct family<AF_INET6> : family_base {
+protected:
 	virtual descriptor create(
 		int type, char const *proto_first, char const *proto_last
 	) const
@@ -132,9 +121,14 @@ struct family<AF_INET6> : family_base {
 		int proto(inet_protocol_id(proto_first, proto_last));
 
 		return descriptor([type, proto]() -> int {
-			return ::socket(AF_INET6, type, proto);
-		});
+			return ::socket(AF_INET, type, proto);
+		}, static_cast<address_family const *>(this));
 	}
+};
+
+template <>
+struct family<AF_INET6> : address_family {
+	typedef ::sockaddr_in6 addr_type;
 
 	virtual void bind(
 		descriptor const &d, char const *addr_first,
@@ -209,7 +203,27 @@ struct family<AF_INET6> : family_base {
 			);
 
 		addr.sin6_port = htons(addr.sin6_port);
+		if (0 > ::bind(
+			d.native(), reinterpret_cast<::sockaddr *>(&addr),
+			sizeof(addr)
+		))
+			throw std::system_error(
+				errno, std::system_category()
+			);
 	}
+
+protected:
+	virtual descriptor create(
+		int type, char const *proto_first, char const *proto_last
+	) const
+	{
+		int proto(inet_protocol_id(proto_first, proto_last));
+
+		return descriptor([type, proto]() -> int {
+			return ::socket(AF_INET6, type, proto);
+		}, static_cast<address_family const *>(this));
+	}
+
 private:
 	static uint32_t scope_parse(
 		char const *scope_first, char const *scope_last

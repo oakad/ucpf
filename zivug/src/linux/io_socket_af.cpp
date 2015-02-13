@@ -12,13 +12,17 @@ extern "C" {
 
 }
 
-#include "io_socket_af.hpp"
+#include "io_socket_so.hpp"
 
 #if !defined(AF_IB)
 #define AF_IB 27
 #endif
 
 namespace ucpf { namespace zivug { namespace io { namespace detail {
+
+template <::sa_family_t AddrFamily>
+struct family : address_family
+{};
 
 extern template struct family<AF_INET>;
 extern template struct family<AF_INET6>;
@@ -31,17 +35,28 @@ using ucpf::zivug::io::detail::family_base;
 namespace {
 
 #include "symbols/address_family_map.hpp"
+#include "symbols/socket_type_map.hpp"
 
-template <int AddrFamily>
+constexpr int registry_type[] = {
+	SOCK_STREAM,
+	SOCK_DGRAM,
+	SOCK_RAW,
+	SOCK_RDM,
+	SOCK_SEQPACKET,
+	SOCK_DCCP,
+	SOCK_PACKET
+};
+
+template <::sa_family_t AddrFamily>
 struct family_entry {
 	constexpr static family<AddrFamily> af = {};
 	constexpr static family_base const *impl = &af;
 };
 
-template <int AddrFamily>
+template <::sa_family_t AddrFamily>
 constexpr family<AddrFamily> family_entry<AddrFamily>::af;
 
-constexpr family_base const *registry[] = {
+constexpr family_base const *registry_af[] = {
 	family_entry<AF_UNIX>::impl,
 	family_entry<AF_LOCAL>::impl,
 	family_entry<AF_INET>::impl,
@@ -87,17 +102,81 @@ constexpr family_base const *registry[] = {
 
 }
 
-namespace ucpf { namespace zivug { namespace io { namespace address_family {
+namespace ucpf { namespace zivug { namespace io {
 
-family_base const *from_string(char const *first, char const *last)
+descriptor address_family::make_descriptor(
+	char const *proto_first, char const *proto_last
+)
 {
+	/* family.type || family.type.protocol */
+	auto af_last(first);
+	while ((af_last != last) && (*af_last != '.'))
+		++af_last;
+
 	auto idx(address_family_map::find(first, last));
-	if (idx)
-		return registry[idx - 1];
-	else
+	if (!idx)
 		throw std::system_error(
 			EAFNOSUPPORT, std::system_category()
 		);
+
+	auto af(registry_af[idx - 1]);
+
+	auto type_first(af_last);
+	if (af_last != last)
+		++type_first;
+	else
+		throw std::system_error(EINVAL, std::system_category());
+
+	auto type_last(type_first);
+	while ((type_last != last) && (*type_last != '.'))
+		++type_last;
+
+	idx = socket_type_map::find(type_first, type_last);
+	if (!idx)
+		throw std::system_error(
+			ESOCKTNOSUPPORT, std::system_category()
+		);
+
+	auto s_type(registry_type[idx - 1]);
+
+	auto proto_first(type_last);
+	if (proto_first != last)
+		++proto_first;
+
+	return af->create(s_type, proto_first, last);
 }
 
-}}}}
+void address_family::set_option(
+	descriptor const &d, char const *first, char const *last
+) const
+{
+	/* socket_level.option = val */
+	auto sol_last(first);
+	while ((sol_last != last) && (*sol_last != '.'))
+		++sol_last;
+	auto sol(io::socket_level::from_string(first, sol_last));
+
+	auto opt_first(sol_last);
+	if (opt_first != last)
+		++opt_first;
+
+	auto opt_last(opt_first);
+	while (
+		(opt_last != last)
+		&& !std::isspace(*opt_last)
+		&& (*opt_last != '=')
+	)
+		++opt_last;
+	auto opt(sol->option_from_string(opt_first, opt_last));
+
+	auto val_first(opt_last);
+	if (val_first != last)
+		++val_first;
+
+	while ((val_first != last) && std::isspace(*val_first))
+		++val_first;
+
+	opt->set(d, val_first, last);
+}
+
+}}}

@@ -21,18 +21,24 @@ namespace ucpf { namespace zivug { namespace io {
 
 struct descriptor {
 	descriptor()
-	: fd(-1)
+	: fd(-1), ctx(nullptr)
 	{}
 
 	template <typename OpenFunc>
 	descriptor(OpenFunc &&func)
-	: fd(func())
+	: fd(func()), ctx(nullptr)
+	{}
+
+	template <typename OpenFunc, typename ContextType>
+	descriptor(OpenFunc &&func, ContextType const *ctx_)
+	: fd(func()), ctx(ctx_)
 	{}
 
 	descriptor(descriptor &&other)
-	: fd(-1)
+	: fd(-1), ctx(nullptr)
 	{
 		std::swap(fd, other.fd);
+		std::swap(ctx, other.ctx);
 	}
 
 	descriptor(descriptor const &other) = delete;
@@ -49,8 +55,15 @@ struct descriptor {
 		return fd;
 	}
 
+	template <typename ContextType>
+	ContextType const *context() const
+	{
+		return reinterpret_cast<CtxType const *>(ctx);
+	}
+
 private:
 	int fd;
+	void const *ctx;
 };
 
 }}}

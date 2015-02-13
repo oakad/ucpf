@@ -9,8 +9,10 @@
 #if !defined(UCPF_YESOD_ALLOCATOR_DEBUG_20141023T2300)
 #define UCPF_YESOD_ALLOCATOR_DEBUG_20141023T2300
 
+#include <string>
 #include <typeinfo>
 #include <cxxabi.h>
+#include <type_traits>
 
 namespace ucpf { namespace yesod { namespace allocator {
 
@@ -31,7 +33,46 @@ struct debug<void> {
 	};
 
 	typedef std::true_type propagate_on_container_move_assignment;
+
+	debug() noexcept
+	: instance_id(random())
+	{
+		set_type_name();
+	}
+
+	debug(debug const &a) noexcept
+	: instance_id(a.instance_id)
+	{
+		set_type_name();
+	}
+
+	template <typename U>
+	debug(debug<U> const &a) noexcept
+	: instance_id(a.instance_id)
+	{
+		set_type_name();
+	}
+
+	~debug() noexcept
+	{}
+
+private:
+	template <typename U>
+	friend struct debug;
+
+	void set_type_name()
+	{
+		if (!value_type_name.empty())
+			return;
+
+		value_type_name.assign("void");
+	}
+
+	size_type instance_id;
+	static std::string value_type_name;
 };
+
+std::string debug<void>::value_type_name;
 
 template <typename T>
 struct debug {

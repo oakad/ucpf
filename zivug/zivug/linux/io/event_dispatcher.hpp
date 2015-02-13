@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Alex Dubov <oakad@yahoo.com>
+ * Copyright (c) 2014-2015 Alex Dubov <oakad@yahoo.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
@@ -15,26 +15,10 @@ extern "C" {
 }
 
 #include <system_error>
-#include <zivug/linux/io_descriptor.hpp>
+#include <zivug/io/endpoint.hpp>
+#include <zivug/linux/io/descriptor.hpp>
 
 namespace ucpf { namespace zivug { namespace io {
-
-struct notification {
-	virtual ~notification()
-	{}
-
-	virtual void read_ready(bool out_of_band, bool priority)
-	{}
-
-	virtual void write_ready(bool out_of_band, bool priority)
-	{}
-
-	virtual void error(bool priority)
-	{}
-
-	virtual void hang_up(bool read_only)
-	{}
-};
 
 struct event_dispatcher {
 	template <typename ConfigType>
@@ -54,7 +38,7 @@ struct event_dispatcher {
 			::close(fd);
 	}
 
-	void set(descriptor const &d, notification &n)
+	void set(descriptor const &d, endpoint &n)
 	{
 		::epoll_event ev{
 			.events = all_events_mask | edge_triggered_event_mask,
@@ -69,7 +53,7 @@ struct event_dispatcher {
 			);
 	}
 
-	void reset(descriptor const &d, notification &n)
+	void reset(descriptor const &d, endpoint &n)
 	{
 		::epoll_event ev{
 			.events = all_events_mask | one_shot_event_mask,
@@ -87,7 +71,7 @@ struct event_dispatcher {
 			);
 	}
 
-	void reset_read(descriptor const &d, notification &n)
+	void reset_read(descriptor const &d, endpoint &n)
 	{
 		::epoll_event ev{
 			.events = read_events_mask | one_shot_event_mask,
@@ -105,7 +89,7 @@ struct event_dispatcher {
 			);
 	}
 
-	void reset_write(descriptor const &d, notification &n)
+	void reset_write(descriptor const &d, endpoint &n)
 	{
 		::epoll_event ev{
 			.events = write_events_mask | one_shot_event_mask,
@@ -146,7 +130,7 @@ private:
 		auto rv(::epoll_wait(fd, ev_buf, event_count, timeout_));
 
 		for (auto c(0); c < rv; ++c) {
-			auto n_ptr(reinterpret_cast<notification *>(
+			auto n_ptr(reinterpret_cast<endpoint *>(
 				ev_buf[c].data.ptr
 			));
 
