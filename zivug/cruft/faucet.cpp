@@ -13,6 +13,8 @@
 #include <zivug/arch/io_server.hpp>
 #include <zivug/arch/io_server_config.hpp>
 
+#include <zivug/io/scheduler.hpp>
+
 namespace mi = ucpf::mina;
 namespace ms = ucpf::mina::store;
 namespace zc = ucpf::zivug::config;
@@ -22,6 +24,8 @@ int main(int argc, char **argv)
 {
 	typedef std::allocator<void> a_type;
 	a_type a;
+
+	scheduler<a_type> s(a);
 
 	ms::gdbm gs("faucet.cfg");
 

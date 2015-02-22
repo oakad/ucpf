@@ -53,10 +53,12 @@ struct event_dispatcher {
 			);
 	}
 
-	void reset(descriptor const &d, endpoint &n)
+	void reset(descriptor const &d, endpoint &n, bool read_only)
 	{
 		::epoll_event ev{
-			.events = all_events_mask | one_shot_event_mask,
+			.events = (
+				read_only ? read_event_mask : all_events_mask
+			) | one_shot_event_mask,
 			.data = { .ptr = &n }
 		};
 
@@ -69,43 +71,6 @@ struct event_dispatcher {
 			throw std::system_error(
 				errno, std::system_category()
 			);
-	}
-
-	void reset_read(descriptor const &d, endpoint &n)
-	{
-		::epoll_event ev{
-			.events = read_events_mask | one_shot_event_mask,
-			.data = { .ptr = &n }
-		};
-
-		auto rv(epoll_ctl(fd, EPOLL_CTL_MOD, d.native(), &ev));
-
-		if ((rv < 0) && (errno == ENOENT))
-			rv = epoll_ctl(fd, EPOLL_CTL_ADD, d.native(), &ev);
-
-		if (rv < 0)
-			throw std::system_error(
-				errno, std::system_category()
-			);
-	}
-
-	void reset_write(descriptor const &d, endpoint &n)
-	{
-		::epoll_event ev{
-			.events = write_events_mask | one_shot_event_mask,
-			.data = { .ptr = &n }
-		};
-
-		auto rv(epoll_ctl(fd, EPOLL_CTL_MOD, d.native(), &ev));
-
-		if ((rv < 0) && (errno == ENOENT))
-			rv = epoll_ctl(fd, EPOLL_CTL_ADD, d.native(), &ev);
-
-		if (rv < 0)
-			throw std::system_error(
-				errno, std::system_category()
-			);
-
 	}
 
 	void remove(descriptor const &d)

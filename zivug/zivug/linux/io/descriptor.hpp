@@ -58,7 +58,12 @@ struct descriptor {
 	template <typename ContextType>
 	ContextType const *context() const
 	{
-		return reinterpret_cast<CtxType const *>(ctx);
+		return reinterpret_cast<ContextType const *>(ctx);
+	}
+
+	explicit operator bool() const
+	{
+		return fd >= 0;
 	}
 
 private:
