@@ -20,12 +20,19 @@ namespace ms = ucpf::mina::store;
 namespace zc = ucpf::zivug::config;
 namespace zi = ucpf::zivug::io;
 
+struct srv_actor_type : zi::actor {
+};
+
 int main(int argc, char **argv)
 {
 	typedef std::allocator<void> a_type;
 	a_type a;
 
 	scheduler<a_type> s(a);
+
+	srv_actor_type srv_actor;
+	zi::descriptor d(address_family::make_descriptor());
+	s.imbue(std::move(d), srv_actor);
 
 	ms::gdbm gs("faucet.cfg");
 

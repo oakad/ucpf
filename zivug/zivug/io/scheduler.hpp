@@ -38,8 +38,8 @@ struct scheduler {
 	struct managed_endp
 	: endpoint, private node<all_nodes_tag>,
 	  private node<active_nodes_tag> {
-		managed_endp(descriptor &&d_, scheduler &parent_)
-		: d(std::move(d_)), parent(parent_), next_action(0)
+		managed_endp(scheduler &parent_, descriptor &&d_, actor &act_)
+		:  parent(parent_), d(std::move(d_)), act(act_), next_action(0)
 		{}
 
 		virtual void read_ready(bool out_of_band, bool priority)
@@ -66,11 +66,50 @@ struct scheduler {
 
 		scheduler &parent;
 		descriptor d;
+		actor act;
 		int next_action;
 	};
 
 	scheduler(Alloc const &a)
+	: tup_endp_alloc(node<all_nodes_tag>(), a)
 	{}
+
+	~scheduler()
+	{
+		auto r(&std::get<0>(tup_endp_alloc));
+
+		while (r->next != r) {
+			auto p(r->next);
+			auto endp(static_cast<managed_endp *>(p));
+			auto q(static_cast<node<active_nodes_tag>>(endp));
+			if (q == q->next)
+				disp.remove(endp.d);
+			else {
+				q->next->prev = q->prev;
+				q->prev->next = q->next;
+			}
+			p->next->prev = p->prev;
+			p->prev->next = p->next;
+			ah_type::destroy(
+				std::get<1>(tup_endp_alloc), endp, 1, true
+			);
+		}
+	}
+
+	void imbue(descriptor &&d, actor &act)
+	{
+		auto endp(ah_type::alloc_n(
+			std::get<1>(tup_endp_alloc), 1,
+			*this, std::move(d), act
+		));
+		auto endp_n(static_cast<node<all_nodes_tag> *>(endp));
+		auto r(&std::get<0>(tup_endp_alloc));
+		endp_n->next = r;
+		endp_n->prev = r->prev;
+		r->prev->next = endp_n;
+		r->prev = endp_n;
+		disp.reset(endp->d, static_cast<endpoint &>(*endp), false);
+	}
 
 	void poll()
 	{
@@ -115,12 +154,13 @@ struct scheduler {
 
 private:
 	friend struct managed_endp;
+	typedef ucpf::yesod::allocator::array_helper<
+		managed_endp, Alloc
+	> ah_type;
 
 	void handle_read(managed_endp &endp, bool out_of_band, bool priority)
 	{
-		auto &act(endp.d.context<actor>());
-
-		auto next(act->read(endp.d, out_of_band, priority));
+		auto next(endp.act.read(endp.d, out_of_band, priority));
 		if (next & actor::WAIT)
 			disp.reset(endp.d, endp, !(next & actor::WRITE));
 		else
@@ -131,7 +171,7 @@ private:
 	{
 		auto &act(endp.d.context<actor>());
 
-		auto next(act->write(endp.d, out_of_band, priority));
+		auto next(endp.act.write(endp.d, out_of_band, priority));
 		if (next & actor::WAIT)
 			disp.reset(endp.d, endp, !(next & actor::WRITE));
 		else
@@ -170,8 +210,10 @@ private:
 	}
 
 	event_dispatcher disp;
-	node<all_nodes_tag> endp_all;
 	node<active_nodes_tag> endp_active;
+	std::tuple<
+		node<all_nodes_tag>, typename ah_type::allocator_type
+	> tup_endp_alloc;
 };
 
 }}}
