@@ -11,17 +11,34 @@
 
 namespace ucpf { namespace zivug { namespace io {
 
+struct scheduler;
+
 struct actor {
 	enum {
 		READ = 1,
 		WRITE = 2,
-		ACCEPT = 4,
-		WAIT = 8
+		WAIT = 4
 	};
 
-	virtual int read(descriptor const &d, bool out_of_band, bool priority);
-	virtual int write(descriptor const &d, bool out_of_band, bool priority);
-	virtual int accept(descriptor const &d, descriptor &con_d);
+	virtual int read(
+		scheduler &s, descriptor const &d, bool out_of_band,
+		bool priority
+	)
+	{
+		return 0;
+	}
+
+	virtual int write(
+		scheduler &s, descriptor const &d, bool out_of_band,
+		bool priority
+ 	)
+	{
+		return 0;
+	}
+
+	virtual void release(scheduler &s, descriptor const &d)
+	{
+	}
 };
 
 }}}

@@ -26,19 +26,13 @@ struct descriptor {
 
 	template <typename OpenFunc>
 	descriptor(OpenFunc &&func)
-	: fd(func()), ctx(nullptr)
-	{}
-
-	template <typename OpenFunc, typename ContextType>
-	descriptor(OpenFunc &&func, ContextType const *ctx_)
-	: fd(func()), ctx(ctx_)
+	: fd(func())
 	{}
 
 	descriptor(descriptor &&other)
-	: fd(-1), ctx(nullptr)
+	: fd(-1)
 	{
 		std::swap(fd, other.fd);
-		std::swap(ctx, other.ctx);
 	}
 
 	descriptor(descriptor const &other) = delete;
@@ -55,12 +49,6 @@ struct descriptor {
 		return fd;
 	}
 
-	template <typename ContextType>
-	ContextType const *context() const
-	{
-		return reinterpret_cast<ContextType const *>(ctx);
-	}
-
 	explicit operator bool() const
 	{
 		return fd >= 0;
@@ -68,7 +56,6 @@ struct descriptor {
 
 private:
 	int fd;
-	void const *ctx;
 };
 
 }}}

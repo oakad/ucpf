@@ -14,7 +14,7 @@
 namespace ucpf { namespace zivug { namespace io {
 
 struct address_family {
-	static descriptor make_descriptor(
+	static std::pair<descriptor, address_family const &> make_descriptor(
 		char const *proto_first, char const *proto_last
 	);
 
@@ -45,12 +45,18 @@ struct address_family {
 		);
 	}
 
+	virtual void listen(descriptor const &d, int backlog) const
+	{
+		throw std::system_error(
+			EOPNOTSUPP, std::system_category()
+		);
+	}
+
 	virtual std::size_t addr_size() const
 	{
 		return 0;
 	}
 
-	
 protected:
 	virtual descriptor create(
 		int type, char const *proto_first, char const *proto_last

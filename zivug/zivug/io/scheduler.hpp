@@ -14,8 +14,91 @@
 
 namespace ucpf { namespace zivug { namespace io {
 
-template <typename Alloc>
 struct scheduler {
+	virtual void imbue(descriptor &&d, actor &act) = 0;
+	virtual void poll() = 0;
+	virtual void wait() = 0;
+};
+
+template <typename Alloc>
+struct rr_scheduler : scheduler {
+	rr_scheduler(Alloc const &a)
+	: tup_endp_alloc(node<all_nodes_tag>(), a)
+	{}
+
+	virtual ~rr_scheduler()
+	{
+		auto r(&std::get<0>(tup_endp_alloc));
+
+		while (r->next != r) {
+			auto p(r->next);
+			auto endp(static_cast<managed_endp *>(p));
+			auto q(static_cast<node<active_nodes_tag>>(endp));
+			if (q == q->next)
+				disp.remove(endp.d);
+			else {
+				q->next->prev = q->prev;
+				q->prev->next = q->next;
+			}
+			p->next->prev = p->prev;
+			p->prev->next = p->next;
+			endp->act.release(*this, endp->d);
+			ah_type::destroy(
+				std::get<1>(tup_endp_alloc), endp, 1, true
+			);
+		}
+	}
+
+	virtual void imbue(descriptor &&d, actor &act)
+	{
+		auto endp(ah_type::alloc_n(
+			std::get<1>(tup_endp_alloc), 1,
+			*this, std::move(d), act
+		));
+		auto endp_n(static_cast<node<all_nodes_tag> *>(endp));
+		auto r(&std::get<0>(tup_endp_alloc));
+		endp_n->next = r;
+		endp_n->prev = r->prev;
+		r->prev->next = endp_n;
+		r->prev = endp_n;
+		disp.reset(endp->d, static_cast<endpoint &>(*endp), false);
+	}
+
+	virtual void poll()
+	{
+		while (disp.poll_next())
+		{}
+
+		for (auto endp(poll_active()); endp; endp = poll_active()) {
+			auto &act(endp->act);
+			int next(0);
+
+			if (endp->next_action & actor::READ)
+				next |= act->read(
+					*this, endp->d, false, false
+				);
+
+			if (endp->next_action & actor::WRITE)
+				next |= act->write(
+					*this, endp->d, false, false
+				);
+
+			if (next & actor::WAIT)
+				disp.reset(
+					endp->d, *endp, !(next & actor::WRITE)
+				);
+			else
+				add_active(next, *endp);
+		}
+	}
+
+	virtual void wait()
+	{
+		if (disp.wait_next())
+			poll();
+	}
+
+private:
 	template <typename Tag>
 	struct node {
 		node()
@@ -66,93 +149,10 @@ struct scheduler {
 
 		scheduler &parent;
 		descriptor d;
-		actor act;
+		actor &act;
 		int next_action;
 	};
 
-	scheduler(Alloc const &a)
-	: tup_endp_alloc(node<all_nodes_tag>(), a)
-	{}
-
-	~scheduler()
-	{
-		auto r(&std::get<0>(tup_endp_alloc));
-
-		while (r->next != r) {
-			auto p(r->next);
-			auto endp(static_cast<managed_endp *>(p));
-			auto q(static_cast<node<active_nodes_tag>>(endp));
-			if (q == q->next)
-				disp.remove(endp.d);
-			else {
-				q->next->prev = q->prev;
-				q->prev->next = q->next;
-			}
-			p->next->prev = p->prev;
-			p->prev->next = p->next;
-			ah_type::destroy(
-				std::get<1>(tup_endp_alloc), endp, 1, true
-			);
-		}
-	}
-
-	void imbue(descriptor &&d, actor &act)
-	{
-		auto endp(ah_type::alloc_n(
-			std::get<1>(tup_endp_alloc), 1,
-			*this, std::move(d), act
-		));
-		auto endp_n(static_cast<node<all_nodes_tag> *>(endp));
-		auto r(&std::get<0>(tup_endp_alloc));
-		endp_n->next = r;
-		endp_n->prev = r->prev;
-		r->prev->next = endp_n;
-		r->prev = endp_n;
-		disp.reset(endp->d, static_cast<endpoint &>(*endp), false);
-	}
-
-	void poll()
-	{
-		while (disp.poll_next())
-		{}
-
-		for (auto endp(poll_active()); endp; endp = poll_active()) {
-			auto &act(endp->d.context<actor>());
-			int next(0);
-
-			if (endp->next_action & actor::READ)
-				next |= act->read(endp->d, false, false);
-
-			if (endp->next_action & actor::WRITE)
-				next |= act->write(endp->d, false, false);
-
-			if (endp->next_action & actor::ACCEPT) {
-				descriptor con_d;
-				next |= act->accept(endp->d, con_d);
-				if (con_d) {
-					auto &x_endp(
-						add_endp(std::move(con_d))
-					);
-					disp.reset(x_endp.d, x_endp, false);
-				}
-			}
-
-			if (next & actor::WAIT)
-				disp.reset(
-					endp->d, *endp, !(next & actor::WRITE)
-				);
-			else
-				add_active(next, *endp);
-		}
-	}
-
-	void wait()
-	{
-		if (disp.wait_next())
-			poll();
-	}
-
-private:
 	friend struct managed_endp;
 	typedef ucpf::yesod::allocator::array_helper<
 		managed_endp, Alloc
