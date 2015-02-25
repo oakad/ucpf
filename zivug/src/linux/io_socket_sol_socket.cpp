@@ -87,18 +87,23 @@ constexpr option_base const *registry[] = {
 
 namespace ucpf { namespace zivug { namespace io { namespace detail {
 
+template <int Level>
+struct socket_level : socket_level_base {};
+
 template <>
-option_base const *socket_level<SOL_SOCKET>::option_from_string(
-	char const *first, char const *last
-) const
-{
-	auto idx(sol_socket_option_map::find(first, last));
-	if (idx)
-		return registry[idx - 1];
-	else
-		throw std::system_error(
-			ENOPROTOOPT, std::system_category()
-		);
-}
+struct socket_level<SOL_SOCKET> : socket_level_base {
+	virtual option_base const *option_from_string(
+		char const *first, char const *last
+	) const
+	{
+		auto idx(sol_socket_option_map::find(first, last));
+		if (idx)
+			return registry[idx - 1];
+		else
+			throw std::system_error(
+				ENOPROTOOPT, std::system_category()
+			);
+	}
+};
 
 }}}}

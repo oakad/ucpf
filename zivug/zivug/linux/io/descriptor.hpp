@@ -21,7 +21,7 @@ namespace ucpf { namespace zivug { namespace io {
 
 struct descriptor {
 	descriptor()
-	: fd(-1), ctx(nullptr)
+	: fd(-1)
 	{}
 
 	template <typename OpenFunc>

@@ -12,6 +12,7 @@
 namespace ucpf { namespace zivug { namespace io {
 
 struct scheduler;
+struct descriptor;
 
 struct actor {
 	enum {

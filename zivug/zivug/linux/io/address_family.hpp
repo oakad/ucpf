@@ -9,17 +9,15 @@
 #if !defined(HPP_6668D74F286DF3886763E7099335A448)
 #define HPP_6668D74F286DF3886763E7099335A448
 
+#include <system_error>
 #include <zivug/arch/io/descriptor.hpp>
 
 namespace ucpf { namespace zivug { namespace io {
 
 struct address_family {
 	static std::pair<descriptor, address_family const &> make_descriptor(
-		char const *proto_first, char const *proto_last
+		char const *first, char const *last
 	);
-
-	~virtual address_family()
-	{}
 
 	virtual void set_option(
 		descriptor const &d, char const *first, char const *last

@@ -13,24 +13,25 @@ extern "C" {
 }
 
 #include "io_socket_so.hpp"
+#include <zivug/linux/io/address_family.hpp>
 
 #if !defined(AF_IB)
 #define AF_IB 27
 #endif
 
-namespace ucpf { namespace zivug { namespace io { namespace detail {
+namespace ucpf { namespace zivug { namespace io {
 
 template <::sa_family_t AddrFamily>
-struct family : address_family
+struct address_family_inst : address_family
 {};
 
-extern template struct family<AF_INET>;
-extern template struct family<AF_INET6>;
+//extern template struct address_family_inst<AF_INET>;
+//extern template struct address_family_inst<AF_INET6>;
 
-}}}}
+}}}
 
-using ucpf::zivug::io::detail::family;
-using ucpf::zivug::io::detail::family_base;
+using ucpf::zivug::io::address_family;
+using ucpf::zivug::io::address_family_inst;
 
 namespace {
 
@@ -49,14 +50,14 @@ constexpr int registry_type[] = {
 
 template <::sa_family_t AddrFamily>
 struct family_entry {
-	constexpr static family<AddrFamily> af = {};
-	constexpr static family_base const *impl = &af;
+	constexpr static address_family_inst<AddrFamily> af = {};
+	constexpr static address_family const *impl = &af;
 };
 
 template <::sa_family_t AddrFamily>
-constexpr family<AddrFamily> family_entry<AddrFamily>::af;
+constexpr address_family_inst<AddrFamily> family_entry<AddrFamily>::af;
 
-constexpr family_base const *registry_af[] = {
+constexpr address_family const *registry_af[] = {
 	family_entry<AF_UNIX>::impl,
 	family_entry<AF_LOCAL>::impl,
 	family_entry<AF_INET>::impl,
@@ -104,8 +105,8 @@ constexpr family_base const *registry_af[] = {
 
 namespace ucpf { namespace zivug { namespace io {
 
-descriptor address_family::make_descriptor(
-	char const *proto_first, char const *proto_last
+std::pair<descriptor, address_family const &> address_family::make_descriptor(
+	char const *first, char const *last
 )
 {
 	/* family.type || family.type.protocol */
@@ -143,7 +144,9 @@ descriptor address_family::make_descriptor(
 	if (proto_first != last)
 		++proto_first;
 
-	return af->create(s_type, proto_first, last);
+	return std::make_pair(
+		af->create(s_type, proto_first, last), *af
+	);
 }
 
 void address_family::set_option(
@@ -154,7 +157,7 @@ void address_family::set_option(
 	auto sol_last(first);
 	while ((sol_last != last) && (*sol_last != '.'))
 		++sol_last;
-	auto sol(io::socket_level::from_string(first, sol_last));
+	auto sol(detail::socket_level_base::level_from_string(first, sol_last));
 
 	auto opt_first(sol_last);
 	if (opt_first != last)

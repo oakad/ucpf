@@ -8,7 +8,7 @@
 #if !defined(HPP_F338EFF8ACCEEA01F492438B941B0657)
 #define HPP_F338EFF8ACCEEA01F492438B941B0657
 
-#include <zivug/config_base.hpp>
+#include <zivug/config/base.hpp>
 
 namespace ucpf { namespace zivug { namespace config {
 

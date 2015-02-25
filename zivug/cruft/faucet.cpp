@@ -10,8 +10,8 @@
 #include <mina/np_packager.hpp>
 #include <mina/text_store_adaptor.hpp>
 
-#include <zivug/arch/io_server.hpp>
-#include <zivug/arch/io_server_config.hpp>
+#include <zivug/arch/config/io_server.hpp>
+#include <zivug/arch/io/address_family.hpp>
 
 #include <zivug/io/scheduler.hpp>
 
@@ -21,17 +21,12 @@ namespace zc = ucpf::zivug::config;
 namespace zi = ucpf::zivug::io;
 
 struct server_actor : zi::actor {
-	template <typename ConfigType>
-	server_actor(ConfigType const &config)
-	{
-	}
-
 	virtual int read(
 		zi::scheduler &s, zi::descriptor const &d, bool out_of_band,
 		bool priority
 	)
 	{
-		
+		return 0;
 	}
 };
 
@@ -49,7 +44,7 @@ int main(int argc, char **argv)
 	zc::io_server<a_type> srv_cfg(a);
 	pack.restore({"server"}, srv_cfg);
 
-	zi::rr_scheduler<a_type> s(a);
+	zi::rr_scheduler<a_type> sched(srv_cfg, a);
 	server_actor srv_actor;
 
 	for (auto const &s: srv_cfg.sockets) {
@@ -65,8 +60,8 @@ int main(int argc, char **argv)
 			);
 
 		dp.second.bind(
-			d, std::begin(config.bind_address).base(),
-			std::end(config.bind_address).base()
+			dp.first, std::begin(s.bind_address).base(),
+			std::end(s.bind_address).base()
 		);
 
 		for (auto const &opt: s.post_bind_options)
@@ -77,7 +72,7 @@ int main(int argc, char **argv)
 
 		dp.second.listen(dp.first, s.listen_backlog);
 
-		s.imbue(dp.first, srv_actor);
+		sched.imbue(std::move(dp.first), srv_actor);
 	}
 
 	return 0;

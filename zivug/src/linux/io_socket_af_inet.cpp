@@ -22,6 +22,14 @@ extern "C" {
 
 }
 
+namespace ucpf { namespace zivug { namespace io {
+
+template <::sa_family_t AddrFamily>
+struct address_family_inst : address_family
+{};
+
+}}}
+
 namespace {
 
 std::pair<int, bool> inet_protocol_id_impl(
@@ -63,10 +71,10 @@ int inet_protocol_id(char const *proto_first, char const *proto_last)
 
 }
 
-namespace ucpf { namespace zivug { namespace io { namespace detail {
+namespace ucpf { namespace zivug { namespace io {
 
 template <>
-struct family<AF_INET> : address_family {
+struct address_family_inst<AF_INET> : address_family {
 	typedef ::sockaddr_in addr_type;
 
 	virtual void bind(
@@ -121,13 +129,13 @@ protected:
 		int proto(inet_protocol_id(proto_first, proto_last));
 
 		return descriptor([type, proto]() -> int {
-			return ::socket(AF_INET, type, proto);
-		}, static_cast<address_family const *>(this));
+			return ::socket(AF_INET, type | SOCK_NONBLOCK, proto);
+		});
 	}
 };
 
 template <>
-struct family<AF_INET6> : address_family {
+struct address_family_inst<AF_INET6> : address_family {
 	typedef ::sockaddr_in6 addr_type;
 
 	virtual void bind(
@@ -220,8 +228,8 @@ protected:
 		int proto(inet_protocol_id(proto_first, proto_last));
 
 		return descriptor([type, proto]() -> int {
-			return ::socket(AF_INET6, type, proto);
-		}, static_cast<address_family const *>(this));
+			return ::socket(AF_INET6, type | SOCK_NONBLOCK, proto);
+		});
 	}
 
 private:
@@ -255,4 +263,4 @@ private:
 	}
 };
 
-}}}}
+}}}

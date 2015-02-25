@@ -16,8 +16,8 @@ extern "C" {
 }
 
 #include <system_error>
-#include <mina/from_ascii_decimal.hpp>
-#include <zivug/linux/io_descriptor.hpp>
+#include <mina/detail/from_ascii_numeric_i.hpp>
+#include <zivug/linux/io/descriptor.hpp>
 
 #if !defined(BPF_MAJOR_VERSION)
 struct sock_filter {
@@ -72,12 +72,10 @@ struct option<int, Level, OptName> : option_base {
 		descriptor const &d, char const *first, char const *last
 	) const
 	{
-		using ucpf::mina::detail::from_ascii_decimal_converter;
+		using ucpf::mina::detail::from_ascii_numeric_s;
 		int x_val(0);
 
-		if (!from_ascii_decimal_converter<int, false>::parse_signed(
-			first, last, x_val
-		))
+		if (!from_ascii_numeric_s(x_val, first, last))
 			throw std::system_error(
 				EINVAL, std::system_category()
 			);
@@ -145,24 +143,19 @@ constexpr option<ValueType, Level, OptName> option_entry<
 >::sock_option;
 
 struct socket_level_base {
+	static socket_level_base const *level_from_string(
+		char const *first, char const *last
+	);
+
 	virtual option_base const *option_from_string(
 		char const *first, char const *last
-	) const = 0;
+	) const
+	{
+		throw std::system_error(
+			EINVAL, std::system_category()
+		);
+	}
 };
-
-template <int Level>
-struct socket_level : socket_level_base {
-	virtual option_base const *option_from_string(
-		char const *first, char const *last
-	) const;
-};
-}
-
-namespace socket_level {
-
-detail::socket_level_base const *from_string(
-	char const *first, char const *last
-);
 
 }
 }}}

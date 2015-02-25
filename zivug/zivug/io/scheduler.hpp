@@ -22,8 +22,9 @@ struct scheduler {
 
 template <typename Alloc>
 struct rr_scheduler : scheduler {
-	rr_scheduler(Alloc const &a)
-	: tup_endp_alloc(node<all_nodes_tag>(), a)
+	template <typename ConfigType>
+	rr_scheduler(ConfigType const &config, Alloc const &a)
+	: disp(config.epoll), tup_endp_alloc(node<all_nodes_tag>(), a)
 	{}
 
 	virtual ~rr_scheduler()
@@ -33,9 +34,9 @@ struct rr_scheduler : scheduler {
 		while (r->next != r) {
 			auto p(r->next);
 			auto endp(static_cast<managed_endp *>(p));
-			auto q(static_cast<node<active_nodes_tag>>(endp));
+			auto q(static_cast<node<active_nodes_tag> *>(endp));
 			if (q == q->next)
-				disp.remove(endp.d);
+				disp.remove(endp->d);
 			else {
 				q->next->prev = q->prev;
 				q->prev->next = q->next;
@@ -74,12 +75,12 @@ struct rr_scheduler : scheduler {
 			int next(0);
 
 			if (endp->next_action & actor::READ)
-				next |= act->read(
+				next |= act.read(
 					*this, endp->d, false, false
 				);
 
 			if (endp->next_action & actor::WRITE)
-				next |= act->write(
+				next |= act.write(
 					*this, endp->d, false, false
 				);
 
@@ -106,7 +107,7 @@ private:
 		{}
 
 	private:
-		friend struct scheduler;
+		friend struct rr_scheduler;
 
 		node *next;
 		node *prev;
@@ -121,8 +122,9 @@ private:
 	struct managed_endp
 	: endpoint, private node<all_nodes_tag>,
 	  private node<active_nodes_tag> {
-		managed_endp(scheduler &parent_, descriptor &&d_, actor &act_)
-		:  parent(parent_), d(std::move(d_)), act(act_), next_action(0)
+		managed_endp(
+			rr_scheduler &parent_, descriptor &&d_, actor &act_
+		) : parent(parent_), d(std::move(d_)), act(act_), next_action(0)
 		{}
 
 		virtual void read_ready(bool out_of_band, bool priority)
@@ -145,9 +147,9 @@ private:
 			parent.handle_hang_up(*this, read_only);
 		}
 	private:
-		friend struct scheduler;
+		friend struct rr_scheduler;
 
-		scheduler &parent;
+		rr_scheduler &parent;
 		descriptor d;
 		actor &act;
 		int next_action;
@@ -160,7 +162,7 @@ private:
 
 	void handle_read(managed_endp &endp, bool out_of_band, bool priority)
 	{
-		auto next(endp.act.read(endp.d, out_of_band, priority));
+		auto next(endp.act.read(*this, endp.d, out_of_band, priority));
 		if (next & actor::WAIT)
 			disp.reset(endp.d, endp, !(next & actor::WRITE));
 		else
@@ -169,9 +171,9 @@ private:
 
 	void handle_write(managed_endp &endp, bool out_of_band, bool priority)
 	{
-		auto &act(endp.d.context<actor>());
-
-		auto next(endp.act.write(endp.d, out_of_band, priority));
+		auto next(endp.act.write(
+			*this, endp.d, out_of_band, priority
+		));
 		if (next & actor::WAIT)
 			disp.reset(endp.d, endp, !(next & actor::WRITE));
 		else
@@ -188,10 +190,10 @@ private:
 
 	void add_active(int next_action, managed_endp &endp)
 	{
-		auto n(static_cast<node<active_nodes_tag> &>(endp));
+		auto n(static_cast<node<active_nodes_tag> *>(&endp));
 		endp.next_action = next_action;
-		n.next = &endp_active;
-		n.prev = endp_active.prev;
+		n->next = &endp_active;
+		n->prev = endp_active.prev;
 		endp_active.prev->next = n;
 		endp_active.prev = n;
 	}

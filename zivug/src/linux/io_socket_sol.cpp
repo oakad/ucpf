@@ -114,7 +114,10 @@
 
 namespace ucpf { namespace zivug { namespace io { namespace detail {
 
-extern template struct socket_level<SOL_SOCKET>;
+template <int Level>
+struct socket_level : socket_level_base {};
+
+//extern template struct socket_level<SOL_SOCKET>;
 
 }}}}
 
@@ -173,9 +176,11 @@ constexpr socket_level_base const *registry[] = {
 
 }
 
-namespace ucpf { namespace zivug { namespace io { namespace socket_level {
+namespace ucpf { namespace zivug { namespace io { namespace detail {
 
-socket_level_base const *from_string(char const *first, char const *last)
+socket_level_base const *socket_level_base::level_from_string(
+	char const *first, char const *last
+)
 {
 	auto idx(socket_level_map::find(first, last));
 	if (idx)
