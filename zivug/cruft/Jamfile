@@ -10,7 +10,13 @@ exe faucet : faucet.cpp ../src//zivug
              <include>..
              <linkflags>-lgdbm ;
 
-install . : faucet ;
+exe hose : hose.cpp ../src//zivug
+         : <include>../../yesod
+           <include>../../mina
+           <include>..
+           <linkflags>-lgdbm ;
+
+install . : faucet tap ;
 
 #install . : t3 nomenclate ../src//zivug ;
 
