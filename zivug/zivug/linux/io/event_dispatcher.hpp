@@ -73,6 +73,42 @@ struct event_dispatcher {
 			);
 	}
 
+	void reset_read(descriptor const &d, endpoint &n)
+	{
+		::epoll_event ev{
+			.events = read_event_mask | one_shot_event_mask,
+			.data = { .ptr = &n }
+		};
+
+		auto rv(epoll_ctl(fd, EPOLL_CTL_MOD, d.native(), &ev));
+
+		if ((rv < 0) && (errno == ENOENT))
+			rv = epoll_ctl(fd, EPOLL_CTL_ADD, d.native(), &ev);
+
+		if (rv < 0)
+			throw std::system_error(
+				errno, std::system_category()
+			);
+	}
+
+	void reset_write(descriptor const &d, endpoint &n)
+	{
+		::epoll_event ev{
+			.events = write_event_mask | one_shot_event_mask,
+			.data = { .ptr = &n }
+		};
+
+		auto rv(epoll_ctl(fd, EPOLL_CTL_MOD, d.native(), &ev));
+
+		if ((rv < 0) && (errno == ENOENT))
+			rv = epoll_ctl(fd, EPOLL_CTL_ADD, d.native(), &ev);
+
+		if (rv < 0)
+			throw std::system_error(
+				errno, std::system_category()
+			);
+	}
+
 	void remove(descriptor const &d)
 	{
 		epoll_ctl(fd, EPOLL_CTL_DEL, d.native(), nullptr);

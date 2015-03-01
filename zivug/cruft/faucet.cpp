@@ -21,12 +21,15 @@ namespace zc = ucpf::zivug::config;
 namespace zi = ucpf::zivug::io;
 
 struct server_actor : zi::actor {
-	virtual int read(
-		zi::scheduler &s, zi::descriptor const &d, bool out_of_band,
-		bool priority
+	virtual void init(zi::scheduler_action &sa)
+	{
+		sa.wait_read();
+	}
+
+	virtual void read(
+		zi::scheduler_action &sa, bool out_of_band, bool priority
 	)
 	{
-		return 0;
 	}
 };
 

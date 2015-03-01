@@ -20,14 +20,24 @@ namespace ms = ucpf::mina::store;
 namespace zc = ucpf::zivug::config;
 namespace zi = ucpf::zivug::io;
 
-struct client_actor : zi::actor {
-        virtual int write(
-                zi::scheduler &s, zi::descriptor const &d, bool out_of_band,
-                bool priority
-        )
-        {
-                return 0;
-        }
+struct splice_writer_actor : zi::actor {
+	splice_writer_actor(int src_fd_)
+	: src_fd(src_fd_)
+	{}
+
+	virtual void init(zi::scheduler_action &sa)
+	{
+		sa.wait_write();
+	}
+
+	virtual void write(
+		zi::scheduler_action &sa, bool out_of_band, bool priority
+	)
+	{
+	}
+
+private:
+	int src_fd;
 };
 
 namespace ucpf { namespace zivug { namespace config {
@@ -76,7 +86,7 @@ int main(int argc, char **argv)
 	pack.restore({"client"}, c_cfg);
 
 	zi::rr_scheduler<a_type> sched(c_cfg, a);
-	client_actor c_actor;
+	splice_writer_actor c_actor(STDIN_FILENO);
 
 	auto dp(zi::address_family::make_descriptor(
 		std::begin(c_cfg.protocol).base(),

@@ -22,6 +22,9 @@ struct scheduler {
 
 template <typename Alloc>
 struct rr_scheduler : scheduler {
+private:
+	
+public:
 	template <typename ConfigType>
 	rr_scheduler(ConfigType const &config, Alloc const &a)
 	: disp(config.epoll), tup_endp_alloc(node<all_nodes_tag>(), a)
@@ -43,7 +46,7 @@ struct rr_scheduler : scheduler {
 			}
 			p->next->prev = p->prev;
 			p->prev->next = p->next;
-			endp->act.release(*this, endp->d);
+			endp->act.release(action(*endp));
 			ah_type::destroy(
 				std::get<1>(tup_endp_alloc), endp, 1, true
 			);
@@ -62,7 +65,7 @@ struct rr_scheduler : scheduler {
 		endp_n->prev = r->prev;
 		r->prev->next = endp_n;
 		r->prev = endp_n;
-		disp.reset(endp->d, static_cast<endpoint &>(*endp), false);
+		act.init(action(*endp));
 	}
 
 	virtual void poll()
@@ -71,25 +74,14 @@ struct rr_scheduler : scheduler {
 		{}
 
 		for (auto endp(poll_active()); endp; endp = poll_active()) {
-			auto &act(endp->act);
-			int next(0);
-
-			if (endp->next_action & actor::READ)
-				next |= act.read(
-					*this, endp->d, false, false
-				);
-
-			if (endp->next_action & actor::WRITE)
-				next |= act.write(
-					*this, endp->d, false, false
-				);
-
-			if (next & actor::WAIT)
-				disp.reset(
-					endp->d, *endp, !(next & actor::WRITE)
-				);
-			else
-				add_active(next, *endp);
+			switch (endp->next_action) {
+			case READ:
+				endp->act.read(action(*endp), false, false);
+				break;
+			case WRITE:
+				endp->act.write(action(*endp), false, false);
+				break;
+			};
 		}
 	}
 
@@ -119,12 +111,20 @@ private:
 	struct active_nodes_tag
 	{};
 
+	struct action;
+
+	enum next_action_t : int {
+		READ = 0,
+		WRITE
+	};
+
 	struct managed_endp
 	: endpoint, private node<all_nodes_tag>,
 	  private node<active_nodes_tag> {
 		managed_endp(
 			rr_scheduler &parent_, descriptor &&d_, actor &act_
-		) : parent(parent_), d(std::move(d_)), act(act_), next_action(0)
+		) : parent(parent_), d(std::move(d_)), act(act_),
+		    next_action(next_action_t::READ)
 		{}
 
 		virtual void read_ready(bool out_of_band, bool priority)
@@ -148,36 +148,78 @@ private:
 		}
 	private:
 		friend struct rr_scheduler;
+		friend struct action;
 
 		rr_scheduler &parent;
 		descriptor d;
 		actor &act;
-		int next_action;
+		next_action_t next_action;
+	};
+
+	struct action : scheduler_action {
+		action(managed_endp &endp_)
+		: endp(endp_)
+		{}
+
+		virtual void resume_read()
+		{
+			endp.next_action = READ;
+			static_cast<rr_scheduler &>(
+				get_scheduler()
+			).add_active(endp);
+		}
+
+		virtual void resume_write()
+		{
+			endp.next_action = WRITE;
+			static_cast<rr_scheduler &>(
+				get_scheduler()
+			).add_active(endp);
+		}
+
+		virtual void wait_read()
+		{
+			static_cast<rr_scheduler &>(
+				get_scheduler()
+			).disp.reset_read(endp.d, endp);
+		}
+
+		virtual void wait_write()
+		{
+			static_cast<rr_scheduler &>(
+				get_scheduler()
+			).disp.reset_write(endp.d, endp);
+		}
+
+		virtual scheduler &get_scheduler()
+		{
+			return endp.parent;
+		}
+
+		virtual descriptor const &get_descriptor()
+		{
+			return endp.d;
+		}
+
+	private:
+		managed_endp &endp;
 	};
 
 	friend struct managed_endp;
+	friend action;
+
 	typedef ucpf::yesod::allocator::array_helper<
 		managed_endp, Alloc
 	> ah_type;
 
 	void handle_read(managed_endp &endp, bool out_of_band, bool priority)
 	{
-		auto next(endp.act.read(*this, endp.d, out_of_band, priority));
-		if (next & actor::WAIT)
-			disp.reset(endp.d, endp, !(next & actor::WRITE));
-		else
-			add_active(next, endp);
+		endp.act.read(action(endp), out_of_band, priority);
 	}
 
 	void handle_write(managed_endp &endp, bool out_of_band, bool priority)
 	{
-		auto next(endp.act.write(
-			*this, endp.d, out_of_band, priority
-		));
-		if (next & actor::WAIT)
-			disp.reset(endp.d, endp, !(next & actor::WRITE));
-		else
-			add_active(next, endp);
+		endp.act.write(action(endp), out_of_band, priority);
 	}
 
 	void handle_error(managed_endp &endp, bool priority)
@@ -188,10 +230,9 @@ private:
 	{
 	}
 
-	void add_active(int next_action, managed_endp &endp)
+	void add_active(managed_endp &endp)
 	{
 		auto n(static_cast<node<active_nodes_tag> *>(&endp));
-		endp.next_action = next_action;
 		n->next = &endp_active;
 		n->prev = endp_active.prev;
 		endp_active.prev->next = n;
