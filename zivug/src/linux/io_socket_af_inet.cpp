@@ -20,6 +20,7 @@ extern "C" {
 #include <sys/types.h>
 #include <sys/socket.h>
 
+#include <arpa/inet.h>
 }
 
 namespace ucpf { namespace zivug { namespace io {
@@ -80,7 +81,24 @@ struct address_family_inst<AF_INET> : address_family {
 	virtual void bind(
 		descriptor const &d, char const *addr_first,
 		char const *addr_last
-	) const
+	) const;
+
+	virtual void connect(
+		descriptor const &d, char const *addr_first,
+		char const *addr_last
+	) const;
+
+	virtual void listen(descriptor const &d, int backlog) const;
+
+protected:
+	virtual descriptor create(
+		int type, char const *proto_first, char const *proto_last
+	) const;
+
+private:
+	static void address_parse(
+		addr_type &addr, char const *addr_first, char const *addr_last
+	)
 	{
 		using zivug::detail::ipv4_addr_parse;
 
@@ -96,10 +114,10 @@ struct address_family_inst<AF_INET> : address_family {
 				EINVAL, std::system_category()
 			);
 
-
 		++port_first;
 
-		::sockaddr_in addr = {0};
+		__builtin_memset(&addr, 0, sizeof(addr_type));
+
 		addr.sin_family = AF_INET;
 		if (!(
 			ipv4_addr_parse(addr.sin_addr, addr_first, ip_last)
@@ -112,27 +130,60 @@ struct address_family_inst<AF_INET> : address_family {
 			);
 
 		addr.sin_port = htons(addr.sin_port);
-		if (0 > ::bind(
-			d.native(), reinterpret_cast<::sockaddr *>(&addr),
-			sizeof(addr)
-		))
-			throw std::system_error(
-				errno, std::system_category()
-			);
-	}
-
-protected:
-	virtual descriptor create(
-		int type, char const *proto_first, char const *proto_last
-	) const
-	{
-		int proto(inet_protocol_id(proto_first, proto_last));
-
-		return descriptor([type, proto]() -> int {
-			return ::socket(AF_INET, type | SOCK_NONBLOCK, proto);
-		});
 	}
 };
+
+void address_family_inst<AF_INET>::bind(
+	descriptor const &d, char const *addr_first, char const *addr_last
+) const
+{
+	addr_type addr;
+	address_parse(addr, addr_first, addr_last);
+
+	if (0 > ::bind(
+		d.native(), reinterpret_cast<::sockaddr *>(&addr), sizeof(addr)
+	))
+		throw std::system_error(errno, std::system_category());
+}
+
+void address_family_inst<AF_INET>::connect(
+	descriptor const &d, char const *addr_first, char const *addr_last
+) const
+{
+	printf("--1- %s\n", std::string(addr_first, addr_last).c_str());
+	addr_type addr;
+	address_parse(addr, addr_first, addr_last);
+	printf("--2- %s, %d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+
+	if (0 > ::connect(
+		d.native(), reinterpret_cast<::sockaddr *>(&addr), sizeof(addr)
+	)) {
+		if (errno != EINPROGRESS)
+			throw std::system_error(errno, std::system_category());
+	}
+}
+
+void address_family_inst<AF_INET>::listen(
+	descriptor const &d, int backlog
+) const
+{
+	if (0 > ::listen(d.native(), backlog))
+		throw std::system_error(errno, std::system_category());
+}
+
+descriptor address_family_inst<AF_INET>::create(
+	int type, char const *proto_first, char const *proto_last
+) const
+{
+	auto proto(inet_protocol_id(proto_first, proto_last));
+
+	return descriptor([type, proto]() -> int {
+		auto rv(::socket(AF_INET, type | SOCK_NONBLOCK, proto));
+		if (rv < 0)
+			throw std::system_error(errno, std::system_category());
+		return rv;
+	});
+}
 
 template <>
 struct address_family_inst<AF_INET6> : address_family {
@@ -141,7 +192,50 @@ struct address_family_inst<AF_INET6> : address_family {
 	virtual void bind(
 		descriptor const &d, char const *addr_first,
 		char const *addr_last
-	) const
+	) const;
+
+	virtual void connect(
+		descriptor const &d, char const *addr_first,
+		char const *addr_last
+	) const;
+
+	virtual void listen(descriptor const &d, int backlog) const;
+
+protected:
+	virtual descriptor create(
+		int type, char const *proto_first, char const *proto_last
+	) const;
+
+private:
+	static uint32_t scope_parse(
+		char const *scope_first, char const *scope_last
+	)
+	{
+		uint32_t scope_id(0);
+		auto x_first(scope_first);
+		if (mina::detail::from_ascii_numeric_u(
+			scope_id, x_first, scope_last
+		) && (x_first == scope_last))
+			return scope_id;
+
+		if (scope_first == scope_last)
+			throw std::system_error(EINVAL, std::system_category());
+
+		auto s_len(scope_last - scope_first + 1);
+		char s_name[s_len];
+		__builtin_memcpy(s_name, scope_first, s_len - 1);
+		s_name[s_len - 1] = 0;
+
+		scope_id = ::if_nametoindex(s_name);
+		if (scope_id)
+			return scope_id;
+		else
+			throw std::system_error(errno, std::system_category());
+	}
+
+	static void address_parse(
+		addr_type &addr, char const *addr_first, char const *addr_last
+	)
 	{
 		using zivug::detail::ipv6_addr_parse;
 
@@ -158,7 +252,7 @@ struct address_family_inst<AF_INET6> : address_family {
 				break;
 		}
 
-		::sockaddr_in6 addr = {0};
+		__builtin_memset(&addr, 0, sizeof(addr_type));
 
 		if ((ip_last == addr_last) || !ipv6_addr_parse(
 			addr.sin6_addr, addr_first, ip_last
@@ -171,7 +265,6 @@ struct address_family_inst<AF_INET6> : address_family {
 		if (*port_first == '%') {
 			auto scope_first(port_first);
 			++scope_first;
-
 
 			auto scope_last(scope_first);
 			for (; scope_last != addr_last; ++scope_last)
@@ -200,7 +293,7 @@ struct address_family_inst<AF_INET6> : address_family {
 			throw std::system_error(
 				EINVAL, std::system_category()
 			);
-		
+
 		++port_first;
 
 		if (!mina::detail::from_ascii_numeric_u(
@@ -211,56 +304,59 @@ struct address_family_inst<AF_INET6> : address_family {
 			);
 
 		addr.sin6_port = htons(addr.sin6_port);
-		if (0 > ::bind(
-			d.native(), reinterpret_cast<::sockaddr *>(&addr),
-			sizeof(addr)
-		))
-			throw std::system_error(
-				errno, std::system_category()
-			);
-	}
-
-protected:
-	virtual descriptor create(
-		int type, char const *proto_first, char const *proto_last
-	) const
-	{
-		int proto(inet_protocol_id(proto_first, proto_last));
-
-		return descriptor([type, proto]() -> int {
-			return ::socket(AF_INET6, type | SOCK_NONBLOCK, proto);
-		});
-	}
-
-private:
-	static uint32_t scope_parse(
-		char const *scope_first, char const *scope_last
-	) {
-		uint32_t scope_id(0);
-		auto x_first(scope_first);
-		if (mina::detail::from_ascii_numeric_u(
-			scope_id, x_first, scope_last
-		) && (x_first == scope_last))
-			return scope_id;
-
-		if (scope_first == scope_last)
-			throw std::system_error(
-				EINVAL, std::system_category()
-			);
-
-		auto s_len(scope_last - scope_first + 1);
-		char s_name[s_len];
-		__builtin_memcpy(s_name, scope_first, s_len - 1);
-		s_name[s_len - 1] = 0;
-
-		scope_id = ::if_nametoindex(s_name);
-		if (scope_id)
-			return scope_id;
-		else
-			throw std::system_error(
-				errno, std::system_category()
-			);
 	}
 };
+
+void address_family_inst<AF_INET6>::bind(
+	descriptor const &d, char const *addr_first, char const *addr_last
+) const
+{
+	addr_type addr;
+	address_parse(addr, addr_first, addr_last);
+
+	if (0 > ::bind(
+		d.native(), reinterpret_cast<::sockaddr *>(&addr), sizeof(addr)
+	))
+		throw std::system_error(errno, std::system_category());
+}
+
+void address_family_inst<AF_INET6>::connect(
+	descriptor const &d, char const *addr_first, char const *addr_last
+) const
+{
+	addr_type addr;
+	address_parse(addr, addr_first, addr_last);
+
+	if (0 > ::connect(
+		d.native(), reinterpret_cast<::sockaddr *>(&addr), sizeof(addr)
+	)) {
+		if (errno != EINPROGRESS)
+			throw std::system_error(errno, std::system_category());
+	}
+}
+
+void address_family_inst<AF_INET6>::listen(
+	descriptor const &d, int backlog
+) const
+{
+	auto rv(::listen(d.native(), backlog));
+	if (rv < 0)
+		throw std::system_error(errno, std::system_category());
+}
+
+descriptor address_family_inst<AF_INET6>::create(
+	int type, char const *proto_first, char const *proto_last
+) const
+{
+	auto proto(inet_protocol_id(proto_first, proto_last));
+
+	return descriptor([type, proto]() -> int {
+		auto rv(::socket(AF_INET6, type | SOCK_NONBLOCK, proto));
+		if (rv < 0)
+			throw std::system_error(errno, std::system_category());
+
+		return rv;
+	});
+}
 
 }}}

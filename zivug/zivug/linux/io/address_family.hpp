@@ -15,7 +15,13 @@
 namespace ucpf { namespace zivug { namespace io {
 
 struct address_family {
-	static std::pair<descriptor, address_family const &> make_descriptor(
+	constexpr address_family()
+	{}
+
+	address_family(address_family const &other) = delete;
+	address_family &operator=(address_family const &other) = delete;
+
+	static std::pair<descriptor, address_family const *> make_descriptor(
 		char const *first, char const *last
 	);
 

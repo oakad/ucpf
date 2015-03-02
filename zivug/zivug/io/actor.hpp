@@ -19,6 +19,7 @@ struct scheduler_action {
 	virtual void resume_write() = 0;
 	virtual void wait_read() = 0;
 	virtual void wait_write() = 0;
+	virtual void release() = 0;
 
 	virtual scheduler &get_scheduler() = 0;
 	virtual descriptor const &get_descriptor() = 0;
@@ -41,7 +42,11 @@ struct actor {
 	{
 	}
 
-	virtual void release(scheduler_action &&sa)
+	virtual void error(scheduler_action &&sa, bool priority)
+	{
+	}
+
+	virtual void hang_up(scheduler_action &&sa, bool read_only)
 	{
 	}
 };

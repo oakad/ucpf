@@ -44,12 +44,7 @@ public:
 				q->next->prev = q->prev;
 				q->prev->next = q->next;
 			}
-			p->next->prev = p->prev;
-			p->prev->next = p->next;
-			endp->act.release(action(*endp));
-			ah_type::destroy(
-				std::get<1>(tup_endp_alloc), endp, 1, true
-			);
+			release_endp(endp);
 		}
 	}
 
@@ -191,6 +186,13 @@ private:
 			).disp.reset_write(endp.d, endp);
 		}
 
+		virtual void release()
+		{
+			static_cast<rr_scheduler &>(
+				get_scheduler()
+			).release_endp(&endp);
+		}
+
 		virtual scheduler &get_scheduler()
 		{
 			return endp.parent;
@@ -224,10 +226,20 @@ private:
 
 	void handle_error(managed_endp &endp, bool priority)
 	{
+		endp.act.error(action(endp), priority);
 	}
 
 	void handle_hang_up(managed_endp &endp, bool read_only)
 	{
+		endp.act.hang_up(action(endp), read_only);
+	}
+
+	void release_endp(managed_endp *endp)
+	{
+		auto n(static_cast<node<all_nodes_tag> *>(endp));
+		n->prev->next = n->next;
+		n->next->prev = n->prev;
+		ah_type::destroy(std::get<1>(tup_endp_alloc), endp, 1, true);
 	}
 
 	void add_active(managed_endp &endp)

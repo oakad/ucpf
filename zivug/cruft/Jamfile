@@ -16,7 +16,7 @@ exe hose : hose.cpp ../src//zivug
            <include>..
            <linkflags>-lgdbm ;
 
-install . : faucet tap ;
+install . : faucet hose ../src//zivug ;
 
 #install . : t3 nomenclate ../src//zivug ;
 

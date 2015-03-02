@@ -22,11 +22,10 @@ extern "C" {
 namespace ucpf { namespace zivug { namespace io {
 
 template <::sa_family_t AddrFamily>
-struct address_family_inst : address_family
-{};
+struct address_family_inst : address_family {};
 
-//extern template struct address_family_inst<AF_INET>;
-//extern template struct address_family_inst<AF_INET6>;
+extern template struct address_family_inst<AF_INET>;
+extern template struct address_family_inst<AF_INET6>;
 
 }}}
 
@@ -105,7 +104,7 @@ constexpr address_family const *registry_af[] = {
 
 namespace ucpf { namespace zivug { namespace io {
 
-std::pair<descriptor, address_family const &> address_family::make_descriptor(
+std::pair<descriptor, address_family const *> address_family::make_descriptor(
 	char const *first, char const *last
 )
 {
@@ -114,7 +113,7 @@ std::pair<descriptor, address_family const &> address_family::make_descriptor(
 	while ((af_last != last) && (*af_last != '.'))
 		++af_last;
 
-	auto idx(address_family_map::find(first, last));
+	auto idx(address_family_map::find(first, af_last));
 	if (!idx)
 		throw std::system_error(
 			EAFNOSUPPORT, std::system_category()
@@ -144,9 +143,7 @@ std::pair<descriptor, address_family const &> address_family::make_descriptor(
 	if (proto_first != last)
 		++proto_first;
 
-	return std::make_pair(
-		af->create(s_type, proto_first, last), *af
-	);
+	return std::make_pair(af->create(s_type, proto_first, last), af);
 }
 
 void address_family::set_option(

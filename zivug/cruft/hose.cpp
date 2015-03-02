@@ -34,6 +34,23 @@ struct splice_writer_actor : zi::actor {
 		zi::scheduler_action &sa, bool out_of_band, bool priority
 	)
 	{
+		auto rv(::splice(
+			src_fd, nullptr, sa.get_descriptor().native(),
+			nullptr, std::size_t(1) << 8,
+			SPLICE_F_MOVE | SPLICE_F_NONBLOCK
+		));
+
+		printf("splice %zd, %d\n", rv, errno);
+
+		if (rv > 0)
+			sa.resume_write();
+		else if (rv < 0) {
+			if (errno == EAGAIN)
+				sa.wait_write();
+			else
+				sa.release();
+		} else
+			sa.release();
 	}
 
 private:
@@ -93,7 +110,9 @@ int main(int argc, char **argv)
 		std::end(c_cfg.protocol).base()
 	));
 
-	dp.second.connect(
+	printf("--0- %d - %p\n", dp.first.native(), &dp.second);
+
+	dp.second->connect(
 		dp.first, std::begin(c_cfg.address).base(),
 		std::end(c_cfg.address).base()
 	);

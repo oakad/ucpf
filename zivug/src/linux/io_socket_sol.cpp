@@ -117,7 +117,7 @@ namespace ucpf { namespace zivug { namespace io { namespace detail {
 template <int Level>
 struct socket_level : socket_level_base {};
 
-//extern template struct socket_level<SOL_SOCKET>;
+extern template struct socket_level<SOL_SOCKET>;
 
 }}}}
 

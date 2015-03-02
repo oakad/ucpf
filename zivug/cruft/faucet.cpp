@@ -57,23 +57,23 @@ int main(int argc, char **argv)
 		));
 
 		for (auto const &opt: s.pre_bind_options)
-			dp.second.set_option(
+			dp.second->set_option(
 				dp.first, std::begin(opt).base(),
 				std::end(opt).base()
 			);
 
-		dp.second.bind(
+		dp.second->bind(
 			dp.first, std::begin(s.bind_address).base(),
 			std::end(s.bind_address).base()
 		);
 
 		for (auto const &opt: s.post_bind_options)
-			dp.second.set_option(
+			dp.second->set_option(
 				dp.first, std::begin(opt).base(),
 				std::end(opt).base()
 			);
 
-		dp.second.listen(dp.first, s.listen_backlog);
+		dp.second->listen(dp.first, s.listen_backlog);
 
 		sched.imbue(std::move(dp.first), srv_actor);
 	}

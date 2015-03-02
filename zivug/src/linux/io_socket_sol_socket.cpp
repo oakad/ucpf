@@ -94,16 +94,18 @@ template <>
 struct socket_level<SOL_SOCKET> : socket_level_base {
 	virtual option_base const *option_from_string(
 		char const *first, char const *last
-	) const
-	{
-		auto idx(sol_socket_option_map::find(first, last));
-		if (idx)
-			return registry[idx - 1];
-		else
-			throw std::system_error(
-				ENOPROTOOPT, std::system_category()
-			);
-	}
+	) const;
 };
+
+option_base const *socket_level<SOL_SOCKET>::option_from_string(
+	char const *first, char const *last
+) const
+{
+	auto idx(sol_socket_option_map::find(first, last));
+	if (idx)
+		return registry[idx - 1];
+	else
+		throw std::system_error(ENOPROTOOPT, std::system_category());
+}
 
 }}}}
