@@ -130,10 +130,23 @@ private:
 		::epoll_event ev_buf[event_count];
 		auto rv(::epoll_wait(fd, ev_buf, event_count, timeout_));
 
+		printf("wait_impl %d\n", rv);
 		for (auto c(0); c < rv; ++c) {
 			auto n_ptr(reinterpret_cast<endpoint *>(
 				ev_buf[c].data.ptr
 			));
+
+			if (ev_buf[c].events & error_event_mask)
+				n_ptr->error(
+					ev_buf[c].events
+					& priority_event_mask
+				);
+
+			if (ev_buf[c].events & hang_up_event_mask)
+				n_ptr->hang_up(
+					ev_buf[c].events
+					& read_hang_up_event_mask
+				);
 
 			if (ev_buf[c].events & read_event_mask)
 				n_ptr->read_ready(
@@ -150,18 +163,7 @@ private:
 					ev_buf[c].events
 					& priority_event_mask
 				);
-
-			if (ev_buf[c].events & hang_up_event_mask)
-				n_ptr->hang_up(
-					ev_buf[c].events
-					& read_hang_up_event_mask
-				);
-
-			if (ev_buf[c].events & error_event_mask)
-				n_ptr->error(
-					ev_buf[c].events
-					& priority_event_mask
-				);
+			printf("wait_impl out\n");
 		}
 
 		if (rv < 0)

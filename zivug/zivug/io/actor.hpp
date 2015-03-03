@@ -13,15 +13,23 @@ namespace ucpf { namespace zivug { namespace io {
 
 struct descriptor;
 struct scheduler;
+struct actor;
 
 struct scheduler_action {
 	virtual void resume_read() = 0;
+
 	virtual void resume_write() = 0;
+
 	virtual void wait_read() = 0;
+
 	virtual void wait_write() = 0;
+
 	virtual void release() = 0;
 
+	virtual void set_actor(actor &act) = 0;
+
 	virtual scheduler &get_scheduler() = 0;
+
 	virtual descriptor const &get_descriptor() = 0;
 };
 

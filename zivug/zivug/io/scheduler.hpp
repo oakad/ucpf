@@ -22,45 +22,36 @@ struct scheduler {
 
 template <typename Alloc>
 struct rr_scheduler : scheduler {
-private:
-	
-public:
 	template <typename ConfigType>
 	rr_scheduler(ConfigType const &config, Alloc const &a)
-	: disp(config.epoll), tup_endp_alloc(node<all_nodes_tag>(), a)
+	: disp(config.epoll), endp_list(a)
 	{}
 
 	virtual ~rr_scheduler()
 	{
-		auto r(&std::get<0>(tup_endp_alloc));
+		destroy_released();
 
-		while (r->next != r) {
-			auto p(r->next);
-			auto endp(static_cast<managed_endp *>(p));
-			auto q(static_cast<node<active_nodes_tag> *>(endp));
-			if (q == q->next)
-				disp.remove(endp->d);
-			else {
-				q->next->prev = q->prev;
-				q->prev->next = q->next;
-			}
-			release_endp(endp);
+		while (true) {
+			auto n(endp_list.all.template unlink_next<
+				managed_endp
+			>());
+
+			if (!n)
+				break;
+
+			destroy_endp(n);
 		}
 	}
 
 	virtual void imbue(descriptor &&d, actor &act)
 	{
 		auto endp(ah_type::alloc_n(
-			std::get<1>(tup_endp_alloc), 1,
-			*this, std::move(d), act
+			endp_list.get_allocator(), 1, *this, std::move(d), &act
 		));
-		auto endp_n(static_cast<node<all_nodes_tag> *>(endp));
-		auto r(&std::get<0>(tup_endp_alloc));
-		endp_n->next = r;
-		endp_n->prev = r->prev;
-		r->prev->next = endp_n;
-		r->prev = endp_n;
-		act.init(action(*endp));
+		static_cast<node<all_nodes_tag> *>(endp)->link_before(
+			&endp_list.all
+		);
+		endp->act->init(action(*endp));
 	}
 
 	virtual void poll()
@@ -68,16 +59,22 @@ public:
 		while (disp.poll_next())
 		{}
 
-		for (auto endp(poll_active()); endp; endp = poll_active()) {
+		while (true) {
+			auto endp(poll_active());
+			if (!endp)
+				break;
+
 			switch (endp->next_action) {
 			case READ:
-				endp->act.read(action(*endp), false, false);
+				endp->act->read(action(*endp), false, false);
 				break;
 			case WRITE:
-				endp->act.write(action(*endp), false, false);
+				endp->act->write(action(*endp), false, false);
 				break;
 			};
 		}
+
+		destroy_released();
 	}
 
 	virtual void wait()
@@ -93,9 +90,67 @@ private:
 		: next(this), prev(this)
 		{}
 
-	private:
-		friend struct rr_scheduler;
+		node(Tag dummy)
+		: next(this), prev(this)
+		{}
 
+		node(node const &other) = delete;
+		node &operator=(node const &other) = delete;
+
+		void unlink()
+		{
+			if (linked()) {
+				next->prev = prev;
+				prev->next = next;
+				prev = this;
+				next = this;
+			}
+		}
+
+		template <typename T>
+		T *unlink_next()
+		{
+			if (linked()) {
+				auto n(next);
+				n->unlink();
+				return static_cast<T *>(n);
+			} else
+				return nullptr;
+		}
+
+		template <typename T>
+		T *unlink_prev()
+		{
+			if (linked()) {
+				auto n(prev);
+				n->unlink();
+				return static_cast<T *>(n);
+			} else
+				return nullptr;
+		}
+
+		void link_before(node *n)
+		{
+			next = n;
+			prev = n->prev;
+			n->prev = this;
+			prev->next = this;
+		}
+
+		void link_after(node *n)
+		{
+			next = n->next;
+			prev = n;
+			n->next = this;
+			next->prev = this;
+		}
+
+		bool linked() const
+		{
+			return next != this;
+		}
+
+	private:
 		node *next;
 		node *prev;
 	};
@@ -117,7 +172,7 @@ private:
 	: endpoint, private node<all_nodes_tag>,
 	  private node<active_nodes_tag> {
 		managed_endp(
-			rr_scheduler &parent_, descriptor &&d_, actor &act_
+			rr_scheduler &parent_, descriptor &&d_, actor *act_
 		) : parent(parent_), d(std::move(d_)), act(act_),
 		    next_action(next_action_t::READ)
 		{}
@@ -147,7 +202,7 @@ private:
 
 		rr_scheduler &parent;
 		descriptor d;
-		actor &act;
+		actor *act;
 		next_action_t next_action;
 	};
 
@@ -193,6 +248,11 @@ private:
 			).release_endp(&endp);
 		}
 
+		virtual void set_actor(actor &act)
+		{
+			endp.act = &act;
+		}
+
 		virtual scheduler &get_scheduler()
 		{
 			return endp.parent;
@@ -216,59 +276,81 @@ private:
 
 	void handle_read(managed_endp &endp, bool out_of_band, bool priority)
 	{
-		endp.act.read(action(endp), out_of_band, priority);
+		endp.act->read(action(endp), out_of_band, priority);
 	}
 
 	void handle_write(managed_endp &endp, bool out_of_band, bool priority)
 	{
-		endp.act.write(action(endp), out_of_band, priority);
+		endp.act->write(action(endp), out_of_band, priority);
 	}
 
 	void handle_error(managed_endp &endp, bool priority)
 	{
-		endp.act.error(action(endp), priority);
+		endp.act->error(action(endp), priority);
 	}
 
 	void handle_hang_up(managed_endp &endp, bool read_only)
 	{
-		endp.act.hang_up(action(endp), read_only);
+		endp.act->hang_up(action(endp), read_only);
 	}
 
 	void release_endp(managed_endp *endp)
 	{
-		auto n(static_cast<node<all_nodes_tag> *>(endp));
-		n->prev->next = n->next;
-		n->next->prev = n->prev;
-		ah_type::destroy(std::get<1>(tup_endp_alloc), endp, 1, true);
+		static_cast<node<all_nodes_tag> *>(endp)->unlink();
+		static_cast<node<all_nodes_tag> *>(endp)->link_before(
+			&endp_list.released
+		);
+	}
+
+	void destroy_released()
+	{
+		while (true) {
+			auto n(endp_list.released.template unlink_next<
+				managed_endp
+			>());
+
+			if (!n)
+				break;
+
+			destroy_endp(n);
+		}
+	}
+
+	void destroy_endp(managed_endp *endp)
+	{
+		disp.remove(endp->d);
+		ah_type::destroy(endp_list.get_allocator(), endp, 1, true);
 	}
 
 	void add_active(managed_endp &endp)
 	{
-		auto n(static_cast<node<active_nodes_tag> *>(&endp));
-		n->next = &endp_active;
-		n->prev = endp_active.prev;
-		endp_active.prev->next = n;
-		endp_active.prev = n;
+		static_cast<node<active_nodes_tag> *>(&endp)->link_before(
+			&endp_list.active
+		);
 	}
 
 	managed_endp *poll_active()
 	{
-		if (endp_active.next != &endp_active) {
-			auto n(endp_active.next);
-			endp_active.next = n->next;
-			n->next->prev = &endp_active;
-			n->next = n;
-			n->prev = n;
-			return static_cast<managed_endp *>(n);
-		} else
-			return nullptr;
+		return endp_list.active.template unlink_prev<managed_endp>();
 	}
 
 	event_dispatcher disp;
-	node<active_nodes_tag> endp_active;
-	std::tuple<
-		node<all_nodes_tag>, typename ah_type::allocator_type
-	> tup_endp_alloc;
+	struct endp_list_t : ah_type::allocator_type {
+		endp_list_t(Alloc const &a)
+		: ah_type::allocator_type(a)
+		{}
+
+		auto &get_allocator()
+		{
+			return *static_cast<
+				typename ah_type::allocator_type *
+			>(this);
+		}
+
+		node<all_nodes_tag> all;
+		node<all_nodes_tag> released;
+		node<active_nodes_tag> active;
+	} endp_list;
 };
 
 }}}

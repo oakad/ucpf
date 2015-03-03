@@ -20,20 +20,26 @@ namespace ms = ucpf::mina::store;
 namespace zc = ucpf::zivug::config;
 namespace zi = ucpf::zivug::io;
 
+struct connector_actor : zi::actor {
+};
+
 struct splice_writer_actor : zi::actor {
 	splice_writer_actor(int src_fd_)
 	: src_fd(src_fd_)
 	{}
 
-	virtual void init(zi::scheduler_action &sa)
+	virtual void init(zi::scheduler_action &&sa)
 	{
+		printf("xx init %p\n", this);
 		sa.wait_write();
 	}
 
 	virtual void write(
-		zi::scheduler_action &sa, bool out_of_band, bool priority
+		zi::scheduler_action &&sa, bool out_of_band, bool priority
 	)
 	{
+		printf("--1- write\n");
+
 		auto rv(::splice(
 			src_fd, nullptr, sa.get_descriptor().native(),
 			nullptr, std::size_t(1) << 8,
@@ -51,6 +57,13 @@ struct splice_writer_actor : zi::actor {
 				sa.release();
 		} else
 			sa.release();
+
+		printf("--4- write out\n");
+	}
+
+	virtual void error(zi::scheduler_action &&sa, bool priority)
+	{
+		printf("--1- error\n");
 	}
 
 private:
@@ -117,7 +130,10 @@ int main(int argc, char **argv)
 		std::end(c_cfg.address).base()
 	);
 
+	printf("--8- %p\n", &c_actor);
 	sched.imbue(std::move(dp.first), c_actor);
+	printf("--9-\n");
 	sched.wait();
+	printf("-10-\n");
 	return 0;
 }
