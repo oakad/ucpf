@@ -6,60 +6,45 @@
  * shed by the Free Software Foundation.
  */
 
-#if !defined(HPP_11109CC3D0125D55C012CFBB2EDD03C5)
-#define HPP_11109CC3D0125D55C012CFBB2EDD03C5
+#if !defined(HPP_F99F8802BC6F8F723BA263D6A2ECC7D1)
+#define HPP_F99F8802BC6F8F723BA263D6A2ECC7D1
+
+#include <zivug/io/actor.hpp>
 
 namespace ucpf { namespace zivug { namespace io {
 
-struct descriptor;
-struct scheduler;
-struct actor;
-
-struct scheduler_action {
-	virtual void resume_read() = 0;
-
-	virtual void resume_write() = 0;
-
-	virtual void wait_read() = 0;
-
-	virtual void wait_write() = 0;
-
-	virtual void release() = 0;
-
-	virtual void set_actor(actor &act) = 0;
-
-	virtual scheduler &get_scheduler() = 0;
-
-	virtual descriptor const &get_descriptor() = 0;
-};
-
-struct actor {
+struct terminating_actor : actor {
 	virtual void init(scheduler_action &&sa)
 	{
+		sa.release();
 	}
 
 	virtual bool read(
 		scheduler_action &&sa, bool out_of_band, bool priority
 	)
 	{
-		return false;
+		sa.release();
+		return true;
 	}
 
 	virtual bool write(
 		scheduler_action &&sa, bool out_of_band, bool priority
  	)
 	{
-		return false;
+		sa.release();
+		return true;
 	}
 
 	virtual bool error(scheduler_action &&sa, bool priority)
 	{
-		return false;
+		sa.release();
+		return true;
 	}
 
 	virtual bool hang_up(scheduler_action &&sa, bool read_only)
 	{
-		return false;
+		sa.release();
+		return true;
 	}
 };
 

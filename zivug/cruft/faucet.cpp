@@ -26,10 +26,12 @@ struct server_actor : zi::actor {
 		sa.wait_read();
 	}
 
-	virtual void read(
+	virtual bool read(
 		zi::scheduler_action &sa, bool out_of_band, bool priority
 	)
 	{
+		zi::descriptor d(
+		return false;
 	}
 };
 

@@ -17,17 +17,25 @@ struct endpoint {
 	virtual ~endpoint()
 	{}
 
-	virtual void read_ready(bool out_of_band, bool priority)
-	{}
+	virtual bool read_ready(bool out_of_band, bool priority)
+	{
+		return false;
+	}
 
-	virtual void write_ready(bool out_of_band, bool priority)
-	{}
+	virtual bool write_ready(bool out_of_band, bool priority)
+	{
+		return false;
+	}
 
-	virtual void error(bool priority)
-	{}
+	virtual bool error(bool priority)
+	{
+		return false;
+	}
 
-	virtual void hang_up(bool read_only)
-	{}
+	virtual bool hang_up(bool read_only)
+	{
+		return false;
+	}
 };
 
 }}}

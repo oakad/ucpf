@@ -52,6 +52,7 @@ struct rr_scheduler : scheduler {
 			&endp_list.all
 		);
 		endp->act->init(action(*endp));
+		destroy_released();
 	}
 
 	virtual void poll()
@@ -177,25 +178,30 @@ private:
 		    next_action(next_action_t::READ)
 		{}
 
-		virtual void read_ready(bool out_of_band, bool priority)
+		virtual bool read_ready(bool out_of_band, bool priority)
 		{
-			parent.handle_read(*this, out_of_band, priority);
+			return parent.handle_read(
+				*this, out_of_band, priority
+			);
 		}
 
-		virtual void write_ready(bool out_of_band, bool priority)
+		virtual bool write_ready(bool out_of_band, bool priority)
 		{
-			parent.handle_write(*this, out_of_band, priority);
+			return parent.handle_write(
+				*this, out_of_band, priority
+			);
 		}
 
-		virtual void error(bool priority)
+		virtual bool error(bool priority)
 		{
-			parent.handle_error(*this, priority);
+			return parent.handle_error(*this, priority);
 		}
 
-		virtual void hang_up(bool read_only)
+		virtual bool hang_up(bool read_only)
 		{
-			parent.handle_hang_up(*this, read_only);
+			return parent.handle_hang_up(*this, read_only);
 		}
+
 	private:
 		friend struct rr_scheduler;
 		friend struct action;
@@ -274,24 +280,26 @@ private:
 		managed_endp, Alloc
 	> ah_type;
 
-	void handle_read(managed_endp &endp, bool out_of_band, bool priority)
+	bool handle_read(managed_endp &endp, bool out_of_band, bool priority)
 	{
-		endp.act->read(action(endp), out_of_band, priority);
+		return endp.act->read(action(endp), out_of_band, priority);
 	}
 
-	void handle_write(managed_endp &endp, bool out_of_band, bool priority)
+	bool handle_write(
+		managed_endp &endp, bool out_of_band, bool priority
+	)
 	{
-		endp.act->write(action(endp), out_of_band, priority);
+		return endp.act->write(action(endp), out_of_band, priority);
 	}
 
-	void handle_error(managed_endp &endp, bool priority)
+	bool handle_error(managed_endp &endp, bool priority)
 	{
-		endp.act->error(action(endp), priority);
+		return endp.act->error(action(endp), priority);
 	}
 
-	void handle_hang_up(managed_endp &endp, bool read_only)
+	bool handle_hang_up(managed_endp &endp, bool read_only)
 	{
-		endp.act->hang_up(action(endp), read_only);
+		return endp.act->hang_up(action(endp), read_only);
 	}
 
 	void release_endp(managed_endp *endp)
@@ -324,7 +332,7 @@ private:
 
 	void add_active(managed_endp &endp)
 	{
-		static_cast<node<active_nodes_tag> *>(&endp)->link_before(
+		static_cast<node<active_nodes_tag> *>(&endp)->link_after(
 			&endp_list.active
 		);
 	}

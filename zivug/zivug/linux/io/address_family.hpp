@@ -14,6 +14,17 @@
 
 namespace ucpf { namespace zivug { namespace io {
 
+struct address_base {
+	virtual std::size_t size() const = 0;
+};
+
+struct address_filter {
+	virtual bool accept(address_base const &peer)
+	{
+		return true;
+	}
+};
+
 struct address_family {
 	constexpr address_family()
 	{}
@@ -50,6 +61,15 @@ struct address_family {
 	}
 
 	virtual void listen(descriptor const &d, int backlog) const
+	{
+		throw std::system_error(
+			EOPNOTSUPP, std::system_category()
+		);
+	}
+
+	virtual descriptor accept(
+		descriptor const &d, address_filter const &flt
+	) const
 	{
 		throw std::system_error(
 			EOPNOTSUPP, std::system_category()
