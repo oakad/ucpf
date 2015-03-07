@@ -15,16 +15,59 @@ struct descriptor;
 struct scheduler;
 struct actor;
 
+struct scheduler_token {
+	scheduler_token()
+	: ptr(nullptr)
+	{}
+
+	scheduler_token(scheduler_token &&other)
+	: ptr(other.ptr)
+	{
+		other.ptr = nullptr;
+	}
+
+	scheduler_token &operator=(scheduler_token &&other)
+	{
+		ptr = other.ptr;
+		other.ptr = nullptr;
+		return *this;
+	}
+
+	scheduler_token(scheduler_token const &other) = delete;
+	scheduler_token &operator=(scheduler_token const &other) = delete;
+
+private:
+	friend struct scheduler;
+
+	scheduler_token(void *ptr_)
+	: ptr(ptr_)
+	{}
+
+	void *ptr;
+};
+
 struct scheduler_action {
 	virtual void resume_read() = 0;
 
+	virtual void resume_read(scheduler_token &&tk) = 0;
+
 	virtual void resume_write() = 0;
+
+	virtual void resume_write(scheduler_token &&tk) = 0;
 
 	virtual void wait_read() = 0;
 
+	virtual void wait_read(scheduler_token &&tk) = 0;
+
 	virtual void wait_write() = 0;
 
+	virtual void wait_write(scheduler_token &&tk) = 0;
+
 	virtual void release() = 0;
+
+	virtual void release(scheduler_token &&tk) = 0;
+
+	virtual scheduler_token suspend() = 0;
 
 	virtual void set_actor(actor &act) = 0;
 
@@ -34,7 +77,7 @@ struct scheduler_action {
 };
 
 struct actor {
-	virtual void init(scheduler_action &&sa)
+	virtual void init(scheduler_action &&sa, bool new_desc)
 	{
 	}
 

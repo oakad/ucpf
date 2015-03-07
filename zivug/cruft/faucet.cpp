@@ -30,7 +30,6 @@ struct server_actor : zi::actor {
 		zi::scheduler_action &sa, bool out_of_band, bool priority
 	)
 	{
-		zi::descriptor d(
 		return false;
 	}
 };

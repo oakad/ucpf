@@ -29,76 +29,93 @@ namespace zi = ucpf::zivug::io;
 
 struct splice_writer_actor : zi::actor {
 	splice_writer_actor(int src_fd_)
-	: src_fd(src_fd_), pipe_fill(0)
+	: reader(*this), src_fd(src_fd_), pipe_fd{-1, -1}, pipe_fill(0)
 	{
-		auto flags(::fcntl(src_fd, F_GETFL, 0));
-		if (0 > ::fcntl(src_fd, F_SETFL, flags | O_NONBLOCK))
-			throw std::system_error(
-				errno, std::system_category()
-			);
+	}
+
+	virtual ~splice_writer_actor()
+	{
+		mark_close(pipe_fd[0]);
+		mark_close(pipe_fd[1]);
+	}
+
+	virtual void init(zi::scheduler_action &&sa, bool new_desc)
+	{
+		zi::descriptor in_d([src_fd = src_fd]() -> int {
+			auto rv(dup(src_fd));
+			if (0 > rv)
+				throw std::system_error(
+					errno, std::system_category()
+				);
+
+			auto flags(::fcntl(rv, F_GETFL, 0));
+			if (0 > ::fcntl(rv, F_SETFL, flags | O_NONBLOCK))
+				throw std::system_error(
+					errno, std::system_category()
+				);
+
+			return rv;
+		});
 
 		if (0 > ::pipe2(pipe_fd, O_NONBLOCK))
 			throw std::system_error(
 				errno, std::system_category()
 			);
 		printf("pipe %d -> %d\n", pipe_fd[1], pipe_fd[0]);
-	}
-
-	virtual ~splice_writer_actor()
-	{
-		close(pipe_fd[0]);
-		close(pipe_fd[1]);
+		sa.get_scheduler().imbue(std::move(in_d), reader);
 	}
 
 	virtual bool write(
 		zi::scheduler_action &&sa, bool out_of_band, bool priority
 	)
 	{
-		printf("--2- write\n");
-
-		auto rv(::splice(
-			src_fd, nullptr, pipe_fd[1],
-			nullptr, std::size_t(1) << 8,
-			SPLICE_F_MOVE | SPLICE_F_NONBLOCK
-		));
-
-		if (rv > 0)
-			pipe_fill += rv;
-
-		printf("splice-1 %zd, %d, %s\n", rv, errno, ::strerror(errno));
+		int err(0);
 
 		if (pipe_fill) {
-			rv = ::splice(
+			auto rv(::splice(
 				pipe_fd[0], nullptr,
 				sa.get_descriptor().native(),
 				nullptr, std::size_t(1) << 8,
 				SPLICE_F_MOVE | SPLICE_F_NONBLOCK
-			);
-			if (rv > 0) {
-				pipe_fill -= rv;
-				sa.resume_write();
-			}
+			));
 
-			printf("splice-2 %zd, %d, %s\n", rv, errno, ::strerror(errno));
+			printf(
+				"pipe read %zd, %d (%s)\n", rv, errno,
+				::strerror(errno)
+			);
+			if (rv >= 0)
+				pipe_fill -= rv;
+			else
+				err = errno;
 		}
 
-		if (rv > 0)
-			sa.resume_write();
-		else if (rv < 0) {
-			if (errno == EAGAIN)
-				sa.wait_write();
-			else
+		if (err) {
+			if (err == EAGAIN) {
+				if (pipe_fill)
+					sa.wait_write();
+				else {
+					writer_tk = sa.suspend();
+					sa.resume_read(std::move(reader_tk));
+				}
+			} else {
+				mark_close(pipe_fd[0]);
+				sa.release(std::move(reader_tk));
 				sa.release();
+			}
+		} else if (!pipe_fill) {
+			writer_tk = sa.suspend();
+			sa.resume_read(std::move(reader_tk));
 		} else
-			sa.release();
+			sa.wait_write();
 
-		printf("--4- write out\n");
 		return true;
 	}
 
 	virtual bool error(zi::scheduler_action &&sa, bool priority)
 	{
 		printf("--2- error\n");
+		mark_close(pipe_fd[0]);
+		sa.release(std::move(reader_tk));
 		sa.release();
 		return true;
 	}
@@ -106,14 +123,84 @@ struct splice_writer_actor : zi::actor {
 	virtual bool hang_up(zi::scheduler_action &&sa, bool read_only)
 	{
 		printf("--2- hang_up\n");
+		mark_close(pipe_fd[0]);
+		sa.release(std::move(reader_tk));
 		sa.release();
 		return true;
 	}
 
 private:
+	struct reader_actor : zi::actor {
+		reader_actor(splice_writer_actor &parent_)
+		: parent(parent_)
+		{}
+
+		virtual void init(zi::scheduler_action &&sa, bool new_desc)
+		{
+		}
+
+		virtual bool read(
+			zi::scheduler_action &&sa, bool out_of_band,
+			bool priority
+		)
+		{
+			if (parent.pipe_fd[0] < 0) {
+				sa.release();
+				mark_close(parent.pipe_fd[1]);
+				return true;
+			}
+
+			auto rv(::splice(
+				sa.get_descriptor().native(), nullptr,
+				parent.pipe_fd[1], nullptr, std::size_t(1) << 8,
+				SPLICE_F_MOVE | SPLICE_F_NONBLOCK
+			));
+
+			printf(
+				"pipe write %zd, %d (%s)\n", rv, errno,
+				::strerror(errno)
+			);
+
+			int err(rv >= 0 ? 0 : errno);
+			parent.pipe_fill += (rv > 0) ? rv : 0;
+
+			if (parent.pipe_fill)
+				sa.resume_write(std::move(parent.writer_tk));
+
+			if (err) {
+				if (err == EAGAIN) {
+					if (parent.pipe_fill)
+						parent.reader_tk = sa.suspend();
+					else
+						sa.wait_read();
+				} else {
+					mark_close(parent.pipe_fd[1]);
+					sa.resume_write(std::move(
+						parent.writer_tk
+					));
+					sa.release();
+				}
+			}
+
+			return true;
+		}
+
+		splice_writer_actor &parent;
+	} reader;
+
+	static void mark_close(int &fd)
+	{
+		if (fd >= 0) {
+			::close(fd);
+			fd = -1;
+		}
+	}
+
 	int src_fd;
 	int pipe_fd[2];
 	int pipe_fill;
+	zi::scheduler_token reader_tk;
+	zi::scheduler_token writer_tk;
 };
 
 struct connector_actor : zi::actor {
@@ -121,7 +208,7 @@ struct connector_actor : zi::actor {
 	: act(act_)
 	{}
 
-	virtual void init(zi::scheduler_action &&sa)
+	virtual void init(zi::scheduler_action &&sa, bool new_desc)
 	{
 		printf("--1- init\n");
 		sa.wait_write();

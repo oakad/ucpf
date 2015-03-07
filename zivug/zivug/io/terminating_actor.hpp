@@ -14,7 +14,7 @@
 namespace ucpf { namespace zivug { namespace io {
 
 struct terminating_actor : actor {
-	virtual void init(scheduler_action &&sa)
+	virtual void init(scheduler_action &&sa, bool new_desc)
 	{
 		sa.release();
 	}

@@ -18,6 +18,17 @@ struct scheduler {
 	virtual void imbue(descriptor &&d, actor &act) = 0;
 	virtual void poll() = 0;
 	virtual void wait() = 0;
+
+protected:
+	static scheduler_token produce_token(void *ptr)
+	{
+		return scheduler_token(ptr);
+	}
+
+	static void *access_token(scheduler_token const &tk)
+	{
+		return tk.ptr;
+	}
 };
 
 template <typename Alloc>
@@ -51,7 +62,7 @@ struct rr_scheduler : scheduler {
 		static_cast<node<all_nodes_tag> *>(endp)->link_before(
 			&endp_list.all
 		);
-		endp->act->init(action(*endp));
+		endp->act->init(action(*endp), true);
 		destroy_released();
 	}
 
@@ -220,43 +231,94 @@ private:
 		virtual void resume_read()
 		{
 			endp.next_action = READ;
-			static_cast<rr_scheduler &>(
-				get_scheduler()
-			).add_active(endp);
+			endp.parent.add_active(endp);
+		}
+
+		virtual void resume_read(scheduler_token &&tk)
+		{
+			auto x_endp(reinterpret_cast<managed_endp *>(
+				rr_scheduler::access_token(tk)
+			));
+			if (x_endp) {
+				x_endp->next_action = READ;
+				x_endp->parent.add_active(*x_endp);
+			}
 		}
 
 		virtual void resume_write()
 		{
 			endp.next_action = WRITE;
-			static_cast<rr_scheduler &>(
-				get_scheduler()
-			).add_active(endp);
+			endp.parent.add_active(endp);
+		}
+
+		virtual void resume_write(scheduler_token &&tk)
+		{
+			auto x_endp(reinterpret_cast<managed_endp *>(
+				access_token(tk)
+			));
+			if (x_endp) {
+				x_endp->next_action = WRITE;
+				x_endp->parent.add_active(*x_endp);
+			}
 		}
 
 		virtual void wait_read()
 		{
-			static_cast<rr_scheduler &>(
-				get_scheduler()
-			).disp.reset_read(endp.d, endp);
+			endp.parent.disp.reset_read(endp.d, endp);
+		}
+
+		virtual void wait_read(scheduler_token &&tk)
+		{
+			auto x_endp(reinterpret_cast<managed_endp *>(
+				rr_scheduler::access_token(tk)
+			));
+			if (x_endp)
+				x_endp->parent.disp.reset_read(
+					x_endp->d, *x_endp
+				);
 		}
 
 		virtual void wait_write()
 		{
-			static_cast<rr_scheduler &>(
-				get_scheduler()
-			).disp.reset_write(endp.d, endp);
+			endp.parent.disp.reset_write(endp.d, endp);
+		}
+
+		virtual void wait_write(scheduler_token &&tk)
+		{
+			auto x_endp(reinterpret_cast<managed_endp *>(
+				rr_scheduler::access_token(tk)
+			));
+			if (x_endp)
+				x_endp->parent.disp.reset_write(
+					x_endp->d, *x_endp
+				);
 		}
 
 		virtual void release()
 		{
-			static_cast<rr_scheduler &>(
-				get_scheduler()
-			).release_endp(&endp);
+			endp.parent.release_endp(&endp);
+		}
+
+		virtual void release(scheduler_token &&tk)
+		{
+			auto x_endp(reinterpret_cast<managed_endp *>(
+				rr_scheduler::access_token(tk)
+			));
+			if (x_endp)
+				x_endp->parent.release_endp(x_endp);
+		}
+
+		virtual scheduler_token suspend()
+		{
+			return rr_scheduler::produce_token(
+				reinterpret_cast<void *>(&endp)
+			);
 		}
 
 		virtual void set_actor(actor &act)
 		{
 			endp.act = &act;
+			endp.act->init(action(endp), false);
 		}
 
 		virtual scheduler &get_scheduler()
