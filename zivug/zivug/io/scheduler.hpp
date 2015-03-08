@@ -389,6 +389,7 @@ private:
 	void destroy_endp(managed_endp *endp)
 	{
 		disp.remove(endp->d);
+		endp->act->fini(action(*endp));
 		ah_type::destroy(endp_list.get_allocator(), endp, 1, true);
 	}
 

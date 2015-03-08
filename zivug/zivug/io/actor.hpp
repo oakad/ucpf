@@ -81,6 +81,10 @@ struct actor {
 	{
 	}
 
+	virtual void fini(scheduler_action &&sa)
+	{
+	}
+
 	virtual bool read(
 		scheduler_action &&sa, bool out_of_band, bool priority
 	)
