@@ -19,13 +19,13 @@ extern "C" {
 
 namespace ucpf { namespace zivug { namespace io {
 
-struct splice_channel_actor : actor {
-	splice_channel_actor(descriptor &&src_d_)
+struct splice_output_actor : actor {
+	splice_output_actor(descriptor &&src_d_, std::size_t block_size_)
 	: reader(*this), src_d(std::move(src_d_)), pipe_fd{-1, -1},
-	  pipe_fill(0)
+	  pipe_fill(0), block_size(block_size_)
 	{}
 
-	virtual ~splice_channel_actor()
+	virtual ~splice_output_actor()
 	{
 		mark_close(pipe_fd[0]);
 		mark_close(pipe_fd[1]);
@@ -58,7 +58,7 @@ struct splice_channel_actor : actor {
 			auto rv(::splice(
 				pipe_fd[0], nullptr,
 				sa.get_descriptor().native(),
-				nullptr, std::size_t(1) << 8,
+				nullptr, block_size,
 				SPLICE_F_MOVE | SPLICE_F_NONBLOCK
 			));
 
@@ -114,7 +114,7 @@ struct splice_channel_actor : actor {
 
 private:
 	struct reader_actor : actor {
-		reader_actor(splice_channel_actor &parent_)
+		reader_actor(splice_output_actor &parent_)
 		: parent(parent_)
 		{}
 
@@ -136,7 +136,7 @@ private:
 
 			auto rv(::splice(
 				sa.get_descriptor().native(), nullptr,
-				parent.pipe_fd[1], nullptr, std::size_t(1) << 8,
+				parent.pipe_fd[1], nullptr, parent.block_size,
 				SPLICE_F_MOVE | SPLICE_F_NONBLOCK
 			));
 
@@ -187,7 +187,7 @@ private:
 			return true;
 		}
 
-		splice_channel_actor &parent;
+		splice_output_actor &parent;
 	} reader;
 
 	static void mark_close(int &fd)
@@ -201,6 +201,7 @@ private:
 	descriptor src_d;
 	int pipe_fd[2];
 	int pipe_fill;
+	std::size_t block_size;
 	scheduler_token reader_tk;
 	scheduler_token writer_tk;
 };

@@ -8,6 +8,10 @@
 
 #include "io_socket_so.hpp"
 
+#if !defined(SO_BPF_EXTENSIONS)
+#define SO_BPF_EXTENSIONS 48
+#endif
+
 #if !defined(SO_INCOMING_CPU)
 #define SO_INCOMING_CPU 49
 #endif

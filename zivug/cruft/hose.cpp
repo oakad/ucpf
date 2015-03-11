@@ -13,7 +13,7 @@
 #include <zivug/arch/config/io_server.hpp>
 #include <zivug/arch/io/address_family.hpp>
 #include <zivug/io/terminating_actor.hpp>
-#include <zivug/arch/io/splice_channel_actor.hpp>
+#include <zivug/arch/io/splice_output_actor.hpp>
 
 #include <zivug/io/scheduler.hpp>
 
@@ -128,9 +128,9 @@ int main(int argc, char **argv)
 		std::end(c_cfg.protocol).base()
 	));
 
-	zi::splice_channel_actor s_actor(zi::descriptor([]() -> int {
+	zi::splice_output_actor s_actor(zi::descriptor([]() -> int {
 		return ::dup(STDIN_FILENO);
-	}));
+	}), 256);
 	connector_actor c_actor(s_actor);
 
 	printf("--0- %d - %p\n", dp.first.native(), &dp.second);
