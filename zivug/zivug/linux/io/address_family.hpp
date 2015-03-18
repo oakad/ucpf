@@ -9,6 +9,7 @@
 #if !defined(HPP_6668D74F286DF3886763E7099335A448)
 #define HPP_6668D74F286DF3886763E7099335A448
 
+#include <functional>
 #include <system_error>
 #include <zivug/arch/io/descriptor.hpp>
 
@@ -16,6 +17,12 @@ namespace ucpf { namespace zivug { namespace io {
 
 struct address_base {
 	virtual std::size_t size() const = 0;
+
+	virtual std::size_t data(char *buf) const = 0;
+
+	virtual std::size_t printable(
+		std::function<void (char const *, char const *)> &&consumer
+	) const = 0;
 };
 
 struct address_filter {
@@ -68,7 +75,7 @@ struct address_family {
 	}
 
 	virtual descriptor accept(
-		descriptor const &d, address_filter const &flt
+		descriptor const &d, address_filter &flt
 	) const
 	{
 		throw std::system_error(

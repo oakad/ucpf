@@ -14,6 +14,7 @@
 extern "C" {
 
 #include <fcntl.h>
+#include <sys/stat.h>
 
 }
 
@@ -22,7 +23,7 @@ namespace ucpf { namespace zivug { namespace io {
 struct splice_input_actor : actor {
 	splice_input_actor(descriptor &&dst_d_, std::size_t block_size_)
 	: writer(*this), dst_d(std::move(dst_d_)), pipe_fd{-1, -1},
-	  pipe_fill(0), block_size(block_size_)
+	  pipe_fill(0), block_size(block_size_), blocking_dst(false)
 	{}
 
 	virtual ~splice_input_actor()
@@ -33,11 +34,16 @@ struct splice_input_actor : actor {
 
 	virtual void init(scheduler_action &&sa, bool new_desc)
 	{
-		auto flags(::fcntl(dst_d.native(), F_GETFL, 0));
-		if (0 > ::fcntl(dst_d.native(), F_SETFL, flags | O_NONBLOCK))
+		struct ::stat fs{0};
+		if (0 > ::fstat(dst_d.native(), &fs))
 			throw std::system_error(
 				errno, std::system_category()
 			);
+
+		auto flags(::fcntl(dst_d.native(), F_GETFL, 0));
+
+		if (S_ISREG(fs.st_mode) || !(flags & O_NONBLOCK))
+			blocking_dst = true;
 
 		if (0 > ::pipe2(pipe_fd, O_NONBLOCK))
 			throw std::system_error(
@@ -203,6 +209,7 @@ private:
 	int pipe_fd[2];
 	int pipe_fill;
 	std::size_t block_size;
+	bool blocking_dst;
 	scheduler_token reader_tk;
 	scheduler_token writer_tk;
 };

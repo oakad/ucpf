@@ -76,7 +76,43 @@ namespace ucpf { namespace zivug { namespace io {
 
 template <>
 struct address_family_inst<AF_INET> : address_family {
-	typedef ::sockaddr_in addr_type;
+	typedef ::sockaddr_in address_type;
+
+	struct address : address_base {
+		address()
+		{
+			__builtin_memset(&addr, 0, size());
+		}
+
+		virtual std::size_t size() const
+		{
+			return sizeof(address_type);
+		}
+
+		virtual std::size_t data(char *buf) const
+		{
+			__builtin_memcpy(buf, &addr, size());
+			return size();
+		}
+
+		virtual std::size_t printable(
+			std::function<
+				void (char const *, char const *)
+			> &&consumer
+		) const
+		{
+			return 0;
+		}
+
+	private:
+		friend address_family_inst<AF_INET>;
+
+		address(address_type const &other)
+		: addr(other)
+		{}
+
+		address_type addr;
+	};
 
 	virtual void bind(
 		descriptor const &d, char const *addr_first,
@@ -90,6 +126,10 @@ struct address_family_inst<AF_INET> : address_family {
 
 	virtual void listen(descriptor const &d, int backlog) const;
 
+	virtual descriptor accept(
+		descriptor const &d, address_filter &flt
+	) const;
+
 protected:
 	virtual descriptor create(
 		int type, char const *proto_first, char const *proto_last
@@ -97,7 +137,8 @@ protected:
 
 private:
 	static void address_parse(
-		addr_type &addr, char const *addr_first, char const *addr_last
+		address_type &addr, char const *addr_first,
+		char const *addr_last
 	)
 	{
 		using zivug::detail::ipv4_addr_parse;
@@ -116,7 +157,7 @@ private:
 
 		++port_first;
 
-		__builtin_memset(&addr, 0, sizeof(addr_type));
+		__builtin_memset(&addr, 0, sizeof(address_type));
 
 		addr.sin_family = AF_INET;
 		if (!(
@@ -137,7 +178,7 @@ void address_family_inst<AF_INET>::bind(
 	descriptor const &d, char const *addr_first, char const *addr_last
 ) const
 {
-	addr_type addr;
+	address_type addr;
 	address_parse(addr, addr_first, addr_last);
 
 	if (0 > ::bind(
@@ -151,7 +192,7 @@ void address_family_inst<AF_INET>::connect(
 ) const
 {
 	printf("--1- %s\n", std::string(addr_first, addr_last).c_str());
-	addr_type addr;
+	address_type addr;
 	address_parse(addr, addr_first, addr_last);
 	printf("--2- %s, %d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
 
@@ -171,6 +212,27 @@ void address_family_inst<AF_INET>::listen(
 		throw std::system_error(errno, std::system_category());
 }
 
+descriptor address_family_inst<AF_INET>::accept(
+	descriptor const &d, address_filter &flt
+) const
+{
+	return descriptor([&d, &flt]() -> int {
+		::socklen_t a_len(sizeof(address_type));
+		address addr;
+		auto n_fd(::accept4(
+			d.native(), reinterpret_cast<::sockaddr *>(&addr.addr),
+			&a_len, SOCK_NONBLOCK
+		));
+
+		if ((n_fd >= 0) && !flt.accept(addr)) {
+			::close(n_fd);
+			n_fd = -1;
+		}
+
+		return n_fd;
+	});
+}
+
 descriptor address_family_inst<AF_INET>::create(
 	int type, char const *proto_first, char const *proto_last
 ) const
@@ -187,7 +249,43 @@ descriptor address_family_inst<AF_INET>::create(
 
 template <>
 struct address_family_inst<AF_INET6> : address_family {
-	typedef ::sockaddr_in6 addr_type;
+	typedef ::sockaddr_in6 address_type;
+
+	struct address : address_base {
+		address()
+		{
+			__builtin_memset(&addr, 0, size());
+		}
+
+		virtual std::size_t size() const
+		{
+			return sizeof(address_type);
+		}
+
+		virtual std::size_t data(char *buf) const
+		{
+			__builtin_memcpy(buf, &addr, size());
+			return size();
+		}
+
+		virtual std::size_t printable(
+			std::function<
+				void (char const *, char const *)
+			> &&consumer
+		) const
+		{
+			return 0;
+		}
+
+	private:
+		friend address_family_inst<AF_INET6>;
+
+		address(address_type const &other)
+		: addr(other)
+		{}
+
+		address_type addr;
+	};
 
 	virtual void bind(
 		descriptor const &d, char const *addr_first,
@@ -200,6 +298,10 @@ struct address_family_inst<AF_INET6> : address_family {
 	) const;
 
 	virtual void listen(descriptor const &d, int backlog) const;
+
+	virtual descriptor accept(
+		descriptor const &d, address_filter &flt
+	) const;
 
 protected:
 	virtual descriptor create(
@@ -234,7 +336,7 @@ private:
 	}
 
 	static void address_parse(
-		addr_type &addr, char const *addr_first, char const *addr_last
+		address_type &addr, char const *addr_first, char const *addr_last
 	)
 	{
 		using zivug::detail::ipv6_addr_parse;
@@ -252,7 +354,7 @@ private:
 				break;
 		}
 
-		__builtin_memset(&addr, 0, sizeof(addr_type));
+		__builtin_memset(&addr, 0, sizeof(address_type));
 
 		if ((ip_last == addr_last) || !ipv6_addr_parse(
 			addr.sin6_addr, addr_first, ip_last
@@ -311,7 +413,7 @@ void address_family_inst<AF_INET6>::bind(
 	descriptor const &d, char const *addr_first, char const *addr_last
 ) const
 {
-	addr_type addr;
+	address_type addr;
 	address_parse(addr, addr_first, addr_last);
 
 	if (0 > ::bind(
@@ -324,7 +426,7 @@ void address_family_inst<AF_INET6>::connect(
 	descriptor const &d, char const *addr_first, char const *addr_last
 ) const
 {
-	addr_type addr;
+	address_type addr;
 	address_parse(addr, addr_first, addr_last);
 
 	if (0 > ::connect(
@@ -342,6 +444,27 @@ void address_family_inst<AF_INET6>::listen(
 	auto rv(::listen(d.native(), backlog));
 	if (rv < 0)
 		throw std::system_error(errno, std::system_category());
+}
+
+descriptor address_family_inst<AF_INET6>::accept(
+	descriptor const &d, address_filter &flt
+) const
+{
+	return descriptor([&d, &flt]() -> int {
+		::socklen_t a_len(sizeof(address_type));
+		address addr;
+		auto n_fd(::accept4(
+			d.native(), reinterpret_cast<::sockaddr *>(&addr.addr),
+			&a_len, SOCK_NONBLOCK
+		));
+
+		if ((n_fd >= 0) && !flt.accept(addr)) {
+			::close(n_fd);
+			n_fd = -1;
+		}
+
+		return n_fd;
+	});
 }
 
 descriptor address_family_inst<AF_INET6>::create(

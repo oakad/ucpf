@@ -20,7 +20,30 @@ namespace ms = ucpf::mina::store;
 namespace zc = ucpf::zivug::config;
 namespace zi = ucpf::zivug::io;
 
+struct server_actor;
+
+struct receiver_actor : zi::splice_input_actor {
+	receiver_actor(
+		server_actor &parent_, descriptor &&dst_d_,
+		std::size_t block_size_
+	) : zi::splice_input_actor(
+		std::forward<descriptor>(dst_d_), block_size_
+	), parent(parent_)
+	{}
+
+	virtual void fini(scheduler_action &&sa)
+	{
+		parent.conn_finished(std::forward<scheduler_action>(sa));
+	}
+
+	server_actor &parent;
+};
+
 struct server_actor : zi::actor {
+	server_actor(zi::address_family const *af_)
+	: af(af_)
+	{}
+
 	virtual void init(zi::scheduler_action &sa)
 	{
 		sa.wait_read();
@@ -33,6 +56,14 @@ struct server_actor : zi::actor {
 		return false;
 	}
 
+	void conn_finished(scheduler_action &&sa)
+	{
+		sa.resume_read(acceptor_tk);
+	}
+
+private:
+	zi::address_family const *af;
+	zi::scheduler_token acceptor_tk;
 };
 
 int main(int argc, char **argv)
@@ -50,7 +81,7 @@ int main(int argc, char **argv)
 	pack.restore({"server"}, srv_cfg);
 
 	zi::rr_scheduler<a_type> sched(srv_cfg, a);
-	server_actor srv_actor;
+	std::vector<server_actor> srv_v;
 
 	for (auto const &s: srv_cfg.sockets) {
 		auto dp(zi::address_family::make_descriptor(
@@ -76,8 +107,8 @@ int main(int argc, char **argv)
 			);
 
 		dp.second->listen(dp.first, s.listen_backlog);
-
-		sched.imbue(std::move(dp.first), srv_actor);
+		srv_v.emplace_back(dp.second);
+		sched.imbue(std::move(dp.first), srv_v.back());
 	}
 
 	return 0;

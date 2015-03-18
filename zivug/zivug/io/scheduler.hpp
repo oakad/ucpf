@@ -59,9 +59,11 @@ struct rr_scheduler : scheduler {
 		auto endp(ah_type::alloc_n(
 			endp_list.get_allocator(), 1, *this, std::move(d), &act
 		));
+
 		static_cast<node<all_nodes_tag> *>(endp)->link_before(
 			&endp_list.all
 		);
+
 		endp->act->init(action(*endp), true);
 		destroy_released();
 	}

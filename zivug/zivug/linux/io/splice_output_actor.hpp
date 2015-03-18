@@ -14,6 +14,7 @@
 extern "C" {
 
 #include <fcntl.h>
+#include <sys/stat.h>
 
 }
 
@@ -22,7 +23,7 @@ namespace ucpf { namespace zivug { namespace io {
 struct splice_output_actor : actor {
 	splice_output_actor(descriptor &&src_d_, std::size_t block_size_)
 	: reader(*this), src_d(std::move(src_d_)), pipe_fd{-1, -1},
-	  pipe_fill(0), block_size(block_size_)
+	  pipe_fill(0), block_size(block_size_), blocking_src(false)
 	{}
 
 	virtual ~splice_output_actor()
@@ -33,17 +34,22 @@ struct splice_output_actor : actor {
 
 	virtual void init(scheduler_action &&sa, bool new_desc)
 	{
-		auto flags(::fcntl(src_d.native(), F_GETFL, 0));
-		if (0 > ::fcntl(src_d.native(), F_SETFL, flags | O_NONBLOCK))
+		struct ::stat fs{0};
+		if (0 > ::fstat(src_d.native(), &fs))
 			throw std::system_error(
 				errno, std::system_category()
 			);
+
+		auto flags(::fcntl(src_d.native(), F_GETFL, 0));
+
+		if (S_ISREG(fs.st_mode) || !(flags & O_NONBLOCK))
+			blocking_src = true;
 
 		if (0 > ::pipe2(pipe_fd, O_NONBLOCK))
 			throw std::system_error(
 				errno, std::system_category()
 			);
-		printf("pipe %d -> %d\n", pipe_fd[1], pipe_fd[0]);
+
 		sa.get_scheduler().imbue(std::move(src_d), reader);
 		writer_tk = sa.suspend();
 	}
@@ -62,10 +68,6 @@ struct splice_output_actor : actor {
 				SPLICE_F_MOVE | SPLICE_F_NONBLOCK
 			));
 
-			printf(
-				"pipe read %zd, %d (%s)\n", rv, errno,
-				::strerror(errno)
-			);
 			if (rv >= 0)
 				pipe_fill -= rv;
 			else
@@ -96,7 +98,6 @@ struct splice_output_actor : actor {
 
 	virtual bool error(scheduler_action &&sa, bool priority)
 	{
-		printf("--2- writer error\n");
 		mark_close(pipe_fd[0]);
 		sa.release(std::move(reader_tk));
 		sa.release();
@@ -105,7 +106,6 @@ struct splice_output_actor : actor {
 
 	virtual bool hang_up(scheduler_action &&sa, bool read_only)
 	{
-		printf("--2- writer hang_up\n");
 		mark_close(pipe_fd[0]);
 		sa.release(std::move(reader_tk));
 		sa.release();
@@ -120,7 +120,10 @@ private:
 
 		virtual void init(scheduler_action &&sa, bool new_desc)
 		{
-			sa.wait_read();
+			if (parent.blocking_src)
+				sa.resume_read();
+			else
+				sa.wait_read();
 		}
 
 		virtual bool read(
@@ -140,11 +143,6 @@ private:
 				SPLICE_F_MOVE | SPLICE_F_NONBLOCK
 			));
 
-			printf(
-				"pipe write %zd, %d (%s)\n", rv, errno,
-				::strerror(errno)
-			);
-
 			int err(rv >= 0 ? 0 : errno);
 			parent.pipe_fill += (rv > 0) ? rv : 0;
 
@@ -155,6 +153,8 @@ private:
 				if (err == EAGAIN) {
 					if (parent.pipe_fill)
 						parent.reader_tk = sa.suspend();
+					else if (parent.blocking_src)
+						sa.resume_read();
 					else
 						sa.wait_read();
 				} else {
@@ -164,14 +164,14 @@ private:
 					));
 					sa.release();
 				}
-			}
+			} else if (parent.pipe_fill)
+				sa.resume_read();
 
 			return true;
 		}
 
 		virtual bool error(scheduler_action &&sa, bool priority)
 		{
-			printf("--2- reader error\n");
 			mark_close(parent.pipe_fd[1]);
 			sa.resume_write(std::move(parent.writer_tk));
 			sa.release();
@@ -180,7 +180,6 @@ private:
 
 		virtual bool hang_up(scheduler_action &&sa, bool read_only)
 		{
-			printf("--2- reader hang_up\n");
 			mark_close(parent.pipe_fd[1]);
 			sa.resume_write(std::move(parent.writer_tk));
 			sa.release();
@@ -202,6 +201,7 @@ private:
 	int pipe_fd[2];
 	int pipe_fill;
 	std::size_t block_size;
+	bool blocking_src;
 	scheduler_token reader_tk;
 	scheduler_token writer_tk;
 };
