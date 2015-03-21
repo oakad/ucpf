@@ -6,10 +6,11 @@
  * shed by the Free Software Foundation.
  */
 
+#include <yesod/iterator/range_fill.hpp>
 #include <mina/detail/from_ascii_numeric_i.hpp>
 
-#include <zivug/detail/ipv4_addr_parse.hpp>
-#include <zivug/detail/ipv6_addr_parse.hpp>
+#include <zivug/detail/ipv4_address_utils.hpp>
+#include <zivug/detail/ipv6_address_utils.hpp>
 
 #include <zivug/arch/io/address_family.hpp>
 
@@ -101,7 +102,22 @@ struct address_family_inst<AF_INET> : address_family {
 			> &&consumer
 		) const
 		{
-			return 0;
+			using zivug::detail::ipv4_in_addr_to_ascii;
+			using ucpf::mina::detail::to_ascii_decimal_u;
+			using ucpf::yesod::iterator::make_range_fill;
+
+			constexpr std::size_t addr_buf_sz(INET_ADDRSTRLEN + 7);
+			char addr_buf[addr_buf_sz];
+			__builtin_memset(addr_buf, 0, addr_buf_sz);
+
+			auto sink(make_range_fill(
+				addr_buf, addr_buf + addr_buf_sz
+			));
+			ipv4_in_addr_to_ascii(sink, addr.sin_addr);
+			*sink++ = ':';
+			to_ascii_decimal_u<uint16_t>(sink, addr.sin_port);
+			consumer(addr_buf, addr_buf + sink.distance());
+			return sink.distance();
 		}
 
 	private:
@@ -141,7 +157,7 @@ private:
 		char const *addr_last
 	)
 	{
-		using zivug::detail::ipv4_addr_parse;
+		using zivug::detail::ipv4_ascii_to_in_addr;
 
 		auto ip_last(addr_first);
 		for (; ip_last != addr_last; ++ip_last) {
@@ -161,7 +177,7 @@ private:
 
 		addr.sin_family = AF_INET;
 		if (!(
-			ipv4_addr_parse(addr.sin_addr, addr_first, ip_last)
+			ipv4_ascii_to_in_addr(addr.sin_addr, addr_first, ip_last)
 			&& mina::detail::from_ascii_numeric_u(
 				addr.sin_port, port_first, addr_last
 			)
@@ -274,7 +290,32 @@ struct address_family_inst<AF_INET6> : address_family {
 			> &&consumer
 		) const
 		{
-			return 0;
+			using zivug::detail::ipv6_in6_addr_to_ascii;
+			using ucpf::mina::detail::to_ascii_decimal_u;
+			using ucpf::yesod::iterator::make_range_fill;
+
+			constexpr std::size_t addr_buf_sz(
+				INET6_ADDRSTRLEN + 20
+			);
+			char addr_buf[addr_buf_sz];
+			__builtin_memset(addr_buf, 0, addr_buf_sz);
+
+			auto sink(make_range_fill(
+				addr_buf, addr_buf + addr_buf_sz
+			));
+			*sink++ = '[';
+			ipv6_in6_addr_to_ascii(sink, addr.sin6_addr);
+			if (addr.sin6_scope_id) {
+				*sink++ = '%';
+				to_ascii_decimal_u<uint32_t>(
+					sink, addr.sin6_scope_id
+				);
+			}
+			*sink++ = ']';
+			*sink++ = ':';
+			to_ascii_decimal_u<uint16_t>(sink, addr.sin6_port);
+			consumer(addr_buf, addr_buf + sink.distance());
+			return sink.distance();
 		}
 
 	private:
@@ -339,7 +380,7 @@ private:
 		address_type &addr, char const *addr_first, char const *addr_last
 	)
 	{
-		using zivug::detail::ipv6_addr_parse;
+		using zivug::detail::ipv6_ascii_to_in6_addr;
 
 		if ((addr_first == addr_last) || (*addr_first != '['))
 			throw std::system_error(
@@ -356,7 +397,7 @@ private:
 
 		__builtin_memset(&addr, 0, sizeof(address_type));
 
-		if ((ip_last == addr_last) || !ipv6_addr_parse(
+		if ((ip_last == addr_last) || !ipv6_ascii_to_in6_addr(
 			addr.sin6_addr, addr_first, ip_last
 		))
 			throw std::system_error(

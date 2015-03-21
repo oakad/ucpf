@@ -2,8 +2,10 @@ import testing ;
 
 alias test_case : : : : <define>BOOST_TEST_DYN_LINK
                         <include>../..
+                        <include>../../../mina
+                        <include>../../../yesod
                         <library>../../..//unit_test_framework
                         <library>../../..//test_exec_monitor ;
 
-run ipv4_addr_parse.cpp : : test_case ;
-run ipv6_addr_parse.cpp : : test_case ;
+run ipv4_address_utils.cpp : : test_case ;
+run ipv6_address_utils.cpp : : test_case ;

@@ -18,7 +18,7 @@ extern "C" {
 namespace ucpf { namespace zivug { namespace detail {
 
 template <typename FirstIterator, typename LastIterator>
-bool ipv6_addr_parse(
+bool ipv6_ascii_to_in6_addr(
 	::in6_addr &out, FirstIterator &&first, LastIterator const &last
 )
 {
@@ -197,6 +197,72 @@ bool ipv6_addr_parse(
 	}
 
 	return true;
+}
+
+template <typename OutputIterator>
+void ipv6_in6_addr_to_ascii(OutputIterator &&sink, ::in6_addr const &in)
+{
+	uint8_t zz(0);
+	for (int c(0); c < 8; ++c)
+		zz |= !in.s6_addr16[c] ? (1 << c) : 0;
+
+	if (zz == 0xff) {
+		*sink++ = ':';
+		*sink++ = ':';
+		return;
+	}
+
+	int zc(0);
+	for (auto zx(zz); zx; zx &= (zx << 1))
+		++zc;
+
+	auto emit_group = [&sink](uint16_t g) -> void {
+		g = ntohs(g);
+		uint8_t gg[5] = {
+			uint8_t((g >> 12) & 0xf), uint8_t((g >> 8) & 0xf),
+			uint8_t((g >> 4) & 0xf),  uint8_t(g & 0xf),
+			uint8_t(0xff)
+		};
+
+		int n_dig(4);
+		while (!gg[4 - n_dig])
+			--n_dig;
+
+		for (auto c(4 - n_dig); c < 4; ++c)
+			*sink++ = gg[c] > 9 ? gg[c] - 10 + 'a' : gg[c] + '0';
+
+		if (!n_dig)
+			*sink++ = '0';
+	};
+
+	int z_off(0);
+	if (zc > 1) {
+		uint8_t zm(uint8_t(0xff) >> (8 - zc));
+		for (; z_off < (8 - zc); ++z_off) {
+			if ((zm & (zz >> z_off)) == zm)
+				break;
+		}
+
+		if (z_off) {
+			emit_group(in.s6_addr16[0]);
+			for (int c(1); c < z_off; ++c) {
+				*sink++ = ':';
+				emit_group(in.s6_addr16[c]);				
+			}
+		}
+
+		*sink++ = ':';
+		if ((z_off + zc) > 7)
+			*sink++ = ':';
+	} else {
+		emit_group(in.s6_addr16[0]);
+		zc = 1;
+	}
+
+	for (auto c(z_off + zc); c < 8; ++c) {
+		*sink++ = ':';
+		emit_group(in.s6_addr16[c]);
+	}
 }
 
 }}}

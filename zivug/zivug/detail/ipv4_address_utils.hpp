@@ -9,6 +9,8 @@
 #if !defined(HPP_601FC8DF2A436B609E66E2DE215E2D2E)
 #define HPP_601FC8DF2A436B609E66E2DE215E2D2E
 
+#include <mina/detail/to_ascii_decimal_u.hpp>
+
 extern "C" {
 
 #include <netinet/in.h>
@@ -18,7 +20,7 @@ extern "C" {
 namespace ucpf { namespace zivug { namespace detail {
 
 template <typename FirstIterator, typename LastIterator>
-bool ipv4_addr_parse(
+bool ipv4_ascii_to_in_addr(
 	::in_addr &out, FirstIterator &&first, LastIterator const &last
 )
 {
@@ -155,8 +157,27 @@ bool ipv4_addr_parse(
 	} else
 		rv = octet;
 
-	out.s_addr = ::htonl(rv);
+	out.s_addr = htonl(rv);
 	return true;
+}
+
+template <typename OutputIterator>
+void ipv4_in_addr_to_ascii(OutputIterator &&sink, ::in_addr const &in)
+{
+	using ucpf::mina::detail::to_ascii_decimal_u;
+
+	auto addr(::ntohl(in.s_addr));
+	for (int shift(24); shift > 0; shift -= 8) {
+		to_ascii_decimal_u<uint8_t>(
+			std::forward<OutputIterator>(sink),
+			(addr >> shift) & 0xff
+		);
+		*sink++ = '.';
+	}
+
+	to_ascii_decimal_u<uint8_t>(
+		std::forward<OutputIterator>(sink), addr & 0xff
+	);
 }
 
 }}}

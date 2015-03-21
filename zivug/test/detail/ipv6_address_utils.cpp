@@ -9,7 +9,7 @@
 #define BOOST_TEST_MODULE zivug
 #include <boost/test/unit_test.hpp>
 
-#include <zivug/detail/ipv6_addr_parse.hpp>
+#include <zivug/detail/ipv6_address_utils.hpp>
 
 extern "C" {
 
@@ -75,9 +75,18 @@ BOOST_AUTO_TEST_CASE(ipv6_addr_parse_0)
 		in6_addr out;
 		in6_addr ref;
 
-		BOOST_CHECK(ipv6_addr_parse(out, a_in.begin(), a_in.end()));
+		BOOST_CHECK(ipv6_ascii_to_in6_addr(out, a_in.begin(), a_in.end()));
 		inet_pton(AF_INET6, a_in.c_str(), &ref);
 		BOOST_CHECK_EQUAL(out, ref);
+	}
+
+	for (auto &a_in: addr_in) {
+		in6_addr ref_0, ref_1;
+		inet_pton(AF_INET6, a_in.c_str(), &ref_0);
+		std::string s_ref;
+		ipv6_in6_addr_to_ascii(std::back_inserter(s_ref), ref_0);
+		inet_pton(AF_INET6, s_ref.c_str(), &ref_1);
+		BOOST_CHECK_EQUAL(ref_0, ref_1);
 	}
 }
 

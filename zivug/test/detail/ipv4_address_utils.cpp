@@ -9,11 +9,11 @@
 #define BOOST_TEST_MODULE zivug
 #include <boost/test/unit_test.hpp>
 
-#include <zivug/detail/ipv4_addr_parse.hpp>
+#include <zivug/detail/ipv4_address_utils.hpp>
 
 namespace ucpf { namespace zivug { namespace detail {
 
-BOOST_AUTO_TEST_CASE(ipv4_addr_parse_0)
+BOOST_AUTO_TEST_CASE(ipv4_address_utils_0)
 {
 	std::array<std::string, 6> addr_in = {{
 		"192.0.2.235",
@@ -27,9 +27,13 @@ BOOST_AUTO_TEST_CASE(ipv4_addr_parse_0)
 	::in_addr ref{htonl(0xc00002eb)};
 	for (auto &a_in: addr_in) {
 		::in_addr out;
-		BOOST_CHECK(ipv4_addr_parse(out, a_in.begin(), a_in.end()));
+		BOOST_CHECK(ipv4_ascii_to_in_addr(out, a_in.begin(), a_in.end()));
 		BOOST_CHECK_EQUAL(ref.s_addr, out.s_addr);
 	}
+
+	std::string s_ref;
+	ipv4_in_addr_to_ascii(std::back_inserter(s_ref), ref);
+	BOOST_CHECK_EQUAL(addr_in[0], s_ref);
 }
 
 }}}
