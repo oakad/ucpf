@@ -72,4 +72,5 @@ run transform_view.cpp : : test_case ;
 run unique.cpp : : test_case ;
 run unpack_args.cpp : : test_case ;
 run value_cast.cpp : : test_case ;
+run value_transform.cpp : : test_case ;
 run vector.cpp : : test_case ;

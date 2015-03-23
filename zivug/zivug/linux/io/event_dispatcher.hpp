@@ -16,7 +16,7 @@ extern "C" {
 
 #include <system_error>
 #include <zivug/io/endpoint.hpp>
-#include <zivug/linux/io/descriptor.hpp>
+#include <zivug/arch/io/descriptor.hpp>
 
 namespace ucpf { namespace zivug { namespace io {
 

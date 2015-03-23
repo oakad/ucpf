@@ -27,6 +27,7 @@
 namespace {
 
 #include "symbols/sol_socket_option_map.hpp"
+#include "symbols/sol_socket_option_list.hpp"
 
 using ucpf::zivug::io::detail::string_tag;
 using ucpf::zivug::io::detail::option_base;

@@ -13,6 +13,7 @@ extern "C" {
 }
 
 #include "io_socket_so.hpp"
+#include <yesod/mpl/value_transform.hpp>
 #include <zivug/linux/io/address_family.hpp>
 
 #if !defined(AF_IB)
@@ -29,23 +30,18 @@ extern template struct address_family_inst<AF_INET6>;
 
 }}}
 
+using ucpf::yesod::mpl::package_c;
+using ucpf::yesod::mpl::value_transform;
+
 using ucpf::zivug::io::address_family;
 using ucpf::zivug::io::address_family_inst;
 
 namespace {
 
 #include "symbols/address_family_map.hpp"
+#include "symbols/address_family_list.hpp"
 #include "symbols/socket_type_map.hpp"
-
-constexpr int registry_type[] = {
-	SOCK_STREAM,
-	SOCK_DGRAM,
-	SOCK_RAW,
-	SOCK_RDM,
-	SOCK_SEQPACKET,
-	SOCK_DCCP,
-	SOCK_PACKET
-};
+#include "symbols/socket_type_list.hpp"
 
 template <::sa_family_t AddrFamily>
 struct family_entry {
@@ -56,49 +52,19 @@ struct family_entry {
 template <::sa_family_t AddrFamily>
 constexpr address_family_inst<AddrFamily> family_entry<AddrFamily>::af;
 
-constexpr address_family const *registry_af[] = {
-	family_entry<AF_UNIX>::impl,
-	family_entry<AF_LOCAL>::impl,
-	family_entry<AF_INET>::impl,
-	family_entry<AF_AX25>::impl,
-	family_entry<AF_IPX>::impl,
-	family_entry<AF_APPLETALK>::impl,
-	family_entry<AF_NETROM>::impl,
-	family_entry<AF_BRIDGE>::impl,
-	family_entry<AF_ATMPVC>::impl,
-	family_entry<AF_X25>::impl,
-	family_entry<AF_INET6>::impl,
-	family_entry<AF_ROSE>::impl,
-	family_entry<AF_DECnet>::impl,
-	family_entry<AF_NETBEUI>::impl,
-	family_entry<AF_SECURITY>::impl,
-	family_entry<AF_KEY>::impl,
-	family_entry<AF_NETLINK>::impl,
-	family_entry<AF_ROUTE>::impl,
-	family_entry<AF_PACKET>::impl,
-	family_entry<AF_ASH>::impl,
-	family_entry<AF_ECONET>::impl,
-	family_entry<AF_ATMSVC>::impl,
-	family_entry<AF_RDS>::impl,
-	family_entry<AF_SNA>::impl,
-	family_entry<AF_IRDA>::impl,
-	family_entry<AF_PPPOX>::impl,
-	family_entry<AF_WANPIPE>::impl,
-	family_entry<AF_LLC>::impl,
-	family_entry<AF_IB>::impl,
-	family_entry<AF_CAN>::impl,
-	family_entry<AF_TIPC>::impl,
-	family_entry<AF_BLUETOOTH>::impl,
-	family_entry<AF_IUCV>::impl,
-	family_entry<AF_RXRPC>::impl,
-	family_entry<AF_ISDN>::impl,
-	family_entry<AF_PHONET>::impl,
-	family_entry<AF_IEEE802154>::impl,
-	family_entry<AF_CAIF>::impl,
-	family_entry<AF_ALG>::impl,
-	family_entry<AF_NFC>::impl,
-	family_entry<AF_VSOCK>::impl
+template <typename T, T const &v>
+struct deref_af_inst {
+	template <typename Ix, Ix... Cn>
+	struct  apply {
+		typedef package_c<
+			address_family const *, family_entry<v[Cn]>::impl...
+		> type;
+	};
 };
+
+typedef typename value_transform<
+	decltype(address_family_list), address_family_list, deref_af_inst
+>::value_type registry_af;
 
 }
 
@@ -119,7 +85,7 @@ std::pair<descriptor, address_family const *> address_family::make_descriptor(
 			EAFNOSUPPORT, std::system_category()
 		);
 
-	auto af(registry_af[idx - 1]);
+	auto af(registry_af::value[idx - 1]);
 
 	auto type_first(af_last);
 	if (af_last != last)
@@ -137,7 +103,7 @@ std::pair<descriptor, address_family const *> address_family::make_descriptor(
 			ESOCKTNOSUPPORT, std::system_category()
 		);
 
-	auto s_type(registry_type[idx - 1]);
+	auto s_type(socket_type_list[idx - 1]);
 
 	auto proto_first(type_last);
 	if (proto_first != last)

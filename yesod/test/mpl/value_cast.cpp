@@ -16,7 +16,7 @@
 
 namespace ucpf { namespace yesod { namespace mpl {
 
-BOOST_AUTO_TEST_CASE(make_value_0)
+BOOST_AUTO_TEST_CASE(value_cast_0)
 {
 	typedef package_c<char, 'z', 'y', 'x', 'w', 'v', 'u'> p0;
 	typedef value_cast<p0> xv0;
