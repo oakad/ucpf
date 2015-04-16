@@ -1,0 +1,5 @@
+
+convert zivug obj : [ glob *.cpp ]
+                  : <include>../..
+                    <include>../../../yesod
+                    <include>../../../mina ;

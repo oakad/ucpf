@@ -1,3 +1,5 @@
+project zivug : requirements <cxxflags>-std=gnu++14
+	      : default-build release <threading>multi ;
 
-project zivug  : requirements <cxxflags>-std=gnu++14 <threading>multi
-               : default-build release ;
+
+path-constant ZIVUG_ROOT : . ;

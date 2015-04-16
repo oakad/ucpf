@@ -1,3 +1,21 @@
+import path ;
+import property ;
 
-lib zivug : [ glob *.cpp ] linux//zivug
-          : <target-os>linux ;
+alias zivug_sysdep : linux//zivug : <target-os>linux ;
+alias zivug_sysdep : cygwin//zivug : <target-os>cygwin ;
+
+lib zivug : [ glob *.cpp ] zivug_sysdep : <conditional>@set-arch-symlink ;
+
+rule set-arch-symlink ( properties * )
+{
+	local target-os = [ property.select <target-os> : $(properties) ] ;
+	local sysdeps-path = [ 
+		path.join $(ZIVUG_ROOT) "zivug" "sysdeps" $(target-os:G=)
+	] ;
+	local arch-symlink-path = [
+		path.join $(ZIVUG_ROOT) "zivug" "arch"
+	] ;
+
+	SHELL "ln -sfnr $(sysdeps-path) $(arch-symlink-path)" ;
+}
+
