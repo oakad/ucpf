@@ -11,7 +11,6 @@
 
 #include <functional>
 #include <system_error>
-#include <zivug/arch/io/descriptor.hpp>
 
 namespace ucpf { namespace zivug { namespace io {
 
@@ -32,6 +31,7 @@ struct address_filter {
 	}
 };
 
+template <typename Descriptor>
 struct address_family {
 	constexpr address_family()
 	{}
@@ -39,16 +39,16 @@ struct address_family {
 	address_family(address_family const &other) = delete;
 	address_family &operator=(address_family const &other) = delete;
 
-	static std::pair<descriptor, address_family const *> make_descriptor(
+	static std::pair<Descriptor, address_family const *> make_descriptor(
 		char const *first, char const *last
 	);
 
 	virtual void set_option(
-		descriptor const &d, char const *first, char const *last
+		Descriptor const &d, char const *first, char const *last
 	) const;
 
 	virtual void bind(
-		descriptor const &d, char const *addr_first,
+		Descriptor const &d, char const *addr_first,
 		char const *addr_last
 	) const
 	{
@@ -58,7 +58,7 @@ struct address_family {
 	}
 
 	virtual void connect(
-		descriptor const &d, char const *addr_first,
+		Descriptor const &d, char const *addr_first,
 		char const *addr_last
 	) const
 	{
@@ -67,15 +67,15 @@ struct address_family {
 		);
 	}
 
-	virtual void listen(descriptor const &d, int backlog) const
+	virtual void listen(Descriptor const &d, int backlog) const
 	{
 		throw std::system_error(
 			EOPNOTSUPP, std::system_category()
 		);
 	}
 
-	virtual descriptor accept(
-		descriptor const &d, address_filter &flt
+	virtual Descriptor accept(
+		Descriptor const &d, address_filter &flt
 	) const
 	{
 		throw std::system_error(
@@ -89,7 +89,7 @@ struct address_family {
 	}
 
 protected:
-	virtual descriptor create(
+	virtual Descriptor create(
 		int type, char const *proto_first, char const *proto_last
 	) const
 	{

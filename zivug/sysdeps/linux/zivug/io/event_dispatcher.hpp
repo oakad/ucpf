@@ -16,10 +16,10 @@ extern "C" {
 
 #include <system_error>
 #include <zivug/io/endpoint.hpp>
-#include <zivug/arch/io/descriptor.hpp>
 
 namespace ucpf { namespace zivug { namespace io {
 
+template <typename Descriptor>
 struct event_dispatcher {
 	template <typename ConfigType>
 	event_dispatcher(ConfigType const &config)
@@ -38,7 +38,7 @@ struct event_dispatcher {
 			::close(fd);
 	}
 
-	void set(descriptor const &d, endpoint &n)
+	void set(Descriptor const &d, endpoint &n)
 	{
 		::epoll_event ev{
 			.events = all_events_mask | edge_triggered_event_mask,
@@ -53,7 +53,7 @@ struct event_dispatcher {
 			);
 	}
 
-	void reset(descriptor const &d, endpoint &n, bool read_only)
+	void reset(Descriptor const &d, endpoint &n, bool read_only)
 	{
 		::epoll_event ev{
 			.events = (
@@ -73,7 +73,7 @@ struct event_dispatcher {
 			);
 	}
 
-	void reset_read(descriptor const &d, endpoint &n)
+	void reset_read(Descriptor const &d, endpoint &n)
 	{
 		::epoll_event ev{
 			.events = read_event_mask | one_shot_event_mask,
@@ -91,7 +91,7 @@ struct event_dispatcher {
 			);
 	}
 
-	void reset_write(descriptor const &d, endpoint &n)
+	void reset_write(Descriptor const &d, endpoint &n)
 	{
 		::epoll_event ev{
 			.events = write_event_mask | one_shot_event_mask,
@@ -109,7 +109,7 @@ struct event_dispatcher {
 			);
 	}
 
-	void remove(descriptor const &d)
+	void remove(Descriptor const &d)
 	{
 		epoll_ctl(fd, EPOLL_CTL_DEL, d.native(), nullptr);
 	}

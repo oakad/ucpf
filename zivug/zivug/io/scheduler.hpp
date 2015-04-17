@@ -10,10 +10,10 @@
 #define HPP_4FA543F2863804554BDE0F1328BAE25E
 
 #include <zivug/io/actor.hpp>
-#include <zivug/arch/io/event_dispatcher.hpp>
 
 namespace ucpf { namespace zivug { namespace io {
 
+template <typename EventDispatcher>
 struct scheduler {
 	virtual void imbue(descriptor &&d, actor &act) = 0;
 	virtual void poll() = 0;
@@ -407,7 +407,7 @@ private:
 		return endp_list.active.template unlink_prev<managed_endp>();
 	}
 
-	event_dispatcher disp;
+	EventDispatcher disp;
 	struct endp_list_t : ah_type::allocator_type {
 		endp_list_t(Alloc const &a)
 		: ah_type::allocator_type(a)

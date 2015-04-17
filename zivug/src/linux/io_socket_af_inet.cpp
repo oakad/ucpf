@@ -12,7 +12,7 @@
 #include <zivug/detail/ipv4_address_utils.hpp>
 #include <zivug/detail/ipv6_address_utils.hpp>
 
-#include <zivug/arch/io/address_family.hpp>
+#include <zivug/io/address_family.hpp>
 
 extern "C" {
 
