@@ -17,7 +17,7 @@ extern "C" {
 
 #include <system_error>
 #include <mina/detail/from_ascii_numeric_i.hpp>
-#include <zivug/linux/io/descriptor.hpp>
+#include <zivug/io/descriptor.hpp>
 
 #if !defined(BPF_MAJOR_VERSION)
 struct sock_filter {

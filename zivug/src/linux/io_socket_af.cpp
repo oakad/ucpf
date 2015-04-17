@@ -14,7 +14,7 @@ extern "C" {
 
 #include "io_socket_so.hpp"
 #include <yesod/mpl/value_transform.hpp>
-#include <zivug/linux/io/address_family.hpp>
+#include <zivug/io/address_family.hpp>
 
 #if !defined(AF_IB)
 #define AF_IB 27
@@ -23,16 +23,16 @@ extern "C" {
 namespace ucpf { namespace zivug { namespace io {
 
 template <::sa_family_t AddrFamily>
-struct address_family_inst : address_family {};
+struct address_family_inst : address_family<descriptor> {};
 
 extern template struct address_family_inst<AF_INET>;
 extern template struct address_family_inst<AF_INET6>;
 
 }}}
 
-using ucpf::yesod::mpl::package_c;
-using ucpf::yesod::mpl::value_transform;
+namespace mpl = ucpf::yesod::mpl;
 
+using ucpf::zivug::io::descriptor;
 using ucpf::zivug::io::address_family;
 using ucpf::zivug::io::address_family_inst;
 
@@ -46,31 +46,36 @@ namespace {
 template <::sa_family_t AddrFamily>
 struct family_entry {
 	constexpr static address_family_inst<AddrFamily> af = {};
-	constexpr static address_family const *impl = &af;
+	constexpr static address_family<descriptor> const *impl = &af;
 };
 
 template <::sa_family_t AddrFamily>
 constexpr address_family_inst<AddrFamily> family_entry<AddrFamily>::af;
 
 template <typename T, T const &v>
-struct deref_af_inst {
+struct deref_inst {
 	template <typename Ix, Ix... Cn>
 	struct  apply {
-		typedef package_c<
-			address_family const *, family_entry<v[Cn]>::impl...
+		typedef mpl::package_c<
+			address_family<descriptor> const * const *,
+			&family_entry<v[Cn]>::impl...
 		> type;
 	};
 };
 
-typedef typename value_transform<
-	decltype(address_family_list), address_family_list, deref_af_inst
+typedef typename mpl::value_transform<
+	decltype(address_family_list::list), address_family_list::list,
+	deref_inst
 >::value_type registry_af;
 
 }
 
 namespace ucpf { namespace zivug { namespace io {
 
-std::pair<descriptor, address_family const *> address_family::make_descriptor(
+template<>
+std::pair<
+	descriptor, address_family<descriptor> const *
+> address_family<descriptor>::make_descriptor(
 	char const *first, char const *last
 )
 {
@@ -85,7 +90,7 @@ std::pair<descriptor, address_family const *> address_family::make_descriptor(
 			EAFNOSUPPORT, std::system_category()
 		);
 
-	auto af(registry_af::value[idx - 1]);
+	auto af(*registry_af::value[idx - 1]);
 
 	auto type_first(af_last);
 	if (af_last != last)
@@ -112,7 +117,8 @@ std::pair<descriptor, address_family const *> address_family::make_descriptor(
 	return std::make_pair(af->create(s_type, proto_first, last), af);
 }
 
-void address_family::set_option(
+template <>
+void address_family<descriptor>::set_option(
 	descriptor const &d, char const *first, char const *last
 ) const
 {

@@ -12,6 +12,7 @@
 #include <zivug/detail/ipv4_address_utils.hpp>
 #include <zivug/detail/ipv6_address_utils.hpp>
 
+#include <zivug/io/descriptor.hpp>
 #include <zivug/io/address_family.hpp>
 
 extern "C" {
@@ -27,7 +28,7 @@ extern "C" {
 namespace ucpf { namespace zivug { namespace io {
 
 template <::sa_family_t AddrFamily>
-struct address_family_inst : address_family
+struct address_family_inst : address_family<descriptor>
 {};
 
 }}}
@@ -76,7 +77,7 @@ int inet_protocol_id(char const *proto_first, char const *proto_last)
 namespace ucpf { namespace zivug { namespace io {
 
 template <>
-struct address_family_inst<AF_INET> : address_family {
+struct address_family_inst<AF_INET> : address_family<descriptor> {
 	typedef ::sockaddr_in address_type;
 
 	struct address : address_base {
@@ -264,7 +265,7 @@ descriptor address_family_inst<AF_INET>::create(
 }
 
 template <>
-struct address_family_inst<AF_INET6> : address_family {
+struct address_family_inst<AF_INET6> : address_family<descriptor> {
 	typedef ::sockaddr_in6 address_type;
 
 	struct address : address_base {

@@ -18,8 +18,7 @@ extern template struct socket_level<SOL_SOCKET>;
 
 }}}}
 
-using ucpf::yesod::mpl::package_c;
-using ucpf::yesod::mpl::value_transform;
+namespace mpl = ucpf::yesod::mpl;
 
 using ucpf::zivug::io::detail::socket_level;
 using ucpf::zivug::io::detail::socket_level_base;
@@ -39,18 +38,18 @@ template <int Level>
 constexpr socket_level<Level> socket_level_entry<Level>::sol;
 
 template <typename T, T const &v>
-struct deref_sol_inst {
+struct deref_inst {
 	template <typename Ix, Ix... Cn>
 	struct  apply {
-		typedef package_c<
-			socket_level_base const *,
-			socket_level_entry<v[Cn]>::impl...
+		typedef mpl::package_c<
+			socket_level_base const * const *,
+			&socket_level_entry<v[Cn]>::impl...
 		> type;
 	};
 };
 
-typedef typename value_transform<
-	decltype(socket_level_list), socket_level_list, deref_sol_inst
+typedef typename mpl::value_transform<
+	decltype(socket_level_list::list), socket_level_list::list, deref_inst
 >::value_type registry;
 
 }
@@ -63,7 +62,7 @@ socket_level_base const *socket_level_base::level_from_string(
 {
 	auto idx(socket_level_map::find(first, last));
 	if (idx)
-		return registry::value[idx - 1];
+		return *registry::value[idx - 1];
 	else
 		throw std::system_error(
 			ENOPROTOOPT, std::system_category()

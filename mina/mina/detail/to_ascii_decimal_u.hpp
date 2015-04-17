@@ -14,7 +14,7 @@
 
 namespace ucpf { namespace mina { namespace detail {
 
-constexpr std::array<uint8_t, 100> ascii_decimal_digits = {
+constexpr std::array<uint8_t, 100> ascii_decimal_digits = {{
 	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
 	0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
 	0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29,
@@ -25,7 +25,7 @@ constexpr std::array<uint8_t, 100> ascii_decimal_digits = {
 	0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79,
 	0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89,
 	0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99
-};
+}};
 
 template <typename OutputIterator, size_t N>
 void bcd_to_ascii_u(OutputIterator &&sink, std::array<uint32_t, N> const &v)
@@ -60,7 +60,7 @@ struct to_ascii_decimal_u<uint8_t> {
 		constexpr uint16_t divider_100(0x29);
 		constexpr int shift_100(4);
 
-		std::array<uint32_t, 1> bv{divider_100};
+		std::array<uint32_t, 1> bv{{divider_100}};
 		bv[0] *= v;
 		bv[0] >>= (8 + shift_100);
 		bv[0] = (bv[0] << 8) | ascii_decimal_digits[v - bv[0] * 100];
@@ -97,7 +97,7 @@ struct to_ascii_decimal_u<uint16_t> {
 	template <typename OutputIterator>
 	to_ascii_decimal_u(OutputIterator &&sink, uint16_t v)
 	{
-		std::array<uint32_t, 1> bv{to_bcd(v)};
+		std::array<uint32_t, 1> bv{{to_bcd(v)}};
 		bcd_to_ascii_u(std::forward<OutputIterator>(sink), bv);
 	}
 };
@@ -109,7 +109,7 @@ struct to_ascii_decimal_u<uint32_t> {
 		constexpr uint32_t divider_100(0x51eb851f);
 		constexpr int shift_100(5);
 
-		std::array<uint32_t, 2> rv{0, 0};
+		std::array<uint32_t, 2> rv{{0, 0}};
 
 		auto xv(v);
 		for (int s(0); s < 32; s += 8) {
@@ -141,16 +141,16 @@ struct to_ascii_decimal_u<uint64_t> {
 		constexpr uint64_t divider_10e8(0xabcc77118461cefd);
 		constexpr int shift_10e8(26);
 
-		std::array<uint32_t, 2> xx{
+		std::array<uint32_t, 2> xx{{
 			uint32_t(v), uint32_t(v >> 32)
-		};
+		}};
 
-		std::array<uint64_t, 2> xy{
+		std::array<uint64_t, 2> xy{{
 			uint64_t(xx[1]) * 94967296u + uint64_t(xx[0]),
 			uint64_t(xx[1]) * 42u
-		};
+		}};
 
-		std::array<uint32_t, 3> bv{0, 0, 0};
+		std::array<uint32_t, 3> bv{{0, 0, 0}};
 		int dp(0);
 		uint64_t c(0);
 		for (uint64_t d: xy) {
@@ -179,12 +179,12 @@ struct to_ascii_decimal_u<uint128_t> {
 		constexpr uint64_t divider_10e8(0xabcc77118461cefd);
 		constexpr int shift_10e8(26);
 
-		std::array<uint32_t, 4> xx{
+		std::array<uint32_t, 4> xx{{
 			uint32_t(v), uint32_t(v >> 32), uint32_t(v >> 64),
 			uint32_t(v >> 96)
-		};
+		}};
 
-		std::array<uint64_t, 4> xy{
+		std::array<uint64_t, 4> xy{{
 			uint64_t(xx[3]) * 43950336u
 			+ uint64_t(xx[2]) * 9551616u
 			+ uint64_t(xx[1]) * 94967296u
@@ -195,9 +195,9 @@ struct to_ascii_decimal_u<uint128_t> {
 			uint64_t(xx[3]) * 16251426u
 			+ uint64_t(xx[2]) * 1844u,
 			uint64_t(xx[3]) * 79228u
-		};
+		}};
 
-		std::array<uint32_t, 5> bv{0, 0, 0, 0, 0};
+		std::array<uint32_t, 5> bv{{0, 0, 0, 0, 0}};
 		int dp(0);
 		uint64_t c(0);
 		for (uint64_t d: xy) {

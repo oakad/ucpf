@@ -166,7 +166,7 @@ void ipv4_in_addr_to_ascii(OutputIterator &&sink, ::in_addr const &in)
 {
 	using ucpf::mina::detail::to_ascii_decimal_u;
 
-	auto addr(::ntohl(in.s_addr));
+	auto addr(ntohl(in.s_addr));
 	for (int shift(24); shift > 0; shift -= 8) {
 		to_ascii_decimal_u<uint8_t>(
 			std::forward<OutputIterator>(sink),
