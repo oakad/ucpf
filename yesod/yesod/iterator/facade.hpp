@@ -18,8 +18,8 @@
     file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ==============================================================================*/
 
-#if !defined(UCPF_YESOD_ITERATOR_FACADE_20131219T1330)
-#define UCPF_YESOD_ITERATOR_FACADE_20131219T1330
+#if !defined(HPP_C15CE29398E61B18C06356D13925E176)
+#define HPP_C15CE29398E61B18C06356D13925E176
 
 #include <yesod/iterator/categories.hpp>
 #include <yesod/mpl/at.hpp>

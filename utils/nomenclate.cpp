@@ -11,7 +11,7 @@
 #include <regex>
 #include <string>
 #include <vector>
-#include <iostream>
+#include <cstdio>
 #include <cinttypes>
 #include <unordered_map>
 #include <zivug/detail/unescape_c.hpp>
