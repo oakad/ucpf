@@ -9,7 +9,7 @@
 #if !defined(HPP_7020A0422B6980AA796A76325F1035E0)
 #define HPP_7020A0422B6980AA796A76325F1035E0
 
-#include <yesod/iterator/facade.hpp>
+#include <yesod/iterator/range.hpp>
 
 namespace ucpf { namespace yesod { namespace iterator {
 namespace detail {
@@ -29,18 +29,40 @@ struct induced_range_base {
 			]);
 		}
 
-		node *prev;
-		node *next;
-		induced_range_base *parent;
-		long ref_count;
-		std::size_t alloc_size;
-		std::size_t data_size;
-		uint8_t *data;
+		static void get_next(node *&node_ptr, std::size_t &offset)
+		{
+			++offset;
+			if (offset < node_ptr->data_size)
+				return;
+
+			auto n_prev = node_ptr;
+
+			if (node_ptr->next) {
+				offset = 0;
+				node_ptr = node_ptr->next;
+			} else {
+				node_ptr = nullptr;
+				node_ptr = n_prev->parent->fetch_next(
+					n_prev, offset, true
+				);
+			}
+		}
+
+		node *prev = nullptr;
+		node *next = nullptr;
+		induced_range_base *parent = nullptr;
+		long ref_count = 0;
+		std::size_t alloc_size = 0;
+		std::size_t data_size = 0;
+		void *data = nullptr;
 	};
 
 	virtual void release(node *) = 0;
+	virtual node *fetch_next(
+		node *prev_ptr, std::size_t &offset, bool release_prev
+	) = 0;
 
-	long ref_count;
+	long ref_count = 0;
 };
 
 template <typename T>
@@ -72,43 +94,140 @@ struct induced_range_store : induced_range_base, Alloc {
 		induced_range_store, Alloc
 	> self_alloc_helper_t;
 
-	induced_range_store(Producer &p_)
-	: p(p_)
+	static induced_range_base::node *make_head(
+		Producer &p_, Alloc const &a
+	)
+	{
+		auto deleter = [a](induced_range_store *p) {
+			self_alloc_helper_t::destroy(a, p, 1, true);
+		};
+
+		auto node_deleter = [](node *p) {
+			p->release();
+		};
+
+		std::unique_ptr<
+			induced_range_store, decltype(deleter)
+		> s(self_alloc_helper_t::alloc(a, p_, a), deleter);
+
+		std::unique_ptr<
+			node, decltype(node_deleter)
+		> node_ptr(s->alloc_node(), node_deleter);
+
+		auto s_ptr = s.release();
+
+		if (s_ptr->p.attach_data(*s, node_ptr.get()))
+			return node_ptr.release();
+		else
+			return nullptr;
+	}
+
+	induced_range_store(Producer &p_, Alloc const &a)
+	: Alloc(a), p(p_), finished(false)
 	{}
 
 	virtual void release(node *node_ptr)
 	{
 
-		--node_ptr->ref_count;
-		if (node_ptr->ref_count || node_ptr->prev)
+		if (node_ptr->ref_count)
+			--node_ptr->ref_count;
+
+		if (node_ptr->ref_count)
 			return;
 
-		if (node_ptr->next)
-			node_ptr->next->prev = nullptr;
+		if (node_ptr->prev)
+			return;
 
-		p.detach_data(*this, node_ptr);
+		do {
+			auto p_next(node_ptr->next);
+			if (p_next)
+				p_next->prev = nullptr;
 
-		node_alloc_helper_t::destroy(
-			static_cast<Alloc>(*this), node_ptr,
-			1, true
+			p.detach_data(*this, node_ptr);
+
+			node_alloc_helper_t::destroy(
+				static_cast<Alloc>(*this), node_ptr,
+				1, true
+			);
+
+			--ref_count;
+
+			if (!ref_count) {
+				self_alloc_helper_t::destroy(
+					static_cast<Alloc &>(*this), this, 1,
+					true
+				);
+				return;
+			}
+
+			node_ptr = p_next;
+		} while (!node_ptr->ref_count);
+
+	}
+
+	virtual node *fetch_next(
+		node *prev_ptr, std::size_t &offset, bool release_prev
+	)
+	{
+		auto prev_deleter = [release_prev](node *p) {
+			if (release_prev)
+				p->release();
+		}
+
+		auto node_deleter = [](node *p) {
+				p->release();
+		}
+
+		std::unique_ptr<node, decltype(prev_deleter)> prev_ptr_guard(
+			prev_ptr, prev_deleter
 		);
 
-		--ref_count;
+		auto l_offset(prev_ptr->data_size);
+		offset = 0;
 
-		if (!ref_count)
-			self_alloc_helper_t::destroy(
-				static_cast<Alloc>(*this), this, 1, true
-			);
+		if (finished)
+			return nullptr;
+
+		finished = true;
+		if (prev_ptr->data_size < prev_ptr->alloc_size) {
+			if (p.append_data(*this, prev_ptr)) {
+				offset = l_offset;
+				finished = false;
+				return prev_ptr;
+			} else
+				return nullptr;
+		}
+
+		std::unique_ptr<node, decltype(node_deleter)> next_ptr(
+			alloc_node(), node_deleter
+		);
+
+		if (p.attach_data(*this, next_ptr.get())) {
+			prev_ptr->next = next_ptr;
+			next_ptr->prev = prev_ptr;
+			finished = false;
+			return next_ptr.release();
+		}
+			return nullptr;
 	}
 
 	uint8_t *alloc_data_buf(std::size_t size) const
 	{
-
+		return reinterpret_cast<uint8_t *>(
+			data_alloc_helper_t::alloc_s(
+				static_cast<Alloc const &>(*this), size
+			)
+		);
 	}
 
 	node *alloc_node() const
 	{
-
+		auto node_ptr = node_alloc_helper_t::alloc(
+			static_cast<Alloc const &>(*this),
+		);
+		node_ptr->parent = this;
+		++ref_count;
+		return node_ptr;
 	}
 
 	template <typename Tp, bool HasAcquire = false>
@@ -117,24 +236,33 @@ struct induced_range_store : induced_range_base, Alloc {
 		: p(p_)
 		{}
 
-		void attach_data(induced_range_store &parent, node *node_ptr)
+		std::size_t append_data(
+			induced_range_store &parent, node *node_ptr
+		)
 		{
-			if (!node_ptr->data) {
-				node_ptr->data = parent.alloc_data_buf(
-					Tp::preferred_block_size
-					* sizeof(storage_type)
-				);
-				node_ptr->alloc_size = Tp::preferred_block_size;
-			}
-
 			auto r_sz = node_ptr->alloc_size - node_ptr->data_size;
 			if (!r_sz)
-				return;
+				return r_sz;
 
 			auto c_sz = p.copy(
-				node_ptr->data + node_ptr->data_size, r_sz
+				reinterpret_cast<value_type *>(
+					node_ptr->data
+				) + node_ptr->data_size, r_sz
 			);
 			node_ptr->data_size += c_sz;
+			return c_sz;
+		}
+
+		std::size_t attach_data(
+			induced_range_store &parent, node *node_ptr
+		)
+		{
+			node_ptr->data = parent.alloc_data_buf(
+				Tp::preferred_block_size
+			);
+
+			node_ptr->alloc_size = Tp::preferred_block_size;
+			return append_data(parent, node_ptr);
 		}
 
 		void detach_data(induced_range_store &parent, node *node_ptr)
@@ -163,24 +291,21 @@ struct induced_range_store : induced_range_base, Alloc {
 		: p(p_)
 		{}
 
-		void attach_data(induced_range_store &parent, node *node_ptr)
+		std::size_t append_data(
+			induced_range_store &parent, node *node_ptr
+		) {
+			return 0;
+		}
+
+		std::size_t attach_data(
+			induced_range_store &parent, node *node_ptr
+		)
 		{
-			if (node_ptr->data) {
-				auto n(parent.alloc_node());
-				n->next = node_ptr->next;
-				n->prev = node_ptr;
-				if (node_ptr->next)
-					node_ptr->next->prev = n;
-
-				node_ptr->next = n;
-				attach_data(parent, n);
-				return;
-			}
-
 			auto bp(p.acquire());
 			node_ptr->data = bp.first;
 			node_ptr->alloc_size = bp.second;
 			node_ptr->data_size = bp.second;
+			return bp.second;
 		}
 
 		void detach_data(induced_range_store &parent, node *node_ptr)
@@ -195,25 +320,38 @@ struct induced_range_store : induced_range_base, Alloc {
 	};
 
 	producer_access<Producer, has_acquire<Producer>::value> p;
+	bool finished;
 };
 
 }
 
 template <typename ValueType>
-struct induced_range : facade<
-	induced_range<ValueType>, ValueType const, std::forward_iterator_tag
+struct induced_range_iterator : facade<
+	induced_range_iterator<ValueType>, ValueType const,
+	std::forward_iterator_tag
 > {
-	induced_range()
+	induced_range_iterator()
 	: node_ptr(nullptr), offset(0)
 	{}
 
-	~induced_range()
+	~induced_range_iterator()
 	{
 		if (node_ptr)
 			node_ptr->release();
 	}
 
 private:
+	friend make_induced_range;
+
+	induced_range_iterator(
+		detail::induced_range_base::node *node_ptr_,
+		std::size_t offset_
+	) : node_ptr(node_ptr_), offset(offset_)
+	{
+		if (node_ptr)
+			++node_ptr->ref_count;
+	}
+
 	bool equal(const_iterator const &other)
 	{
 		if (node_base == other.node_base)
@@ -235,6 +373,18 @@ private:
 	detail::induced_range_base::node *node_ptr;
 	std::size_t offset;
 };
+
+template <typename ValueType, typename Producer, typename Alloc>
+auto make_induced_range(Producer &p, Alloc const &a = std::allocator<void>())
+{
+	return make_range(
+		induced_range_iterator<ValueType>(
+			induced_range_store<
+				ValueType, Producer, Alloc
+			>::make_head(), 0
+		), induced_range_iterator<ValueType>()
+	);
+}
 
 }}}
 

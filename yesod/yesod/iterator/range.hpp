@@ -6,8 +6,8 @@
  * shed by the Free Software Foundation.
  */
 
-#if !defined(UCPF_YESOD_ITERATOR_RANGE_20140327T1420)
-#define UCPF_YESOD_ITERATOR_RANGE_20140327T1420
+#if !defined(HPP_143727AD722EA03961E8636E66406C03)
+#define HPP_143727AD722EA03961E8636E66406C03
 
 #include <yesod/iterator/facade.hpp>
 

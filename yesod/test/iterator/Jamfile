@@ -6,6 +6,7 @@ alias test_case : : : : <define>BOOST_TEST_DYN_LINK
                         <library>../../..//test_exec_monitor ;
 
 run facade.cpp : : test_case ;
+run induced_range.cpp : : test_case ;
 run is_lvalue_iterator.cpp : : test_case ;
 run joined_range.cpp : : test_case ;
 run range.cpp : : test_case ;
