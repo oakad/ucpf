@@ -10,6 +10,7 @@
 #define HPP_7020A0422B6980AA796A76325F1035E0
 
 #include <yesod/iterator/range.hpp>
+#include <yesod/allocator/array_helper.hpp>
 
 namespace ucpf { namespace yesod { namespace iterator {
 namespace detail {
@@ -19,14 +20,6 @@ struct induced_range_base {
 		void release()
 		{
 			parent->release(this);
-		}
-
-		template <typename Reference>
-		Reference at(std::size_t offset) const
-		{
-			return reinterpret_cast<Reference>(data[
-				offset * sizeof(ValueType)
-			]);
 		}
 
 		static void get_next(node *&node_ptr, std::size_t &offset)
@@ -98,12 +91,12 @@ struct induced_range_store : induced_range_base, Alloc {
 		Producer &p_, Alloc const &a
 	)
 	{
-		auto deleter = [a](induced_range_store *p) {
-			self_alloc_helper_t::destroy(a, p, 1, true);
+		auto deleter = [a](induced_range_store *store_ptr) {
+			self_alloc_helper_t::destroy(a, store_ptr, 1, true);
 		};
 
-		auto node_deleter = [](node *p) {
-			p->release();
+		auto node_deleter = [](node *node_ptr) {
+			node_ptr->release();
 		};
 
 		std::unique_ptr<
@@ -172,11 +165,11 @@ struct induced_range_store : induced_range_base, Alloc {
 		auto prev_deleter = [release_prev](node *p) {
 			if (release_prev)
 				p->release();
-		}
+		};
 
 		auto node_deleter = [](node *p) {
 				p->release();
-		}
+		};
 
 		std::unique_ptr<node, decltype(prev_deleter)> prev_ptr_guard(
 			prev_ptr, prev_deleter
@@ -203,7 +196,7 @@ struct induced_range_store : induced_range_base, Alloc {
 		);
 
 		if (p.attach_data(*this, next_ptr.get())) {
-			prev_ptr->next = next_ptr;
+			prev_ptr->next = next_ptr.get();
 			next_ptr->prev = prev_ptr;
 			finished = false;
 			return next_ptr.release();
@@ -220,10 +213,10 @@ struct induced_range_store : induced_range_base, Alloc {
 		);
 	}
 
-	node *alloc_node() const
+	node *alloc_node()
 	{
 		auto node_ptr = node_alloc_helper_t::alloc(
-			static_cast<Alloc const &>(*this),
+			static_cast<Alloc const &>(*this)
 		);
 		node_ptr->parent = this;
 		++ref_count;
@@ -231,7 +224,7 @@ struct induced_range_store : induced_range_base, Alloc {
 	}
 
 	template <typename Tp, bool HasAcquire = false>
-	struct producer_access : Tp {
+	struct producer_access {
 		producer_access(Tp &p_)
 		: p(p_)
 		{}
@@ -286,7 +279,7 @@ struct induced_range_store : induced_range_base, Alloc {
 	};
 
 	template <typename Tp>
-	struct producer_access<Tp, true> : Tp {
+	struct producer_access<Tp, true> {
 		producer_access(Tp &p_)
 		: p(p_)
 		{}
@@ -327,7 +320,7 @@ struct induced_range_store : induced_range_base, Alloc {
 
 template <typename ValueType>
 struct induced_range_iterator : facade<
-	induced_range_iterator<ValueType>, ValueType const,
+	induced_range_iterator<ValueType const>, ValueType const,
 	std::forward_iterator_tag
 > {
 	induced_range_iterator()
@@ -341,7 +334,11 @@ struct induced_range_iterator : facade<
 	}
 
 private:
-	friend make_induced_range;
+	friend struct core_access;
+	template <typename ValueType1, typename Producer, typename Alloc>
+	friend range<induced_range_iterator<ValueType1>> make_induced_range(
+		Producer &p, Alloc const &a
+	);
 
 	induced_range_iterator(
 		detail::induced_range_base::node *node_ptr_,
@@ -352,10 +349,10 @@ private:
 			++node_ptr->ref_count;
 	}
 
-	bool equal(const_iterator const &other)
+	bool equal(induced_range_iterator const &other) const
 	{
-		if (node_base == other.node_base)
-			return !node_base || (offset == other.offset);
+		if (node_ptr == other.node_ptr)
+			return !node_ptr || (offset == other.offset);
 		else
 			return false;
 	}
@@ -367,21 +364,28 @@ private:
 
 	auto dereference() const
 	{
-		return node_ptr->at<typename induced_range::reference>(offset);
+		return *(reinterpret_cast<ValueType const *>(
+			node_ptr->data
+		) + offset);
 	}
 
 	detail::induced_range_base::node *node_ptr;
 	std::size_t offset;
 };
 
-template <typename ValueType, typename Producer, typename Alloc>
-auto make_induced_range(Producer &p, Alloc const &a = std::allocator<void>())
+template <
+	typename ValueType, typename Producer,
+	typename Alloc = std::allocator<void>
+>
+range<induced_range_iterator<ValueType>> make_induced_range(
+	Producer &p, Alloc const &a = Alloc()
+)
 {
 	return make_range(
 		induced_range_iterator<ValueType>(
-			induced_range_store<
+			detail::induced_range_store<
 				ValueType, Producer, Alloc
-			>::make_head(), 0
+			>::make_head(p, a), 0
 		), induced_range_iterator<ValueType>()
 	);
 }

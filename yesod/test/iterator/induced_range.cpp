@@ -10,10 +10,13 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/test/output_test_stream.hpp>
 
-#include <yesod/iterator/seq_range.hpp>
+#include <fcntl.h>
+#include <system_error>
+
+#include <yesod/iterator/induced_range.hpp>
 
 namespace ucpf { namespace yesod { namespace iterator {
-namespace detail {
+namespace test {
 
 struct fd_reader {
 	constexpr static std::size_t preferred_block_size = 16;
@@ -38,11 +41,11 @@ struct fd_reader {
 
 BOOST_AUTO_TEST_CASE(induced_range_1)
 {
-	test::fd_reader frd(open("../ref/string_map/names.00.in", O_RDONLY));
+	test::fd_reader frd(::open("../ref/string_map/names.00.in", O_RDONLY));
 	using boost::test_tools::output_test_stream;
 	output_test_stream out("../ref/iterator/names.00.out", true);
 
-	auto ir_0(make_induced_range(frd));
+	auto ir_0(make_induced_range<char>(frd));
 	auto l_iter(ir_0.begin());
 	int l_cnt(0);
 
@@ -58,7 +61,7 @@ BOOST_AUTO_TEST_CASE(induced_range_1)
 	}
 
 	if (l_iter != ir_0.end()) {
-		std::string s(l_iter, iter);
+		std::string s(l_iter, ir_0.end());
 		out << s << '\n';
 		BOOST_CHECK(out.match_pattern());
 		++l_cnt;
