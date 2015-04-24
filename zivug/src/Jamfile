@@ -1,10 +1,6 @@
 import path ;
 import property ;
 
-alias zivug_inc : : : : <include>.. <conditional>@add-sysdeps ;
-alias mina_inc : : : : <include>../../mina ;
-alias yesod_inc : : : : <include>../../yesod ;
-
 rule add-sysdeps ( properties * )
 {
 	local target-os = [ property.select <target-os> : $(properties) ] ;

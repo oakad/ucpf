@@ -1,2 +1,3 @@
 
-convert zivug obj : [ glob *.cpp ] ..//zivug_inc ..//yesod_inc ..//mina_inc ;
+convert zivug obj : [ glob *.cpp ]
+		    ../..//zivug_headers $(ucpf)//yesod $(ucpf)//mina ;

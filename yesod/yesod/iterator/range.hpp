@@ -23,75 +23,8 @@ struct range {
 		Iterator
 	>::difference_type difference_type;
 
-	template <typename ValueType>
-	struct iterator_base : facade<
-		iterator_base<ValueType>, ValueType,
-		typename std::iterator_traits<Iterator>::iterator_category,
-		reference, difference_type
-	> {
-		friend struct core_access;
-		friend struct range;
-
-		iterator_base() = default;
-
-		iterator_base(Iterator pos_)
-		: pos(pos_)
-		{}
-
-		template <typename ValueType1>
-		iterator_base(
-			iterator_base<ValueType1> const &other,
-			typename std::enable_if<
-				std::is_convertible<
-					ValueType1 *, ValueType *
-				>::value, std::nullptr_t
-			>::type = nullptr
-		) : pos(other.pos)
-		{}
-	private:
-		template <typename ValueType1>
-		bool equal(iterator_base<ValueType1> const &other) const
-		{
-			return pos == other.pos;
-		}
-
-		void increment()
-		{
-			++pos;
-		}
-
-		void decrement()
-		{
-			--pos;
-		}
-
- 		void advance(typename iterator_base::difference_type n)
-		{
-			std::advance(pos, n);
-		}
-
-		template <typename ValueType1>
-		typename iterator_base::difference_type distance_to(
-			iterator_base<ValueType1> const &other
-		) const
-		{
-			return std::distance(pos, other.pos);
-		}
-
-		typename iterator_base::reference dereference() const
-		{
-			return *pos;
-		}
-
-		Iterator pos;
-	};
-
-	typedef iterator_base<value_type> iterator;
-	typedef typename std::conditional<
-		std::is_const<value_type>::value,
-		iterator_base<value_type>,
-		iterator_base<typename std::add_const<value_type>::type>
-	>::type const_iterator;
+	typedef Iterator iterator;
+	typedef Iterator const_iterator;
 
 	range(Iterator first_, Iterator last_)
 	: first(first_), last(last_)

@@ -1,5 +1,12 @@
 using gcc ;
 
-lib unit_test_framework : : <name>boost_unit_test_framework ;
-lib test_exec_monitor : : <name>boost_test_exec_monitor ;
-lib context : : <name>boost_context ;
+path-constant ucpf : . ;
+
+alias test_case : : :
+		: <define>BOOST_TEST_DYN_LINK
+		  <linkflags>-lboost_unit_test_framework
+		  <linkflags>-lboost_prg_exec_monitor ;
+
+alias yesod : yesod//yesod ;
+alias mina : mina//mina ;
+alias zivug : zivug//zivug ;

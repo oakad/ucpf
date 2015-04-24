@@ -1,3 +1,5 @@
 
 project mina : requirements <cxxflags>-std=gnu++14
-             : default-build release <threading>multi ;
+	     : default-build release <threading>multi ;
+
+alias mina : : : : <include>. ;

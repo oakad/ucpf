@@ -5,11 +5,11 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_YESOD_SHARED_MUTEX_DEC_09_2013_1200)
-#define UCPF_YESOD_SHARED_MUTEX_DEC_09_2013_1200
+#if !defined(HPP_1C4E35B84F7A7577D150D358D35DBA66)
+#define HPP_1C4E35B84F7A7577D150D358D35DBA66
 
-#include <yesod/arch/timed_mutex.hpp>
-#include <yesod/arch/event_variable.hpp>
+#include <yesod/timed_mutex.hpp>
+#include <yesod/event_variable.hpp>
 
 #include <atomic>
 #include <mutex>

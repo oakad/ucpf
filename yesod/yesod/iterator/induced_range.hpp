@@ -121,7 +121,6 @@ struct induced_range_store : induced_range_base, Alloc {
 
 	virtual void release(node *node_ptr)
 	{
-
 		if (node_ptr->ref_count)
 			--node_ptr->ref_count;
 
@@ -154,8 +153,7 @@ struct induced_range_store : induced_range_base, Alloc {
 			}
 
 			node_ptr = p_next;
-		} while (!node_ptr->ref_count);
-
+		} while (node_ptr && !node_ptr->ref_count);
 	}
 
 	virtual node *fetch_next(
@@ -168,7 +166,7 @@ struct induced_range_store : induced_range_base, Alloc {
 		};
 
 		auto node_deleter = [](node *p) {
-				p->release();
+			p->release();
 		};
 
 		std::unique_ptr<node, decltype(prev_deleter)> prev_ptr_guard(
@@ -200,16 +198,14 @@ struct induced_range_store : induced_range_base, Alloc {
 			next_ptr->prev = prev_ptr;
 			finished = false;
 			return next_ptr.release();
-		}
+		} else
 			return nullptr;
 	}
 
-	uint8_t *alloc_data_buf(std::size_t size) const
+	void *alloc_data_buf(std::size_t size) const
 	{
-		return reinterpret_cast<uint8_t *>(
-			data_alloc_helper_t::alloc_s(
-				static_cast<Alloc const &>(*this), size
-			)
+		return data_alloc_helper_t::alloc_s(
+			static_cast<Alloc const &>(*this), size
 		);
 	}
 
@@ -327,10 +323,53 @@ struct induced_range_iterator : facade<
 	: node_ptr(nullptr), offset(0)
 	{}
 
+	induced_range_iterator(induced_range_iterator const &other)
+	: node_ptr(other.node_ptr), offset(other.offset)
+	{
+		if (node_ptr)
+			++node_ptr->ref_count;
+	}
+
+	induced_range_iterator(induced_range_iterator &&other)
+	: node_ptr(other.node_ptr), offset(other.offset)
+	{
+		other.node_ptr = nullptr;
+		other.offset = 0;
+	}
+
 	~induced_range_iterator()
 	{
 		if (node_ptr)
 			node_ptr->release();
+	}
+
+	induced_range_iterator &operator=(induced_range_iterator const &other)
+	{
+		offset = other.offset;
+
+		if (node_ptr == other.node_ptr)
+			return *this;
+
+		if (node_ptr)
+			node_ptr->release();
+
+		node_ptr = other.node_ptr;
+
+		if (node_ptr)
+			++node_ptr->ref_count;
+
+		return *this;
+	}
+
+	induced_range_iterator &operator=(induced_range_iterator &&other)
+	{
+		offset = other.offset;
+		if (node_ptr)
+			node_ptr->release();
+
+		node_ptr = other.node_ptr;
+		other.node_ptr = nullptr;
+		other.offset = 0;
 	}
 
 private:
@@ -362,7 +401,7 @@ private:
 		detail::induced_range_base::node::get_next(node_ptr, offset);
 	}
 
-	auto dereference() const
+	typename induced_range_iterator::reference dereference() const
 	{
 		return *(reinterpret_cast<ValueType const *>(
 			node_ptr->data

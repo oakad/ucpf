@@ -1,11 +1,6 @@
 import testing ;
 
-alias test_case : : : : <define>BOOST_TEST_DYN_LINK
-                        <include>../..
-                        <library>../../..//unit_test_framework
-                        <library>../../..//test_exec_monitor
-                        <toolset>clang:<cxxflags>-ferror-limit=4
-                        <toolset>gcc:<cxxflags>-fmax-errors=4 ;
+alias test_case : $(ucpf)//test_case $(ucpf)//yesod ;
 
 run base32.cpp : : test_case ;
 run base86.cpp : : test_case ;

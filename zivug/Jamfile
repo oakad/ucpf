@@ -1,2 +1,14 @@
 project zivug : requirements <cxxflags>-std=gnu++14
 	      : default-build release <threading>multi ;
+
+
+rule add-sysdeps ( properties * )
+{
+#	local target-os = [ property.select <target-os> : $(properties) ] ;
+#	return <include>./sysdeps/$(target-os:G=) ;
+	return <include>./sysdeps/linux ;
+}
+
+alias zivug_headers : : : : <include>. <conditional>@add-sysdeps ;
+
+alias zivug : zivug_headers ./src//zivug ;

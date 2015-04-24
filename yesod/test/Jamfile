@@ -1,9 +1,6 @@
 import testing ;
 
-alias test_case : : : : <define>BOOST_TEST_DYN_LINK
-                        <include>..
-                        <library>../..//unit_test_framework
-                        <library>../..//test_exec_monitor ;
+alias test_case : $(ucpf)//test_case $(ucpf)//yesod ;
 
 run array_element_count.cpp : : test_case ;
 run bitops.cpp : : test_case ;

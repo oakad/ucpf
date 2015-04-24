@@ -12,6 +12,7 @@
 
 #include <fcntl.h>
 #include <system_error>
+#include <cstdio>
 
 #include <yesod/iterator/induced_range.hpp>
 
@@ -43,7 +44,7 @@ BOOST_AUTO_TEST_CASE(induced_range_1)
 {
 	test::fd_reader frd(::open("../ref/string_map/names.00.in", O_RDONLY));
 	using boost::test_tools::output_test_stream;
-	output_test_stream out("../ref/iterator/names.00.out", true);
+	output_test_stream out("../ref/string_map/names.00.in", true);
 
 	auto ir_0(make_induced_range<char>(frd));
 	auto l_iter(ir_0.begin());
@@ -52,6 +53,7 @@ BOOST_AUTO_TEST_CASE(induced_range_1)
 	for (auto iter(ir_0.begin()); iter != ir_0.end(); ++iter) {
 		if (*iter == '\n') {
 			std::string s(l_iter, iter);
+			printf("xx %d: %s\n", l_cnt, s.c_str());
 			out << s << '\n';
 			BOOST_CHECK(out.match_pattern());
 			++l_cnt;

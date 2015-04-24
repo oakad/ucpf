@@ -1,16 +1,11 @@
 import testing ;
 
-alias test_case : : : : <define>BOOST_TEST_DYN_LINK
-                        <include>..
-                        <include>../../yesod
-                        <library>../..//unit_test_framework
-                        <library>../..//test_exec_monitor
-                        <linkflags>-lquadmath ;
+alias test_case : $(ucpf)//test_case $(ucpf)//yesod $(ucpf)//mina ;
 
 run fixed_string.cpp : : test_case ;
 run from_ascii_numeric2.cpp : : test_case ;
 run from_ascii_numeric3.cpp : : test_case ;
 run mbp.cpp : : test_case ;
-run np_packager.cpp : : test_case : <linkflags>-lgdbm <variant>debug ;
+run np_packager.cpp : : test_case : <linkflags>-lgdbm ;
 run to_ascii_decimal1.cpp : : test_case : <cflags>-O2 ;
-run to_ascii_decimal2.cpp : : test_case ;
+run to_ascii_decimal2.cpp : : test_case : <linkflags>-lquadmath ;

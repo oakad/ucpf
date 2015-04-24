@@ -52,6 +52,9 @@ struct counted_ptr {
 
 	counted_ptr &operator=(counted_ptr const &other)
 	{
+		if (ptr == other.ptr)
+			return *this;
+
 		if (ptr)
 			ptr->release();
 
