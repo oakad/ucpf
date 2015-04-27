@@ -1,26 +1,126 @@
 /*
- * Copyright (c) 2014 Alex Dubov <oakad@yahoo.com>
+ * Copyright (c) 2014-2015 Alex Dubov <oakad@yahoo.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
 
-#if !defined(UCPF_YESOD_ALLOCATOR_DEBUG_20141023T2300)
-#define UCPF_YESOD_ALLOCATOR_DEBUG_20141023T2300
+#if !defined(HPP_FCB600647E3379FFE866C1CC907B2908)
+#define HPP_FCB600647E3379FFE866C1CC907B2908
 
+#include <map>
 #include <string>
 #include <typeinfo>
 #include <cxxabi.h>
+#include <typeindex>
 #include <type_traits>
+#include <unordered_map>
 
 namespace ucpf { namespace yesod { namespace allocator {
+namespace detail {
+
+template <typename Dummy = void>
+struct debug_base {
+	template <typename T>
+	void on_alloc(
+		std::size_t instance_id, std::size_t count
+	)
+	{
+		stats.alloc_map[instance_id][
+			std::type_index(typeid(T))
+		].allocated += count;
+	}
+
+	template <typename T>
+	void on_free(
+		std::size_t instance_id, std::size_t count
+	)
+	{
+		stats.alloc_map[instance_id][
+			std::type_index(typeid(T))
+		].freed += count;
+	}
+
+	template <typename T>
+	void register_type(std::size_t instance_id)
+	{
+		stats.alloc_map[instance_id][
+			std::type_index(typeid(T))
+		].unit_size = sizeof(T);
+	}
+
+	std::size_t extant_bytes() const
+	{
+		std::size_t rv(0);
+
+		for (auto const &m: stats.alloc_map) {
+			for (auto const &n: m.second) {
+				auto c(
+					n.second.balance() * n.second.unit_size
+				);
+				rv += c >= 0 ? c : -c;
+			}
+		}
+		return rv;
+	}
+
+	static struct stats_holder {
+		~stats_holder()
+		{
+			for (auto const &m: alloc_map) {
+				fprintf(stderr, "inst: %zd\n", m.first);
+				for (auto const &n: m.second) {
+					auto *s(abi::__cxa_demangle(
+						n.first.name(),
+						0, 0, 0
+					));
+
+					fprintf(
+						stderr,
+						"\t%s: out: %zd, in: %zd "
+						"total: %zd\n",
+						s,
+						n.second.allocated,
+						n.second.freed,
+						n.second.balance()
+					);
+
+					free(s);
+				}
+			}
+		}
+
+		struct debug_stats {
+			long balance() const
+			{
+				return allocated >= freed
+				       ? long(allocated - freed)
+				       : -long(freed - allocated);
+			}
+
+			std::size_t unit_size = 0;
+			std::size_t allocated = 0;
+			std::size_t freed = 0;
+		};
+
+		std::map<
+			std::size_t,
+			std::unordered_map<std::type_index, debug_stats>
+		> alloc_map;
+	} stats;
+};
+
+template <typename Dummy>
+typename debug_base<Dummy>::stats_holder debug_base<Dummy>::stats;
+
+}
 
 template <typename T>
 struct debug;
 
 template <>
-struct debug<void> {
+struct debug<void> : detail::debug_base<> {
 	typedef std::size_t size_type;
 	typedef ptrdiff_t difference_type;
 	typedef void *pointer;
@@ -36,22 +136,16 @@ struct debug<void> {
 
 	debug() noexcept
 	: instance_id(random())
-	{
-		set_type_name();
-	}
+	{}
 
 	debug(debug const &a) noexcept
 	: instance_id(a.instance_id)
-	{
-		set_type_name();
-	}
+	{}
 
 	template <typename U>
 	debug(debug<U> const &a) noexcept
 	: instance_id(a.instance_id)
-	{
-		set_type_name();
-	}
+	{}
 
 	~debug() noexcept
 	{}
@@ -60,22 +154,11 @@ private:
 	template <typename U>
 	friend struct debug;
 
-	void set_type_name()
-	{
-		if (!value_type_name.empty())
-			return;
-
-		value_type_name.assign("void");
-	}
-
 	size_type instance_id;
-	static std::string value_type_name;
 };
 
-std::string debug<void>::value_type_name;
-
 template <typename T>
-struct debug {
+struct debug : detail::debug_base<> {
 	typedef std::size_t size_type;
 	typedef ptrdiff_t  difference_type;
 	typedef T *pointer;
@@ -94,20 +177,20 @@ struct debug {
 	debug() noexcept
 	: instance_id(random())
 	{
-		set_type_name();
+		register_type<value_type>(instance_id);
 	}
 
 	debug(debug const &a) noexcept
 	: instance_id(a.instance_id)
 	{
-		set_type_name();
+		register_type<value_type>(instance_id);	
 	}
 
 	template <typename U>
 	debug(debug<U> const &a) noexcept
 	: instance_id(a.instance_id)
 	{
-		set_type_name();
+		register_type<value_type>(instance_id);
 	}
 
 	~debug() noexcept
@@ -125,25 +208,18 @@ struct debug {
 
 	pointer allocate(size_type n, void const * = nullptr)
 	{
+		on_alloc<value_type>(instance_id, n);
 		auto p(static_cast<pointer>(
 			::operator new(n * sizeof(value_type))
 		));
 
-		printf(
-			"allocator::debug<%s> (%zd): allocate %p (%zd)\n",
-			value_type_name.c_str(), instance_id, p, n
-		);
-
+	
 		return p;
 	}
 
 	void deallocate(pointer p, size_type n)
 	{
-		printf(
-			"allocator::debug<%s> (%zd): deallocate %p (%zd)\n",
-			value_type_name.c_str(), instance_id, p, n
-		);
-
+		on_free<value_type>(instance_id, n);
 		::operator delete(p);
 	}
 
@@ -154,12 +230,7 @@ struct debug {
 
 	template <typename... Args>
 	void construct(pointer p, Args&&... args)
-	{
-		printf(
-			"allocator::debug<%s> (%zd): construct %p\n",
-			value_type_name.c_str(), instance_id, p
-		);
-
+	{	
 		::new(reinterpret_cast<void *>(p)) value_type(
 			std::forward<Args>(args)...
 		);
@@ -167,11 +238,6 @@ struct debug {
 
 	void destroy(pointer p)
 	{
-		printf(
-			"allocator::debug<%s> (%zd): destroy %p\n",
-			value_type_name.c_str(), instance_id, p
-		);
-		fflush(stdout);
 		p->~value_type();
 	}
 
@@ -185,26 +251,8 @@ private:
 	template <typename U>
 	friend bool operator!=(debug<U> const &a0, debug<U> const &a1);
 
-	void set_type_name()
-	{
-		if (!value_type_name.empty())
-			return;
-
-		auto *s(abi::__cxa_demangle(
-			typeid(value_type).name(), 0, 0, 0
-		));
-
-		value_type_name.assign(s);
-
-		free(s);
-	}
-
 	size_type instance_id;
-	static std::string value_type_name;
 };
-
-template <typename T>
-std::string debug<T>::value_type_name;
 
 template <typename T>
 bool operator==(debug<T> const &a0, debug<T> const &a1)

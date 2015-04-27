@@ -14,6 +14,7 @@
 #include <system_error>
 #include <cstdio>
 
+#include <yesod/allocator/debug.hpp>
 #include <yesod/iterator/induced_range.hpp>
 
 namespace ucpf { namespace yesod { namespace iterator {
@@ -42,34 +43,37 @@ struct fd_reader {
 
 BOOST_AUTO_TEST_CASE(induced_range_1)
 {
+	std::setbuf(stdout, nullptr);
 	test::fd_reader frd(::open("../ref/string_map/names.00.in", O_RDONLY));
 	using boost::test_tools::output_test_stream;
 	output_test_stream out("../ref/string_map/names.00.in", true);
 
-	auto ir_0(make_induced_range<char>(frd));
-	auto l_iter(ir_0.begin());
+	allocator::debug<void> a0;
 	int l_cnt(0);
+	{
+		auto ir_0(make_induced_range<char>(frd, a0));
+		auto l_iter(ir_0.begin());
 
-	for (auto iter(ir_0.begin()); iter != ir_0.end(); ++iter) {
-		if (*iter == '\n') {
-			std::string s(l_iter, iter);
-			printf("xx %d: %s\n", l_cnt, s.c_str());
+		for (auto iter(ir_0.begin()); iter != ir_0.end(); ++iter) {
+			if (*iter == '\n') {
+				std::string s(l_iter, iter);
+				out << s << '\n';
+				BOOST_CHECK(out.match_pattern());
+				++l_cnt;
+				l_iter = iter;
+				++l_iter;
+			}
+		}
+
+		if (l_iter != ir_0.end()) {
+			std::string s(l_iter, ir_0.end());
 			out << s << '\n';
 			BOOST_CHECK(out.match_pattern());
 			++l_cnt;
-			l_iter = iter;
-			++l_iter;
 		}
 	}
-
-	if (l_iter != ir_0.end()) {
-		std::string s(l_iter, ir_0.end());
-		out << s << '\n';
-		BOOST_CHECK(out.match_pattern());
-		++l_cnt;
-	}
-
 	BOOST_CHECK_EQUAL(l_cnt, 4676);
+	BOOST_CHECK_EQUAL(a0.extant_bytes(), 0);
 }
 
 }}}

@@ -17,11 +17,6 @@ namespace detail {
 
 struct induced_range_base {
 	struct node {
-		void release()
-		{
-			parent->release(this);
-		}
-
 		static void get_next(node *&node_ptr, std::size_t &offset)
 		{
 			++offset;
@@ -33,6 +28,7 @@ struct induced_range_base {
 			if (node_ptr->next) {
 				offset = 0;
 				node_ptr = node_ptr->next;
+				n_prev->parent->release(n_prev);
 			} else {
 				node_ptr = nullptr;
 				node_ptr = n_prev->parent->fetch_next(
@@ -79,8 +75,6 @@ struct has_acquire {
 template <typename ValueType, typename Producer, typename Alloc>
 struct induced_range_store : induced_range_base, Alloc {
 	typedef ValueType value_type;
-	typedef allocator::array_helper<value_type, Alloc> data_alloc_helper_t;
-	typedef typename data_alloc_helper_t::storage_type storage_type;
 	typedef induced_range_base::node node;
 	typedef allocator::array_helper<node, Alloc> node_alloc_helper_t;
 	typedef allocator::array_helper<
@@ -96,7 +90,7 @@ struct induced_range_store : induced_range_base, Alloc {
 		};
 
 		auto node_deleter = [](node *node_ptr) {
-			node_ptr->release();
+			node_ptr->parent->release(node_ptr);
 		};
 
 		std::unique_ptr<
@@ -109,7 +103,7 @@ struct induced_range_store : induced_range_base, Alloc {
 
 		auto s_ptr = s.release();
 
-		if (s_ptr->p.attach_data(*s, node_ptr.get()))
+		if (s_ptr->p.attach_data(*s_ptr, node_ptr.get()))
 			return node_ptr.release();
 		else
 			return nullptr;
@@ -162,11 +156,11 @@ struct induced_range_store : induced_range_base, Alloc {
 	{
 		auto prev_deleter = [release_prev](node *p) {
 			if (release_prev)
-				p->release();
+				p->parent->release(p);
 		};
 
 		auto node_deleter = [](node *p) {
-			p->release();
+			p->parent->release(p);
 		};
 
 		std::unique_ptr<node, decltype(prev_deleter)> prev_ptr_guard(
@@ -202,13 +196,6 @@ struct induced_range_store : induced_range_base, Alloc {
 			return nullptr;
 	}
 
-	void *alloc_data_buf(std::size_t size) const
-	{
-		return data_alloc_helper_t::alloc_s(
-			static_cast<Alloc const &>(*this), size
-		);
-	}
-
 	node *alloc_node()
 	{
 		auto node_ptr = node_alloc_helper_t::alloc(
@@ -221,6 +208,18 @@ struct induced_range_store : induced_range_base, Alloc {
 
 	template <typename Tp, bool HasAcquire = false>
 	struct producer_access {
+		typedef allocator::array_helper<
+			value_type, Alloc
+		> data_alloc_helper_t;
+
+		static void * alloc_data_buf(induced_range_store &parent)
+		{
+			return data_alloc_helper_t::alloc_n(
+				static_cast<Alloc const &>(parent),
+				Tp::preferred_block_size
+			);
+		}
+
 		producer_access(Tp &p_)
 		: p(p_)
 		{}
@@ -246,10 +245,7 @@ struct induced_range_store : induced_range_base, Alloc {
 			induced_range_store &parent, node *node_ptr
 		)
 		{
-			node_ptr->data = parent.alloc_data_buf(
-				Tp::preferred_block_size
-			);
-
+			node_ptr->data = alloc_data_buf(parent);
 			node_ptr->alloc_size = Tp::preferred_block_size;
 			return append_data(parent, node_ptr);
 		}
@@ -257,13 +253,8 @@ struct induced_range_store : induced_range_base, Alloc {
 		void detach_data(induced_range_store &parent, node *node_ptr)
 		{
 			data_alloc_helper_t::destroy(
-				static_cast<Alloc &>(parent), node_ptr->data,
-				node_ptr->data_size, false
-			);
-
-			data_alloc_helper_t::free_s(
-				static_cast<Alloc &>(parent), node_ptr->data,
-				node_ptr->alloc_size
+				static_cast<Alloc const &>(parent),
+				node_ptr->data, Tp::preferred_block_size, true
 			);
 
 			node_ptr->data = nullptr;
@@ -340,7 +331,7 @@ struct induced_range_iterator : facade<
 	~induced_range_iterator()
 	{
 		if (node_ptr)
-			node_ptr->release();
+			node_ptr->parent->release(node_ptr);
 	}
 
 	induced_range_iterator &operator=(induced_range_iterator const &other)
@@ -351,7 +342,7 @@ struct induced_range_iterator : facade<
 			return *this;
 
 		if (node_ptr)
-			node_ptr->release();
+			node_ptr->parent->release(node_ptr);
 
 		node_ptr = other.node_ptr;
 
@@ -365,7 +356,7 @@ struct induced_range_iterator : facade<
 	{
 		offset = other.offset;
 		if (node_ptr)
-			node_ptr->release();
+			node_ptr->parent->release(node_ptr);
 
 		node_ptr = other.node_ptr;
 		other.node_ptr = nullptr;
