@@ -21,7 +21,7 @@ namespace ucpf { namespace yesod { namespace iterator {
 namespace test {
 
 struct fd_reader {
-	constexpr static std::size_t preferred_block_size = 16;
+	constexpr static std::size_t preferred_block_size = 457;
 
 	fd_reader(int fd_)
 	: fd(fd_)

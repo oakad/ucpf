@@ -9,8 +9,8 @@ actions apply-util
 	$(>[1]) < $(>[2]) > $(<)
 }
 
-exe nomenclate : nomenclate.cpp
-               : <cxxflags>-std=gnu++14 <include>../zivug <include>../yesod
+exe nomenclate : nomenclate.cpp $(ucpf)//yesod $(ucpf)/zivug//headers
+               : <cxxflags>-std=gnu++14
                  <implicit-dependency>nomenclate_tmpl_p.hpp <variant>release ;
 
 install . : nomenclate ;

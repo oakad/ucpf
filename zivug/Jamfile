@@ -9,6 +9,6 @@ rule add-sysdeps ( properties * )
 	return <include>./sysdeps/linux ;
 }
 
-alias zivug_headers : : : : <include>. <conditional>@add-sysdeps ;
+alias headers : : : : <include>. <conditional>@add-sysdeps ;
 
-alias zivug : zivug_headers ./src//zivug ;
+alias zivug : headers ./src//zivug ;

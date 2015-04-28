@@ -14,7 +14,9 @@
 #include <cstdio>
 #include <cinttypes>
 #include <unordered_map>
+#include <system_error>
 #include <zivug/detail/unescape_c.hpp>
+#include <yesod/iterator/induced_range.hpp>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -558,15 +560,64 @@ std::vector<char> gen_random_str128()
 	return rv;
 }
 
-int main(int argc, char **argv)
+struct fd_reader {
+	constexpr static std::size_t preferred_block_size = 4096;
+
+	fd_reader(int fd_)
+	: fd(fd_)
+	{}
+
+	std::size_t copy(char *buf, std::size_t count)
+	{
+		auto rc(::read(fd, buf, count));
+		if (rc < 0)
+			throw std::system_error(errno, std::system_category());
+
+		return rc;
+	}
+
+	int fd;
+};
+
+template <typename InputRange, typename ABSet>
+void read_input_lines(InputRange &r_out, ABSet &ab)
 {
 	using ucpf::zivug::detail::unescape_c;
+	using ucpf::yesod::iterator::make_induced_range;
+	typename InputRange::value_type v_in;
 
+	fd_reader f_in(STDIN_FILENO);
+	auto r_in(make_induced_range<char>(f_in));
+	auto l_iter(r_in.begin());
+
+	for (auto iter(r_in.begin()); iter != r_in.end(); ++iter) {
+		if (*iter == '\n' || *iter == '\r') {
+			if (unescape_c(v_in, l_iter, iter) && !v_in.empty()) {
+				for (auto c: v_in)
+					ab.emplace(c);
+
+				r_out.emplace_back(std::move(v_in));
+			}
+
+			v_in.clear();
+			l_iter = iter;
+			++l_iter;
+		}
+	}
+
+	if (unescape_c(v_in, l_iter, r_in.end()) && !v_in.empty()) {
+		for (auto c: v_in)
+			ab.emplace(c);
+
+		r_out.emplace_back(std::move(v_in));
+	}
+}
+
+int main(int argc, char **argv)
+{
 	int out_fd(STDOUT_FILENO);
 	std::string r_name("fixed_string_map");
-	std::string s_in;
-	std::vector<uint8_t> v_in;
-	std::list<decltype(v_in)> l_in;
+	std::list<std::vector<uint8_t>> l_in;
 	std::set<uint8_t> ab;
 
 	if (argc > 1) {
@@ -586,20 +637,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	while (std::getline(std::cin, s_in)) {
-		if (s_in.empty())
-			continue;
-
-		if (!unescape_c(v_in, s_in.begin(), s_in.end()))
-			return -1;
-
-		for (auto c: v_in)
-			ab.emplace(c);
-
-		l_in.emplace_back(std::move(v_in));
-		v_in.clear();
-		s_in.clear();
-	}
+	read_input_lines(l_in, ab);
 
 	int c_low(*ab.begin());
 	int c_high(*ab.rbegin());
