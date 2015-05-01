@@ -1,15 +1,12 @@
-#include <yesod/allocator/debug.hpp>
+#include <yesod/allocator/klipah.hpp>
 #include <yesod/allocator/any.hpp>
 
 namespace ya = ucpf::yesod::allocator;
 
 int main(int argc, char **argv)
 {
-	ya::debug<void> dd;
-	ya::any xx(dd);
-	auto p1(xx.alloc(100));
-	auto p2(xx.alloc(200));
-	xx.free(p1, 100);
-	xx.free(p2, 200);
-	return 0;
+	ya::klipah<void>::print();
+	ya::klipah<int>::print();
+	ya::klipah<void, ya::k1_policy>::print();
+	ya::klipah<int, ya::k1_policy>::print();
 }
