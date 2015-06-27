@@ -26,7 +26,7 @@ struct system {
 		return ::sysconf(_SC_PAGESIZE);
 	}
 
-	static void *allocate(std::size_t n, void const *hint = nullptr)
+	static void *allocate(std::size_t n, void *hint = nullptr)
 	{
 		auto rv(::mmap(
 			hint, n, PROT_READ | PROT_WRITE,
