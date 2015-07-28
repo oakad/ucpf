@@ -88,6 +88,33 @@ void test_find_first()
 	BOOST_CHECK_EQUAL(u, u_cnt);
 }
 
+template <typename T, typename T::size_type (T::*f)(
+	typename T::size_type, typename T::size_type
+) const>
+void test_find_zero_range()
+{
+	static std::random_device src;
+	std::mt19937 gen(src());
+	std::uniform_int_distribution<uint32_t> dis;
+
+	T s;
+	s.reset();
+	auto rem(s.size());
+
+	while (rem) {
+		auto len(dis(gen) % (rem + 1));
+		if (!len)
+			continue;
+
+		auto pos((s.*f)(0, len));
+		BOOST_CHECK_LT(pos, s.size());
+		s.set(pos, len);
+		rem -= len;
+	}
+
+	BOOST_CHECK_EQUAL(s.size(), s.count());
+}
+
 }
 
 BOOST_AUTO_TEST_CASE(bitset_0)
@@ -95,7 +122,7 @@ BOOST_AUTO_TEST_CASE(bitset_0)
 	BOOST_CHECK(std::is_pod<bitset<512>>::value);
 	test::test_for_each<47, 13>();
 	test::test_for_each<64, 17>();
-	test::test_for_each<123, 0>();
+	test::test_for_each<123, 63>();
 	test::test_for_each<373, 111>();
 	test::test_for_each<512, 200>();
 }
@@ -104,8 +131,47 @@ BOOST_AUTO_TEST_CASE(bitset_1)
 {
 	test::test_find_first<47, 13>();
 	test::test_find_first<64, 17>();
+	test::test_find_first<123, 63>();
 	test::test_find_first<373, 111>();
 	test::test_find_first<512, 200>();
+}
+
+BOOST_AUTO_TEST_CASE(bitset_2)
+{
+	test::test_find_zero_range<
+		bitset<47>, &bitset<47>::find_zero_range_first
+	>();
+	test::test_find_zero_range<
+		bitset<64>, &bitset<64>::find_zero_range_first
+	>();
+	test::test_find_zero_range<
+		bitset<123>, &bitset<123>::find_zero_range_first
+	>();
+	test::test_find_zero_range<
+		bitset<373>, &bitset<373>::find_zero_range_first
+	>();
+	test::test_find_zero_range<
+		bitset<512>, &bitset<512>::find_zero_range_first
+	>();
+}
+
+BOOST_AUTO_TEST_CASE(bitset_3)
+{
+	test::test_find_zero_range<
+		bitset<47>, &bitset<47>::find_zero_range_best
+	>();
+	test::test_find_zero_range<
+		bitset<64>, &bitset<64>::find_zero_range_best
+	>();
+	test::test_find_zero_range<
+		bitset<123>, &bitset<123>::find_zero_range_best
+	>();
+	test::test_find_zero_range<
+		bitset<373>, &bitset<373>::find_zero_range_best
+	>();
+	test::test_find_zero_range<
+		bitset<512>, &bitset<512>::find_zero_range_best
+	>();
 }
 
 }}
