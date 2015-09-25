@@ -31,23 +31,22 @@ struct [[gnu::packed]] alignas(8) s1
 
 BOOST_AUTO_TEST_CASE(basic_block_0)
 {
-	BOOST_CHECK(std::is_pod<basic_block<64>>::value);
-
 	basic_block<64> b0;
 	BOOST_CHECK_EQUAL(
-		b0.cast_size<test::s0>(), b0.size() / sizeof(test::s0)
+		b0.count<test::s0>(), b0.size() / sizeof(test::s0)
 	);
 	BOOST_CHECK_EQUAL(
-		b0.cast_size<test::s1>(), b0.size() / sizeof(test::s1)
+		b0.count<test::s1>(), b0.size() / sizeof(test::s1)
 	);
 
-	memset(b0.get(), 'a', b0.size());
-	for (unsigned c = 0; c < b0.cast_size<test::s1>(); ++c) {
-		auto *p = b0.cast<test::s1>(c, c + 1);
-		*p = test::s1{{'v', 'w', 'x', 'y', 'z'}};
-	}
+	b0.assign<uint8_t>(0, b0.size(), 'a');
+	for (unsigned c = 0; c < b0.count<test::s1>(); ++c)
+		b0.construct<test::s1>(
+			c, 1, test::s1{{'v', 'w', 'x', 'y', 'z'}}
+		);
 
-	std::string ss(reinterpret_cast<char *>(b0.get()), b0.size());
+	auto cptr(b0.get<char>(0, b0.size()));
+	std::string ss(cptr.get(), b0.size());
 	BOOST_CHECK_EQUAL(
 		ss,
 		"vwxyzaaavwxyzaaavwxyzaaavwxyzaaavwxyzaaavwxyzaaavwxyzaaavwxyzaaa"
