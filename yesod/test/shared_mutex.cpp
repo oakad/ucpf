@@ -9,16 +9,22 @@
 #define BOOST_TEST_MODULE yesod
 #include <boost/test/unit_test.hpp>
 
+#include <yesod/timed_mutex.hpp>
 #include <yesod/shared_mutex.hpp>
 
 namespace ucpf { namespace yesod {
 
 BOOST_AUTO_TEST_CASE(shared_mutex_0)
 {
-	shared_mutex m;
+	shared_mutex<timed_mutex> m;
+	decltype(m)::init(m);
 	m.lock();
 	m.unlock();
 	m.lock_shared();
+	m.unlock_shared();
+	BOOST_CHECK(m.try_lock());
+	m.unlock();
+	BOOST_CHECK(m.try_lock_shared());
 	m.unlock_shared();
 }
 

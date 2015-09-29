@@ -1,12 +1,12 @@
 /*
- * Copyright (c) 2013-2015 Alex Dubov <oakad@yahoo.com>
+ * Copyright (c) 2015 Alex Dubov <oakad@yahoo.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(HPP_A8E2E349CFCE033202B050F7AE6374E8)
-#define HPP_A8E2E349CFCE033202B050F7AE6374E8
+#if !defined(HPP_5879DF38EEACE04EAD0EF0AE54B36D31)
+#define HPP_5879DF38EEACE04EAD0EF0AE54B36D31
 
 extern "C" {
 
@@ -21,10 +21,11 @@ extern "C" {
 namespace ucpf { namespace yesod {
 
 template <bool Interprocess = false, int SpinCount = 100>
-struct timed_mutex {
-	static void init(timed_mutex &m)
+struct waitable_mutex {
+	static void init(waitable_mutex &m)
 	{
 		__atomic_store_n(&m.state, 0, __ATOMIC_RELAXED);
+		__atomic_store_n(&m.wait_seq, 0, __ATOMIC_RELAXED);
 	}
 
 	void lock()
@@ -105,6 +106,49 @@ struct timed_mutex {
 		);
 	}
 
+	void wait()
+	{
+		return wait_impl(nullptr);
+	}
+
+	template <typename Rep, typename Period>
+	bool wait_for(std::chrono::duration<Rep, Period> const &rel_time)
+	{
+		std::chrono::seconds s(rel_time);
+		std::chrono::nanoseconds ns(rel_time - s);
+		struct timespec ts = {s.count(), ns.count()};
+
+		return wait_impl(&ts);
+	}
+
+	template <typename Clock, typename Duration>
+	bool wait_until(
+		std::chrono::time_point<Clock, Duration> const &timeout_time
+	)
+	{
+		return wait_for(
+			timeout_time - std::chrono::system_clock::now()
+		);
+	}
+
+	void notify_one()
+	{
+		__atomic_add_fetch(&wait_seq, 1, __ATOMIC_RELEASE);
+		futex(
+			&seq_count, FUTEX_WAKE | futex_op_flags, 1, nullptr,
+			nullptr, 0
+		);
+	}
+
+	void notify_all()
+	{
+		__atomic_add_fetch(&wait_seq, 1, __ATOMIC_RELEASE);
+		futex(
+			&seq_count, FUTEX_REQUEUE | futex_op_flags, 1, nullptr,
+			&state, 0
+		);
+	}
+
 private:
 	void lock_blocking()
 	{
@@ -115,6 +159,21 @@ private:
 				&state, FUTEX_WAIT | futex_op_flags,
 				locked | busy, nullptr, nullptr, 0
 			);
+	}
+
+	bool wait_impl(struct timespec *rel_time)
+	{
+		uint32_t seq(__atomic_load_n(&wait_seq, __ATOMIC_ACQUIRE));
+
+		unlock();
+
+		bool rv(0 == futex(
+			&wait_seq, FUTEX_WAIT | futex_op_flags, seq,
+			rel_time, nullptr, 0
+		));
+
+		lock_blocking();
+		return rv;
 	}
 
 	static auto futex(
@@ -133,6 +192,7 @@ private:
 	constexpr static uint32_t locked = 1;
 	constexpr static uint32_t busy = 2;
 	alignas(4) uint32_t volatile state;
+	alignas(4) uint32_t volatile wait_seq;
 };
 
 }}

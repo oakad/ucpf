@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Alex Dubov <oakad@yahoo.com>
+ * Copyright (c) 2013-2015 Alex Dubov <oakad@yahoo.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
@@ -8,88 +8,77 @@
 #if !defined(HPP_1C4E35B84F7A7577D150D358D35DBA66)
 #define HPP_1C4E35B84F7A7577D150D358D35DBA66
 
-#include <yesod/timed_mutex.hpp>
-#include <yesod/event_variable.hpp>
-
-#include <atomic>
-#include <mutex>
-
 namespace ucpf { namespace yesod {
 
+template <typename Mutex>
 struct shared_mutex {
-	typedef timed_mutex<> base_mutex_type;
+	typedef Mutex base_mutex_type;
 
-	shared_mutex()
-	: write_lock(false), reader_count(0)
-	{}
+	static void init(shared_mutex &m)
+	{
+		base_mutex_type::init(self_lock);
+		base_mutex_type::init(writer_lock);
+		reader_count = 0;
+	}
 
 	void lock()
 	{
-		std::unique_lock<base_mutex_type> l_g(state_lock);
-
-		while (write_lock.test_and_set())
-			ev.wait();
+		std::unique_lock<base_mutex_type> lg(self_lock);
+		writer_lock.lock();
 	}
 
 	void lock_shared()
 	{
-		std::unique_lock<base_mutex_type> l_g(state_lock);
+		std::unique_lock<base_mutex_type> lg(self_lock);
 
-		if (!reader_count.fetch_add(1)) {
-			while (write_lock.test_and_set())
-				ev.wait();
-		}
+		if (!__atomic_fetch_add(&reader_count, 1, __ATOMIC_ACQUIRE))
+			write_lock.lock();
 	}
 
 	void unlock()
 	{
-		write_lock.clear();
-		ev.notify_one();
+		writer_lock.unlock();
 	}
 
 	void unlock_shared()
 	{
-		if (reader_count.fetch_sub(1) == 1)
-			unlock();
+		if (1 == __atomic_fetch_sub(&reader_count, 1, __ATOMIC_RELEASE))
+			writer_lock.unlock();
 	}
 
 	bool try_lock()
 	{
-		std::unique_lock<base_mutex_type> l_g(
-			state_lock, std::try_to_lock
+		std::unique_lock<base_mutex_type> lg(
+			self_lock, std::try_to_lock
 		);
-		if (!l_g.owns_lock())
+		if (!lg.owns_lock())
 			return false;
 
-		return  !write_lock.test_and_set();
+		return  writer_lock.try_lock();
 	}
 
 	bool try_lock_shared()
 	{
-		std::unique_lock<base_mutex_type> l_g(
-			state_lock, std::try_to_lock
+		std::unique_lock<base_mutex_type> lg(
+			self_lock, std::try_to_lock
 		);
-		if (!l_g.owns_lock())
+		if (!lg.owns_lock())
 			return false;
 
-		if (reader_count) {
-			write_lock.test_and_set();
-			++reader_count;
+		if (__atomic_fetch_add(&reader_count, 1, __ATOMIC_ACQUIRE))
 			return true;
-		} else {
-			if (!write_lock.test_and_set()) {
-				++reader_count;
-				return true;
-			} else
-				return false;
-		}
+
+		if (writer_lock.try_lock())
+			return true;
+
+		__atomic_sub_fetch(&reader_count, 1, __ATOMIC_RELEASE);
+		return false;
 	}
 
 private:
-	event_variable<> ev;
-	base_mutex_type state_lock;
-	std::atomic_flag write_lock;
-	std::atomic_ulong reader_count;
+	base_mutex_type self_lock;
+	base_mutex_type writer_lock;
+	uint32_t volatile reader_count;
 };
 
 template <typename Mutex>
