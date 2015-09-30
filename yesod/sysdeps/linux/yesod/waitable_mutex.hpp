@@ -19,6 +19,7 @@ extern "C" {
 #include <chrono>
 
 namespace ucpf { namespace yesod {
+namespace detail {
 
 template <bool Interprocess = false, int SpinCount = 100>
 struct waitable_mutex {
@@ -194,6 +195,9 @@ private:
 	alignas(4) uint32_t volatile state;
 	alignas(4) uint32_t volatile wait_seq;
 };
+}
+
+typedef detail::waitable_mutex<> waitable_mutex;
 
 }}
 #endif

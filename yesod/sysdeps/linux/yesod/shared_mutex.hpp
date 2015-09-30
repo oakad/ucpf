@@ -8,17 +8,21 @@
 #if !defined(HPP_1C4E35B84F7A7577D150D358D35DBA66)
 #define HPP_1C4E35B84F7A7577D150D358D35DBA66
 
-namespace ucpf { namespace yesod {
+#include <mutex>
+#include <yesod/timed_mutex.hpp>
 
-template <typename Mutex>
+namespace ucpf { namespace yesod {
+namespace detail {
+
+template <bool Interprocess = false, int SpinCount = 100>
 struct shared_mutex {
-	typedef Mutex base_mutex_type;
+	typedef timed_mutex<Interprocess, SpinCount> base_mutex_type;
 
 	static void init(shared_mutex &m)
 	{
-		base_mutex_type::init(self_lock);
-		base_mutex_type::init(writer_lock);
-		reader_count = 0;
+		base_mutex_type::init(m.self_lock);
+		base_mutex_type::init(m.writer_lock);
+		m.reader_count = 0;
 	}
 
 	void lock()
@@ -32,7 +36,7 @@ struct shared_mutex {
 		std::unique_lock<base_mutex_type> lg(self_lock);
 
 		if (!__atomic_fetch_add(&reader_count, 1, __ATOMIC_ACQUIRE))
-			write_lock.lock();
+			writer_lock.lock();
 	}
 
 	void unlock()
@@ -81,34 +85,9 @@ private:
 	uint32_t volatile reader_count;
 };
 
-template <typename Mutex>
-struct shared_lock {
-	typedef Mutex mutex_type;
+}
 
-	explicit shared_lock(mutex_type &m_)
-	: m(&m_)
-	{
-		lock();
-	}
-
-	~shared_lock()
-	{
-		unlock();
-	}
-
-	void lock()
-	{
-		m->lock_shared();
-	}
-
-	void unlock()
-	{
-		m->unlock_shared();
-	}
-
-private:
-	mutex_type *m;
-};
+typedef detail::shared_mutex<> shared_mutex;
 
 }}
 #endif

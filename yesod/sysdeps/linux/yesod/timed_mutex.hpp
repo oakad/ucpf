@@ -19,6 +19,7 @@ extern "C" {
 #include <chrono>
 
 namespace ucpf { namespace yesod {
+namespace detail {
 
 template <bool Interprocess = false, int SpinCount = 100>
 struct timed_mutex {
@@ -134,6 +135,9 @@ private:
 	constexpr static uint32_t busy = 2;
 	alignas(4) uint32_t volatile state;
 };
+}
+
+typedef detail::timed_mutex<> timed_mutex;
 
 }}
 #endif
