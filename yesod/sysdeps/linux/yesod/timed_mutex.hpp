@@ -94,7 +94,7 @@ struct timed_mutex {
 		__atomic_and_fetch(&state, ~locked, __ATOMIC_RELEASE);
 
 		for (auto cnt(0); cnt < SpinCount; ++cnt) {
-			if (locked & __atomic_load_4(&state, __ATOMIC_ACQUIRE))
+			if (locked & __atomic_load_n(&state, __ATOMIC_ACQUIRE))
 				return;
 		}
 

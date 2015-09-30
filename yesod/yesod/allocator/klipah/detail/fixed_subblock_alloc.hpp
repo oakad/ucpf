@@ -9,11 +9,13 @@
 #if !defined(HPP_61F2F54C2244F2056AFAD24CB06D3133)
 #define HPP_61F2F54C2244F2056AFAD24CB06D3133
 
+#include <mutex>
+
 namespace ucpf { namespace yesod { namespace allocator { namespace klipah {
 namespace detail {
 
 template <typename Policy, std::size_t BlockSize, std::size_t MacroBlockSize>
-struct fixed_block_alloc : Policy::object_manager_type {
+struct fixed_subblock_alloc : Policy::object_manager_type {
 	typedef typename Policy::block_type::template rebind<
 		BlockSize
 	> block_type;
@@ -45,7 +47,7 @@ struct fixed_block_alloc : Policy::object_manager_type {
 		"alignof(block_pointer) <= alignof(block_type)"
 	);
 
-	fixed_block_alloc(
+	fixed_subblock_alloc(
 		object_manager_type const &mngr = object_manager_type{}
 	) : object_manager_type(mngr)
 	{
@@ -55,7 +57,7 @@ struct fixed_block_alloc : Policy::object_manager_type {
 
 	void append_macro_block(macro_block_pointer p)
 	{
-		std::lock_guard<mutex_type> lg(macro_block_lock);
+		std::unique_lock<mutex_type> lg(macro_block_lock);
 		p->template construct<macro_block_pointer>(0, 1, virgin_list);
 		virgin_list = p;
 		++macro_blocks_provisioned;
@@ -69,7 +71,7 @@ struct fixed_block_alloc : Policy::object_manager_type {
 
 	block_pointer allocate()
 	{
-		std::lock_guard<mutex_type> lg(block_lock);
+		std::unique_lock<mutex_type> lg(block_lock);
 		if (free_list) {
 			auto p(free_list);
 			auto q(free_list->template get<block_pointer>(0, 1));
@@ -97,7 +99,7 @@ struct fixed_block_alloc : Policy::object_manager_type {
 
 	void deallocate(block_pointer p)
 	{
-		std::lock_guard<mutex_type> lg(block_lock);
+		std::unique_lock<mutex_type> lg(block_lock);
 		p->template construct<block_pointer>(0, 1, free_list);
 		free_list = p;
 		--blocks_allocated;	
@@ -117,7 +119,7 @@ private:
 
 	bool alloc_current_macro()
 	{
-		std::lock_guard<mutex_type> lg(macro_block_lock);
+		std::unique_lock<mutex_type> lg(macro_block_lock);
 		if (!virgin_list)
 			return false;
 

@@ -16,6 +16,7 @@ struct basic_object_manager {
 	template <typename MutexType>
 	void init_mutex(MutexType &m)
 	{
+		MutexType::init(m);
 	}
 
 	template <typename PtrType, typename RawPtrType>

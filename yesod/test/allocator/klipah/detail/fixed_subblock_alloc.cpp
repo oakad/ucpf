@@ -10,14 +10,14 @@
 #include <boost/test/unit_test.hpp>
 
 #include <yesod/allocator/klipah/policy/basic.hpp>
-#include <yesod/allocator/klipah/detail/fixed_block_alloc.hpp>
+#include <yesod/allocator/klipah/detail/fixed_subblock_alloc.hpp>
 
 namespace ucpf { namespace yesod { namespace allocator { namespace klipah {
 namespace detail {
 
 BOOST_AUTO_TEST_CASE(fixed_block_alloc_0)
 {
-	fixed_block_alloc<policy::basic, 16, 64> a0;
+	fixed_subblock_alloc<policy::basic, 16, 64> a0;
 	BOOST_CHECK(std::is_standard_layout<decltype(a0)>::value);
 }
 

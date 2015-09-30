@@ -1,3 +1,4 @@
+import property ;
 
 project yesod : requirements <cxxflags>-std=gnu++14
               : default-build release <threading>multi ;
@@ -5,9 +6,15 @@ project yesod : requirements <cxxflags>-std=gnu++14
 
 rule add-sysdeps ( properties * )
 {
-#	local target-os = [ property.select <target-os> : $(properties) ] ;
-#	return <include>../sysdeps/$(target-os:G=) ;
-	return <include>./sysdeps/linux ;
+	local target-os = [ property.select <target-os> : $(properties) ] ;
+	local os-name = $(target-os:G=) ;
+	switch $(os-name)
+	{
+		case cygwin : return
+			<include>./sysdeps/$(os-name)
+			<linkflags>-lntdll ;
+		case * : return <include>./sysdeps/$(os-name) ;
+	}
 }
 
 alias yesod : : : : <include>. <conditional>@add-sysdeps ;

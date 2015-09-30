@@ -3,4 +3,4 @@ import testing ;
 alias test_case : $(ucpf)//test_case $(ucpf)//yesod ;
 
 run basic_block.cpp : : test_case ;
-run fixed_block_alloc.cpp : : test_case ;
+run fixed_subblock_alloc.cpp : : test_case ;
