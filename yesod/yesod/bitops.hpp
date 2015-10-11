@@ -5,8 +5,9 @@
  * under  the  terms of  the GNU General Public License version 3 as publi-
  * shed by the Free Software Foundation.
  */
-#if !defined(UCPF_YESOD_BITOPS_20131117T1945)
-#define UCPF_YESOD_BITOPS_20131117T1945
+
+#if !defined(HPP_528B9716355BFE92F1924EE8163B295A)
+#define HPP_528B9716355BFE92F1924EE8163B295A
 
 #include <cstdint>
 #include <type_traits>
