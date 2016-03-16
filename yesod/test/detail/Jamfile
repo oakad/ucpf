@@ -3,4 +3,5 @@ import testing ;
 alias test_case : $(ucpf)//test_case $(ucpf)//yesod ;
 
 run compressed_array.cpp : : test_case ;
+run list_smooth_sort.cpp : : test_case ;
 run static_bit_field_map.cpp : : test_case ;

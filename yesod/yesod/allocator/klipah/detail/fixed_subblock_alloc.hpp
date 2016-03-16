@@ -31,7 +31,7 @@ struct fixed_subblock_alloc : Policy::object_manager_type {
 	typedef typename Policy::mutex_type mutex_type;
 	typedef typename Policy::object_manager_type object_manager_type;
 
-	constexpr static size_t blocks_per_macro_block
+	constexpr static std::size_t blocks_per_macro_block
 	= macro_block_type::storage_size / sizeof(block_type);
 
 	static_assert(
@@ -52,15 +52,6 @@ struct fixed_subblock_alloc : Policy::object_manager_type {
 	) : object_manager_type(mngr)
 	{
 		this->init_mutex(block_lock);
-		this->init_mutex(macro_block_lock);
-	}
-
-	void append_macro_block(macro_block_pointer p)
-	{
-		std::unique_lock<mutex_type> lg(macro_block_lock);
-		p->template construct<macro_block_pointer>(0, 1, virgin_list);
-		virgin_list = p;
-		++macro_blocks_provisioned;
 	}
 
 	template <typename MacroBlockConsumer>
@@ -69,7 +60,8 @@ struct fixed_subblock_alloc : Policy::object_manager_type {
 
 	}
 
-	block_pointer allocate()
+	template <typename MacroBlockProvider>
+	block_pointer allocate(MacroBlockProvider &&p)
 	{
 		std::unique_lock<mutex_type> lg(block_lock);
 		if (free_list) {
@@ -81,17 +73,40 @@ struct fixed_subblock_alloc : Policy::object_manager_type {
 			return p;
 		}
 
-		if (!current && !alloc_current_macro())
+		macro_block_pointer mp(p.get());
+		if (!mp)
 			return block_pointer();
 
-		auto p = this->template wrap_pointer<block_pointer>(
-			current->template subblock_ptr<BlockSize>(
-				current_block_offset++
-			)
-		);
+		++macro_blocks_provisioned;
+		std::size_t pos(1);
 
-		if (current_block_offset == blocks_per_macro_block)
-			current = macro_block_pointer();
+		auto p(this->template wrap_pointer<block_pointer>(
+			mp->template subblock_ptr<BlockSize>(0)
+		));
+
+		if (used_list && (
+			current_used_offset < used_list_node::item_count
+		)) {
+			auto r(used_list->template get<used_list_node>(0, 1));
+			r->items[current_used_offset++] = mp;
+		} else {
+			auto q(this->template wrap_pointer<block_pointer>(
+				mp->template subblock_ptr<BlockSize>(1)
+			));
+			++pos;
+			auto r(q->template construct<used_list_node>(0, 1));
+			r->next = used_list;
+			r->items[0] = mp;
+			current_used_offset = 1;
+			used_list = q;
+		}
+
+		for (std::size_t c(pos); c < blocks_per_macro_block; ++c) {
+			auto q(this->template wrap_pointer<block_pointer>(
+				mp->template subblock_ptr<BlockSize>(c)
+			);
+			q->template construct<block_pointer>(0, 1, free_list);
+		}
 
 		++blocks_allocated;
 		return p;
@@ -102,7 +117,7 @@ struct fixed_subblock_alloc : Policy::object_manager_type {
 		std::unique_lock<mutex_type> lg(block_lock);
 		p->template construct<block_pointer>(0, 1, free_list);
 		free_list = p;
-		--blocks_allocated;	
+		--blocks_allocated;
 	}
 
 private:
@@ -117,54 +132,12 @@ private:
 		macro_block_pointer items[item_count];
 	};
 
-	bool alloc_current_macro()
-	{
-		std::unique_lock<mutex_type> lg(macro_block_lock);
-		if (!virgin_list)
-			return false;
-
-		block_pointer u_node;
-
-		if (used_list && (
-			current_used_offset < used_list_node::item_count
-		)) {
-			auto r(used_list->template get<used_list_node>(0, 1));
-			r->items[current_used_offset++] = current;
-		} else {
-			current = virgin_list;
-			auto p(current->template get<
-				macro_block_pointer
-			>(0, 1));
-			virgin_list = *p;
-			current->template erase<
-				macro_block_pointer
-			>(0, 1);
-			current_block_offset = 1;
-			auto q(this->template wrap_pointer<block_pointer>(
-				current->subblock_ptr(0)
-			));
-			auto r(q->template construct<used_list_node>(0, 1));
-			r->next = used_list;
-			r->items[0] = current;
-			current_used_offset = 1;
-			used_list = q;
-		}
-
-		return true;
-	}
-
-
 	mutex_type block_lock;
 	block_pointer free_list;
-	macro_block_pointer current;
-	std::size_t current_block_offset = 0;
-	std::size_t blocks_allocated = 0;
-
-	mutex_type macro_block_lock;
-	macro_block_pointer virgin_list;
 	block_pointer used_list;
-	std::size_t current_used_offset = 0;
 	std::size_t macro_blocks_provisioned = 0;
+	std::size_t blocks_allocated = 0;
+	std::size_t current_used_offset = 0;
 };
 
 }

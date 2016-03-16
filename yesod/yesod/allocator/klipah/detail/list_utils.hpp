@@ -59,7 +59,45 @@ bool list_is_sorted(NodePtr head, Traits const &t)
 }
 
 template <typename NodePtr, typename Traits>
-NodePtr list_sort(NodePtr head, Traits const &t = Traits())
+NodePtr list_insertion_sort(NodePtr head, Traits const &t = Traits())
+{
+	auto list_end(Traits::is_circular ? head : NodePtr{});
+	auto p(t.next(head));
+	auto rv_begin(t.list_head(head));
+	auto rv_end(first);
+	auto rv_last(first);
+	
+	while (p != list_end) {
+		auto q(t.next(p));
+
+		if (t.precedes(rv_end, p)) {
+			rv_last = rv_end;
+			rv_end = t.link_after(rv_end, p);
+		} else if (t.precedes(p, rv_begin)) {
+			p = t.list_head(p);
+			rv_last = t.link_after(p, rv_begin);
+			rv_begin = p;
+		} else {
+			auto r(t.precedes(rv_last, p) ? rv_last : rv_begin);
+			auto rr(t.next(r));
+
+			while (t.precedes(rr, p)) {
+				r = rr;
+				rr = t.next(r);
+			}
+
+			rv_last = t.link_after(r, p);
+		}
+
+		
+		p = q;
+	}
+
+	return rv_begin;
+}
+
+template <typename NodePtr, typename Traits>
+NodePtr list_merge_sort(NodePtr head, Traits const &t = Traits())
 {
 	for (std::size_t m_size(1); true; m_size <<= 1) {
 		std::size_t p_size(0);
