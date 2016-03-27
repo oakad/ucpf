@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Alex Dubov <oakad@yahoo.com>
+ * Copyright (c) 2014-2016 Alex Dubov <oakad@yahoo.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
@@ -36,21 +36,21 @@ namespace ucpf { namespace yesod { namespace detail { namespace test {
 
 BOOST_AUTO_TEST_CASE(static_bit_field_map_0)
 {
-	typedef static_bit_field_map<32, 10, 12, 5, 10>::value_type v0;
+	typedef static_bit_field_map<32, false, 10, 12, 5, 10>::value_type v0;
 	std::array<std::pair<std::size_t, std::size_t>, 4> ref0 = {{
-		{10, 0}, {12, 10}, {5, 22}, {5, 27}
+		{0, 10}, {10, 12}, {22, 5}, {27, 5}
 	}};
 	BOOST_CHECK_EQUAL(v0::value, ref0);
 
-	typedef static_bit_field_map<32, 8, 7>::value_type v1a;
-	std::array<std::pair<std::size_t, std::size_t>, 2> ref1a = {{
-		{8, 0}, {7, 8}
+	typedef static_bit_field_map<32, false, 8, 7>::value_type v1a;
+	std::array<std::pair<std::size_t, std::size_t>, 3> ref1a = {{
+		{0, 8}, {8, 7}, {15, 17}
 	}};
 	BOOST_CHECK_EQUAL(v1a::value, ref1a);
 
-	typedef static_bit_field_map<32, 8, 7>::repeat_last::value_type v1b;
+	typedef static_bit_field_map<32, true, 8, 7>::value_type v1b;
 	std::array<std::pair<std::size_t, std::size_t>, 5> ref1b = {{
-		{8, 0}, {7, 8}, {7, 15}, {7, 22}, {3, 29}
+		{0, 8}, {8, 7}, {15, 7}, {22, 7}, {29, 3}
 	}};
 	BOOST_CHECK_EQUAL(v1b::value, ref1b);
 }

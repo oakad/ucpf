@@ -617,23 +617,24 @@ private:
 	>::type min_data_node_type;
 
 	typedef typename detail::static_bit_field_map<
-		sizeof(uintptr_t) * 8, max_data_node_type::apparent_order,
+		sizeof(uintptr_t) * 8, true,
+		max_data_node_type::apparent_order,
 		max_ptr_node_type::apparent_order
-	>::repeat_last::value_type pos_field_map;
+	>::value_type pos_field_map;
 
 	constexpr static size_type node_size_shift(size_type h)
 	{
-		return pos_field_map::value[h - 1].first;
+		return pos_field_map::value[h - 1].second;
 	}
 
 	constexpr static size_type node_size(size_type h)
 	{
-		return size_type(1) << pos_field_map::value[h - 1].first;
+		return size_type(1) << pos_field_map::value[h - 1].second;
 	}
 
 	constexpr static size_type node_offset(uintptr_t pos, size_type h)
 	{
-		return (pos >> pos_field_map::value[h - 1].second) & (
+		return (pos >> pos_field_map::value[h - 1].first) & (
 			node_size(h) - 1
 		);
 	}
