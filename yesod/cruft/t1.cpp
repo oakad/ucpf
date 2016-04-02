@@ -6,6 +6,16 @@
 
 using ucpf::yesod::crope;
 
+struct alignas(16) xx {
+	int a;
+	int b;
+};
+
+struct alignas(8) yy {
+	int a;
+	int b;
+};
+
 int main()
 {
 	char const *xa = "aaaaa";
@@ -16,5 +26,6 @@ int main()
 	std::cout << aa.dump<char>() << '\n';
 	std::cout << bb.dump<char>() << '\n';
 	std::cout << cc.dump<char>() << '\n';
+	printf("xx %zd - %zd\n", sizeof(xx), sizeof(yy));
 	return 0;
 }

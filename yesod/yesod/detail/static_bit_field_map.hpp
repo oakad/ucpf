@@ -22,11 +22,11 @@ struct static_bit_field_map {
 	struct value_pack_t;
 
 	template <
-		std::size_t... Ps, template <std::size_t...> class PackP,
-		std::size_t... Cs, template <std::size_t...> class PackC
+		std::size_t... Ps, template <std::size_t...> typename PackP,
+		std::size_t... Cs, template <std::size_t...> typename PackC
 	>
 	struct value_pack_t<PackP<Ps...>, PackC<Cs...>> {
-		constexpr static std::array<
+		static constexpr std::array<
 			std::pair<std::size_t, std::size_t>, sizeof...(Ps)
 		> value = {{ std::pair<std::size_t, std::size_t>(Ps, Cs)... }};
 	};
@@ -43,7 +43,7 @@ struct static_bit_field_map {
 	template <typename...>
 	struct cum_sum;
 
-	template <std::size_t... XFs, template <std::size_t...> class PackF>
+	template <std::size_t... XFs, template <std::size_t...> typename PackF>
 	struct cum_sum<PackF<XFs...>> {
 		template <std::size_t YF0, std::size_t... YFs>
 		struct apply {
@@ -77,9 +77,9 @@ struct static_bit_field_map {
 	};
 
 	template <
-		std::size_t... XFs, template <std::size_t...> class PackF,
-		std::size_t... Ps, template <std::size_t...> class PackP,
-		std::size_t... Cs, template <std::size_t...> class PackC,
+		std::size_t... XFs, template <std::size_t...> typename PackF,
+		std::size_t... Ps, template <std::size_t...> typename PackP,
+		std::size_t... Cs, template <std::size_t...> typename PackC,
 		typename NextP
 	>
 	struct cum_sum<
@@ -130,8 +130,8 @@ struct static_bit_field_map {
 	};
 
 	template <
-		std::size_t... Ps, template <std::size_t...> class PackP,
-		std::size_t... Cs, template <std::size_t...> class PackC,
+		std::size_t... Ps, template <std::size_t...> typename PackP,
+		std::size_t... Cs, template <std::size_t...> typename PackC,
 		typename NextP, typename LastF
 	>
 	struct cum_sum<
@@ -158,9 +158,9 @@ struct static_bit_field_map {
 	};
 
 	template <
-		std::size_t... XFs, template <std::size_t...> class PackF,
-		std::size_t... Ps, template <std::size_t...> class PackP,
-		std::size_t... Cs, template <std::size_t...> class PackC,
+		std::size_t... XFs, template <std::size_t...> typename PackF,
+		std::size_t... Ps, template <std::size_t...> typename PackP,
+		std::size_t... Cs, template <std::size_t...> typename PackC,
 		typename NextP
 	>
 	struct cum_sum<
@@ -171,8 +171,8 @@ struct static_bit_field_map {
 	};
 
 	template <
-		std::size_t... Ps, template <std::size_t...> class PackP,
-		std::size_t... Cs, template <std::size_t...> class PackC,
+		std::size_t... Ps, template <std::size_t...> typename PackP,
+		std::size_t... Cs, template <std::size_t...> typename PackC,
 		typename NextP, typename LastF
 	>
 	struct cum_sum<
@@ -189,8 +189,8 @@ struct static_bit_field_map {
 
 template <std::size_t BitCount, bool RepeatLast, std::size_t... Fs>
 template <
-	std::size_t... Ps, template <std::size_t...> class PackP,
-	std::size_t... Cs, template <std::size_t...> class PackC
+	std::size_t... Ps, template <std::size_t...> typename PackP,
+	std::size_t... Cs, template <std::size_t...> typename PackC
 >
 constexpr std::array<
 	std::pair<std::size_t, std::size_t>, sizeof...(Ps)

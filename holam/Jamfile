@@ -1,0 +1,7 @@
+import property ;
+
+project holam : requirements <cxxflags>-std=gnu++14
+              : default-build release <threading>multi ;
+
+
+alias holam : : : : <include>. ;

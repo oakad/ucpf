@@ -18,9 +18,9 @@ namespace detail {
 
 template <typename StorageFacadeType, bool stateful = true>
 struct basic_pointer_address {
-	StorageFacadeType &storage() const
+	StorageFacadeType *storage() const
 	{
-		return *sfp;
+		return sfp;
 	}
 
 	typename StorageFacadeType::address_type value;
@@ -31,13 +31,16 @@ template <typename StorageFacadeType>
 struct basic_pointer_address<StorageFacadeType, false> {
 	static StorageFacadeType sfp;
 
-	StorageFacadeType &storage() const
+	StorageFacadeType *storage() const
 	{
-		return sfp;
+		return &sfp;
 	}
 
 	typename StorageFacadeType::address_type value;
 };
+
+template <typename StorageFacadeType>
+StorageFacadeType basic_pointer_address<StorageFacadeType, false>::sfp;
 
 template <typename StorageFacadeType, bool stateful = true>
 struct basic_pointer_access {
@@ -75,7 +78,7 @@ struct basic_pointer_access<StorageFacadeType, false> {
 
 	template <typename ValueType, bool IsConst>
 	static  typename StorageFacadeType::address_type address(
-		basic_pointer<ValueType, StorageFacadeType, IsConst> p
+		basic_pointer<ValueType, StorageFacadeType, IsConst> const &p
 	)
 	{
 		return p.addr.value;
@@ -95,9 +98,6 @@ struct basic_pointer {
 	>::type pointer_type;
 	typedef typename StorageFacadeType::size_type size_type;
 	typedef typename StorageFacadeType::difference_type difference_type;
-	static constexpr size_type value_size = sizeof(std::aligned_storage_t<
-		sizeof(element_type), alignof(element_type)
-	>);
 
 	template <typename StorageFacadeType_, bool stateful>
 	friend struct detail::basic_pointer_access;
@@ -109,21 +109,80 @@ struct basic_pointer {
 
 	reference_type operator*()
 	{
-		printf("op2\n");
-		return *reinterpret_cast<pointer_type>(addr.storage().access(
-			addr.value, value_size
+		return *reinterpret_cast<pointer_type>(addr.storage()->access(
+			addr.value, sizeof(element_type)
 		));
 	}
 
 	pointer_type operator->()
 	{
-		printf("op3\n");
-		return reinterpret_cast<pointer_type>(addr.storage().access(
-			addr.value, value_size
+		return reinterpret_cast<pointer_type>(addr.storage()->access(
+			addr.value, sizeof(element_type)
 		));
 	}
 
+	basic_pointer operator++(int)
+	{
+		basic_pointer rv;
+		pointer_access::assign(
+			rv, addr.storage()->access(
+				addr.value, sizeof(element_type), 1
+			), addr.storage()
+		);
+		return rv;
+	}
+
+	basic_pointer operator--(int)
+	{
+		basic_pointer rv;
+		pointer_access::assign(
+			rv, addr.storage()->access(
+				addr.value, sizeof(element_type), -1
+			), addr.storage()
+		);
+		return rv;
+	}
+
+	basic_pointer &operator--()
+	{
+		addr.value = addr.storage()->access(
+			addr.value, sizeof(element_type), -1
+		);
+		return *this;
+	}
+
+	basic_pointer &operator+=(difference_type n)
+	{
+		addr.value = addr.storage()->access(
+			addr.value, sizeof(element_type), n
+		);
+		return *this;
+	}
+
+	basic_pointer &operator-=(difference_type n)
+	{
+		addr.value = addr.storage()->access(
+			addr.value, sizeof(element_type), -n
+		);
+		return *this;
+	}
+
+	basic_pointer operator+(difference_type n)
+	{
+		basic_pointer rv;
+		pointer_access::assign(
+			rv, addr.storage()->access(
+				addr.value, sizeof(element_type), n
+			), addr.storage()
+		);
+		return rv;
+	}
+
 private:
+	typedef detail::basic_pointer_access<
+		StorageFacadeType, StorageFacadeType::is_stateful
+	> pointer_access;
+
 	detail::basic_pointer_address<
 		StorageFacadeType, StorageFacadeType::is_stateful
 	> addr;

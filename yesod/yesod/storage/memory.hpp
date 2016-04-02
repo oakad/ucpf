@@ -16,7 +16,9 @@
 
 namespace ucpf { namespace yesod { namespace storage {
 
-struct memory : detail::memory_pointer_facade {
+struct memory {
+	typedef detail::memory_pointer_facade::size_type size_type;
+
 	typedef basic_pointer<
 		std::uint8_t, detail::memory_pointer_facade, false
 	> storage_pointer;
@@ -32,33 +34,33 @@ struct memory : detail::memory_pointer_facade {
 	>;
 
 	template <typename ElementType>
-	storage_pointer storage_cast(pointer<ElementType> p)
+	storage_pointer storage_cast(pointer<ElementType> p) const
 	{
 		storage_pointer rv;
-		pointer_access::assign(rv, pointer_access::address(p), this);
+		pointer_access::assign(rv, pointer_access::address(p), nullptr);
 		return rv;
 	}
 
 	template <typename ElementType>
-	pointer<ElementType> storage_cast(storage_pointer p)
+	pointer<ElementType> storage_cast(storage_pointer p) const
 	{
 		pointer<ElementType> rv;
-		pointer_access::assign(rv, pointer_access::address(p), this);
+		pointer_access::assign(rv, pointer_access::address(p), nullptr);
 		return rv;
 	}
 
 	storage_pointer allocate(
 		size_type count,
 		size_type alignment = alignof(std::max_align_t)
-	)
+	) const
 	{
 		storage_pointer p;
-		pointer_access::assign(p, nullptr, this);
+		pointer_access::assign(p, nullptr, nullptr);
 
 		if (alignment == 1)
 			pointer_access::assign(
 				p, reinterpret_cast<uint8_t *>(malloc(count)),
-				this
+				nullptr
 			);
 		else {
 			if (alignment < alignof(std::max_align_t))
@@ -71,8 +73,8 @@ struct memory : detail::memory_pointer_facade {
 
 			pointer_access::assign(
 				p, reinterpret_cast<uint8_t *>(
-					aligned_alloc(alignment, a_count)
-				), this
+					::aligned_alloc(alignment, a_count)
+				), nullptr
 			);
 		}
 
@@ -85,13 +87,13 @@ struct memory : detail::memory_pointer_facade {
 	void deallocate(
 		storage_pointer p, size_type count,
 		size_type alignment = alignof(std::max_align_t)
-	)
+	) const
 	{
-		free(pointer_access::address(p));
+		::free(pointer_access::address(p));
 	}
 
 	template <typename ElementType, typename... Args>
-	pointer<ElementType> construct(storage_pointer p, Args&&... args)
+	pointer<ElementType> construct(storage_pointer p, Args&&... args) const
 	{
 		pointer<ElementType> q;
 
@@ -102,13 +104,13 @@ struct memory : detail::memory_pointer_facade {
 		pointer_access::assign(
 			q, reinterpret_cast<
 				detail::memory_pointer_facade::address_type
-			>(qq), this
+			>(qq), nullptr
 		);
 		return q;
 	}
 
 	template <typename ElementType>
-	void destroy(pointer<ElementType> p)
+	void destroy(pointer<ElementType> p) const
 	{
 		auto pp(reinterpret_cast<ElementType *>(
 			pointer_access::address(p)
@@ -118,7 +120,8 @@ struct memory : detail::memory_pointer_facade {
 
 private:
 	typedef detail::basic_pointer_access<
-		memory_pointer_facade, memory_pointer_facade::is_stateful
+		detail::memory_pointer_facade,
+		detail::memory_pointer_facade::is_stateful
 	> pointer_access;
 };
 

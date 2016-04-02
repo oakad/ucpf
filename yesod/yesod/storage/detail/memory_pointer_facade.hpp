@@ -18,14 +18,14 @@ struct memory_pointer_facade {
 
 	static constexpr bool is_stateful = false;
 
-	void *access(
+	address_type access(
 		address_type p, size_type unit_size
 	)
 	{
 		return p;
 	}
 
-	void *access(
+	address_type access(
 		address_type p, size_type unit_size, difference_type offset
 	)
 	{
