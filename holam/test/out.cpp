@@ -10,16 +10,16 @@
 #include <boost/test/unit_test.hpp>
 
 #include <holam/out.hpp>
-#include <holam/output/collector.hpp>
+#include "test.hpp"
 
 namespace ucpf { namespace holam { namespace test {
 
 BOOST_AUTO_TEST_CASE(out_0)
 {
+	char const *s0 = "abcdefghij";
 	output::collector<> dest;
-	BOOST_CHECK_EQUAL(10, out(dest, "abcdefghij"));
-	*dest++ = 0;
-	BOOST_CHECK(dest == "abcdefghij");
+	BOOST_CHECK_EQUAL(10, out(dest, s0));
+	BOOST_CHECK_EQUAL(dest, s0);
 }
 
 }}}

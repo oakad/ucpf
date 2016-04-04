@@ -100,6 +100,52 @@ struct collector {
 		return pos == StrSize;
 	}
 
+	friend bool operator==(
+		collector const &v0, value_type const * const &v1
+	)
+	{
+		std::size_t pos(0);
+		auto p(v0.first);
+		while (p) {
+			for (
+				std::size_t s_pos(0); s_pos < data_size;
+				++s_pos
+			) {
+				if (!v1[pos] || (v1[pos] != p->data[s_pos]))
+					return false;
+				++pos;
+			}
+
+			p = p->header.next;
+		}
+
+		if (v0.cur) {
+			for (
+				std::size_t s_pos(0); s_pos < v0.cur_offset;
+				++s_pos
+			) {
+				if (!v1[pos] || (
+					v1[pos] != v0.cur->data[s_pos]
+				))
+					return false;
+				++pos;
+			}
+
+		}
+
+		return !v1[pos];
+	}
+
+	template <typename Func>
+	void apply(Func &&f) const
+	{
+		for (auto p(first); p; p = p->header.next)
+			f(p->data, data_size);
+
+		if (cur)
+			f(cur->data, cur_offset);
+	}
+
 private:
 	struct block;
 

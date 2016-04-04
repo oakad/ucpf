@@ -13,27 +13,24 @@
 
 namespace ucpf { namespace yesod { namespace allocator {
 
-template <typename T>
-using aligned_storage_t = typename std::aligned_storage<
-	sizeof(T), std::alignment_of<T>::value
->::type;
-
 template <typename T, typename Alloc>
 struct array_helper {
-	typedef typename std::allocator_traits<
-		Alloc
-	>::template rebind_alloc<T> allocator_type;
+	typedef T value_type;
+	typedef typename std::aligned_storage<
+		sizeof(value_type), std::alignment_of<value_type>::value
+	>::type storage_type;
 
 	typedef typename std::allocator_traits<
 		Alloc
-	>::template rebind_traits<T> allocator_traits;
+	>::template rebind_alloc<value_type> allocator_type;
 
+	typedef typename std::allocator_traits<
+		Alloc
+	>::template rebind_traits<value_type> allocator_traits;
+
+	typedef typename allocator_type::pointer_type pointer;
 	typedef typename allocator_traits::size_type size_type;
 	typedef typename allocator_traits::difference_type difference_type;
-
-	typedef typename std::aligned_storage<
-		sizeof(T), std::alignment_of<T>::value
-	>::type storage_type;
 
 	typedef typename std::allocator_traits<
 		Alloc
@@ -43,78 +40,68 @@ struct array_helper {
 		Alloc
 	>::template rebind_traits<storage_type> storage_allocator_traits;
 
+	typedef typename storage_allocator_type::pointer_type storage_pointer;
+
 	template <typename Alloc1>
-	static storage_type *alloc_s(Alloc1 const &a, size_type n)
+	static auto alloc_s(Alloc1 const &a, size_type n)
 	{
 		storage_allocator_type x_alloc(a);
 		return storage_allocator_traits::allocate(x_alloc, n);
 	}
 
-	template <typename Alloc1, typename U>
-	static void free_s(Alloc1 const &a, U *p, size_type n)
+	template <typename Alloc1, typename Pointer>
+	static void free_s(Alloc1 const &a, Pointer up, size_type n)
 	{
 		storage_allocator_type x_alloc(a);
-		storage_allocator_traits::deallocate(
-			x_alloc, reinterpret_cast<storage_type *>(p), n
-		);
+		std::pointer_traits<Pointer>::rebind<storage_type> p(up);
+
+		storage_allocator_traits::deallocate(x_alloc, up, n);
 	}
 
-	template <typename Alloc1, typename U, typename... Args>
-	static T *make(Alloc1 const &a, U *up, Args&&... args)
+	template <typename Alloc1, typename Pointer, typename... Args>
+	static auto make(Alloc1 const &a, Pointer up, Args&&... args)
 	{
 		allocator_type x_alloc(a);
-		auto p(reinterpret_cast<T *>(up));
+
 		allocator_traits::construct(
-			x_alloc, p, std::forward<Args>(args)...
+			x_alloc, value_pointer(up), std::forward<Args>(args)...
 		);
 		return p;
 	}
 
 	template <typename Alloc1, typename... Args>
-	static T *alloc(Alloc1 const &a, Args&&... args)
+	static auto alloc(Alloc1 const &a, Args&&... args)
 	{
 		allocator_type x_alloc(a);
-
-		auto deleter([&x_alloc](T *p) -> void {
-			allocator_traits::deallocate(x_alloc, p, 1);
-		});
-
-		std::unique_ptr<T[], decltype(deleter)> s_ptr(
-			allocator_traits::allocate(x_alloc, 1), deleter
+		allocator_guard a_g(
+			allocator_traits::allocate(x_alloc, 1),
+			x_alloc, 1
 		);
 
-		make(a, s_ptr.get(), std::forward<Args>(args)...);
-		return s_ptr.release();
+		make(a, a_g.p, std::forward<Args>(args)...);
+		return a_g.release();
 	}
 
-	template <typename Alloc1, typename U, typename... Args>
-	static T *make_n(Alloc1 const &a, U *up, size_type n, Args&&... args)
+	template <typename Alloc1, typename Pointer, typename... Args>
+	static auto make_n(
+		Alloc1 const &a, Pointer up, size_type n, Args&&... args
+	)
 	{
 		allocator_type x_alloc(a);
 		size_type init_length(0);
-
-		auto deleter([&x_alloc, &init_length, n](T *p) -> void {
-			for (; init_length > 0; --init_length)
-				allocator_traits::destroy(
-					x_alloc, &p[init_length - 1]
-				);
-		});
-
-		std::unique_ptr<T[], decltype(deleter)> s_ptr(
-			reinterpret_cast<T *>(up), deleter
-		);
+		constructor_guard c_g(value_pointer(up), x_alloc, init_length);
 
 		for (; init_length < n; ++init_length)
 			allocator_traits::construct(
-				x_alloc, &s_ptr[init_length],
+				x_alloc, &c_g.p[init_length],
 				std::forward<Args>(args)...
 			);
 
-		return s_ptr.release();
+		return c_g.release();
 	}
 
 	template <typename Alloc1, typename... Args>
-	static T *alloc_n(Alloc1 const &a, size_type n, Args&&... args)
+	static auto alloc_n(Alloc1 const &a, size_type n, Args&&... args)
 	{
 		allocator_type x_alloc(a);
 
@@ -186,6 +173,111 @@ struct array_helper {
 		if (d)
 			allocator_traits::deallocate(x_alloc, p, n);
 	}
+
+private:
+	template <typename Pointer, int Raw = 3>
+	struct as_value_pointer
+	{
+		static pointer get(Pointer const &p)
+		{
+			return reinterpret_cast<pointer>(p);
+		}
+	};
+
+	template <typename Pointer>
+	struct as_value_pointer<Pointer, 2>
+	{
+		static pointer get(Pointer const &p)
+		{
+			return pointer(reinterpret_cast<value_type *>(p));
+		}
+	};
+
+	template <typename Pointer>
+	struct as_value_pointer<Pointer, 1>
+	{
+		static pointer get(Pointer const &p)
+		{
+			return reinterpret_cast<pointer>(std::addressof(*p));
+		}
+	};
+
+	template <typename Pointer>
+	struct as_value_pointer<Pointer, 0>
+	{
+		static pointer get(Pointer const &p)
+		{
+			return pointer(p);
+		}
+	};
+
+	static pointer value_pointer(Pointer const &p)
+	{
+		return as_value_pointer<
+			Pointer,
+			(std::is_pointer<Pointer>::value ? 2 : 0)
+			+ (std::is_pointer<pointer>::value ? 1 : 0)
+		>::get(p);
+	}
+
+	struct allocator_guard {
+		allocator_guard(
+			pointer p_, size_type length_, allocator_type &alloc_
+		) : p(p_), alloc(alloc_), length(length_)
+		{}
+
+		~allocator_guard()
+		{
+			if (!p)
+				return;
+
+			allocator_traits::deallocate(
+				alloc, p, length
+			);
+		}
+
+		auto release()
+		{
+			auto rv(p);
+			p = {};
+			return rv;
+		}
+
+		pointer p;
+		size_type length;
+		allocator_type &alloc;
+	};
+
+	struct constructor_guard {
+		constructor_guard(
+			pointer p_, size_type &init_length_,
+			allocator_type &alloc_,
+			
+		) : p(p_), init_length(init_length_), alloc(alloc_)
+		{}
+
+		~constructor_guard()
+		{
+			if (!p)
+				return;
+
+			for (; init_length > 0; --init_length)
+				allocator_traits::destroy(
+					alloc, &p[init_length - 1]
+				);
+		}
+
+		auto release()
+		{
+			auto rv(p);
+			p = {};
+			return rv;
+		}
+
+		pointer p;
+		size_type &init_length;
+		allocator_type &alloc;
+	};
 };
 
 }}}

@@ -9,48 +9,24 @@
 #if !defined(HPP_8AB2B6049EB6ABD37D6443C0A7527014)
 #define HPP_8AB2B6049EB6ABD37D6443C0A7527014
 
+#include <holam/detail/output_formatter.hpp>
 #include <holam/output/stdio.hpp>
 
 namespace ucpf { namespace holam {
 namespace detail {
 
-template <typename OutputIterator>
-std::size_t out_fixed(OutputIterator &iter, char const *&format)
-{
-	std::size_t count(0);
-
-	while (*format) {
-		if (*format == '{')
-			break;
-
-		*iter++ = *format;
-		++format;
-		++count;
-	}
-
-	return count;
-}
-
-template <typename OutputIterator, typename... Args>
-std::size_t out_arg(OutputIterator &iter, char const *format, Args &&...args)
-{
-	return 0;
-}
 
 }
 
 template <typename OutputIterator, typename... Args>
 std::size_t out(OutputIterator &iter, char const *format, Args &&...args)
 {
-	std::size_t count(0);
-	while (true) {
-		count += detail::out_fixed(iter, format);
-		if (!*format)
-			return count;
-		count += detail::out_arg(
-			iter, format, std::forward<Args>(args)...
-		);
+	detail::output_formatter<OutputIterator> formatter(iter, format);
+
+	while (formatter.advance()) {
+
 	}
+	return formatter.count;
 }
 
 template <typename... Args>
