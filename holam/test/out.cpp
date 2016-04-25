@@ -12,7 +12,7 @@
 #include <holam/out.hpp>
 #include "test.hpp"
 
-namespace ucpf { namespace holam { namespace test {
+namespace ucpf { namespace holam {
 
 BOOST_AUTO_TEST_CASE(out_0)
 {
@@ -23,4 +23,4 @@ BOOST_AUTO_TEST_CASE(out_0)
 	BOOST_CHECK_EQUAL(dest, s1);
 }
 
-}}}
+}}

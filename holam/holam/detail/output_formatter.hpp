@@ -10,11 +10,20 @@
 #define HPP_CA7734C48F3FB819FA74B86C178619BD
 
 #include <cstdio>
+#include <type_traits>
 #include <holam/traits/string.hpp>
-#include <holam/traits/signed.hpp>
-#include <holam/detail/format_int.hpp>
+#include <holam/traits/integral.hpp>
+#include <holam/detail/format_integral.hpp>
 
 namespace ucpf { namespace holam { namespace detail {
+
+template <typename T, typename U = std::__void_t<>>
+struct is_trait_disabled : std::false_type {};
+
+template <typename T>
+struct is_trait_disabled<
+	T, std::__void_t<decltype(T::disabled)>
+>: std::true_type {};
 
 template <typename OutputIterator>
 struct output_formatter {
@@ -50,16 +59,19 @@ struct output_formatter {
 		template <typename Arg>
 		bool emit_value(Arg &&arg)
 		{
+			typedef traits::integral_value<Arg> int_trait_type;
+			//typedef traits::fp_value<Arg> fp_trait_type;
+			typedef traits::string_value<Arg> string_trait_type;
+
 			switch (output_mode) {
 			case SIGNED: {
-				traits::signed_value<Arg> val_wrapper(
-					std::forward<Arg>(arg)
-				);
-				if (!val_wrapper.implemented())
+				if (is_trait_disabled<int_trait_type>::value)
 					return false;
 
-				format_signed(
-					val_wrapper.value(), *this
+				format_integral(
+					int_trait_type::apply(
+						std::forward<Arg>(arg)
+					), *this
 				);
 				return true;
 			}
@@ -68,16 +80,16 @@ struct output_formatter {
 			case FLOAT:
 				break;
 			case STRING: {
-				traits::string_value<Arg> val_wrapper(
-					std::forward<Arg>(arg)
-				);
-				if (!val_wrapper.implemented())
+				if (!is_trait_disabled<
+					string_trait_type
+				>::value) {
+					auto n_out(nested_output(*this));
+					string_trait_type::apply(
+						n_out, std::forward<Arg>(arg)
+					);
+					return true;
+				} else
 					return false;
-
-				auto n_out(nested_output(*this));
-				val_wrapper.out(n_out);
-				return true;
-				
 			}};
 			return true;
 		}

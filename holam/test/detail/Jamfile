@@ -1,0 +1,6 @@
+import testing ;
+
+alias test_case : $(ucpf)//test_case $(ucpf)//holam ;
+
+run format_integral.cpp : : test_case ;
+

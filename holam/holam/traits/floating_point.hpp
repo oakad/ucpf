@@ -6,21 +6,20 @@
  * shed by the Free Software Foundation.
  */
 
-#if !defined(HPP_4E17D50D00941F44FCFD5E01561235B7)
-#define HPP_4E17D50D00941F44FCFD5E01561235B7
+#if !defined(HPP_D000D5E3C92C841ABA3E31D67C1D8F74)
+#define HPP_D000D5E3C92C841ABA3E31D67C1D8F74
 
 namespace ucpf { namespace holam { namespace traits {
 
 template <typename T>
-struct string_value {
+struct floating_point_value {
 	typedef std::true_type disabled;
 
-	template <typename OutputIterator>
-	static void apply(OutputIterator &iter, T &&val)
+	static double apply(T &&val)
 	{
+		return 0.0;
 	}
 };
-
 
 }}}
 #endif
