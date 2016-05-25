@@ -14,10 +14,12 @@
 
 #if defined(_GLIBCXX_USE_INT128)
 
+namespace ucpf {
+
 typedef __int128 int128_t;
 typedef unsigned __int128 uint128_t;
 
-namespace ucpf { namespace holam { namespace support {
+namespace holam { namespace support {
 
 inline std::pair<uint64_t, uint64_t> multiply(uint64_t l, uint64_t r)
 {
@@ -57,11 +59,13 @@ inline uint32_t divide_near(uint128_t &num, uint64_t denom)
 	return rv;
 }
 
-}}}
+}}
+}
 
 #else
 
-namespace ucpf { namespace holam { namespace support {
+namespace ucpf {
+namespace holam { namespace support {
 
 inline std::pair<uint64_t, uint64_t> multiply(uint64_t l, uint64_t r)
 {
@@ -87,7 +91,7 @@ inline std::pair<uint64_t, uint64_t> multiply(uint64_t l, uint64_t r)
 	return rv;
 }
 
-}}}
+}}
 
 struct [[gnu::packed]] int128_t {
 	uint64_t v[2];
@@ -350,7 +354,7 @@ struct [[gnu::packed]] uint128_t {
 	}
 };
 
-namespace ucpf { namespace holam { namespace support {
+namespace holam { namespace support {
 
 inline std::pair<uint128_t, uint128_t> multiply(uint128_t l, uint128_t r)
 {
@@ -409,13 +413,13 @@ inline uint32_t divide_near(uint128_t &num, uint64_t denom)
 	}
 }
 
-}}}
+}}
 
 inline uint128_t uint128_t::operator*(uint128_t other) const
 {
 	return ucpf::holam::support::multiply(*this, other).first;
 }
 
+}
 #endif
-
 #endif
