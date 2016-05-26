@@ -97,6 +97,7 @@ struct floating_point_to_bcd_bigint {
 			bound_low = reinterpret_cast<limb_type *>(
 				__builtin_alloca(limb_cnt * sizeof(limb_type))
 			);
+
 			assign_pow5(bound_low, limb_cnt, -exp10);
 			shift_left(bound_low, limb_cnt, -exp10);
 			multiply_pow5(num, limb_cnt, -exp10);
@@ -140,17 +141,24 @@ struct floating_point_to_bcd_bigint {
 				multiply_10(bound_high, limb_cnt);
 			}
 		}
-
+#if 0
+		dump("num:   ", num, limb_cnt);
+		dump("denom: ", denom, limb_cnt);
+		dump("high:  ", bound_high, limb_cnt);
+		dump("low:   ", bound_low, limb_cnt);
+#endif
 		auto denom_msb(find_msb(denom, limb_cnt));
 		m_len = 0;
-		printf("m_out %p\n", m_out);
 		while (true) {
 			auto num_msb(find_msb(num, limb_cnt));
-			auto digit(
-				extract_limb(num, num_msb)
-				/ extract_limb(denom, num_msb)
-			);
-			digit = subtract_mul(num, denom, limb_cnt, digit);
+			limb_type digit(0);
+			if (num_msb >= denom_msb) {
+				digit = extract_limb(num, num_msb)
+					/ extract_limb(denom, num_msb);
+				digit = subtract_mul(
+					num, denom, limb_cnt, digit
+				);
+			}
 
 			int bd_test(0);
 			if (val.m & 1) {
@@ -171,23 +179,26 @@ struct floating_point_to_bcd_bigint {
 
 			switch (bd_test) {
 			case 0:
-				m_out[m_len] = m_len & 1
-					? m_out[m_len] | (digit << 4) : digit;
+				m_out[m_len / 2] = m_len & 1
+					? m_out[m_len / 2] | (digit << 4)
+					: digit;
 				++m_len;
 				multiply_10(num, limb_cnt);
 				multiply_10(bound_low, limb_cnt);
 				multiply_10(bound_high, limb_cnt);
 				break;
 			case 1:
-				m_out[m_len] = m_len & 1
-					? m_out[m_len] | (digit << 4) : digit;
+				m_out[m_len / 2] = m_len & 1
+					? m_out[m_len / 2] | (digit << 4)
+					: digit;
 				++m_len;
 				exp_out = exp10 - m_len;
 				return;
 			case 2:
 				++digit;
-				m_out[m_len] = m_len & 1
-					? m_out[m_len] | (digit << 4) : digit;
+				m_out[m_len / 2] = m_len & 1
+					? m_out[m_len / 2] | (digit << 4)
+					: digit;
 				++m_len;
 				exp_out = exp10 - m_len;
 				return;
@@ -198,8 +209,9 @@ struct floating_point_to_bcd_bigint {
 				if ((bd_test > 0) || (!bd_test && (digit & 1)))
 					++digit;
 
-				m_out[m_len] = m_len & 1
-					? m_out[m_len] | (digit << 4) : digit;
+				m_out[m_len / 2] = m_len & 1
+					? m_out[m_len / 2] | (digit << 4)
+					: digit;
 				++m_len;
 				exp_out = exp10 - m_len;
 				return;
@@ -255,7 +267,7 @@ struct floating_point_to_bcd_bigint {
 
 	static std::size_t limb_count_estimate(int32_t exp2)
 	{
-		auto bit_count = value_traits::mantissa_bits + exp2 + 4;
+		auto bit_count = value_traits::mantissa_bits + exp2 + 5;
 		if (bit_count % calc_traits::limb_bits)
 			return (bit_count / calc_traits::limb_bits) + 1;
 		else
@@ -281,6 +293,9 @@ struct floating_point_to_bcd_bigint {
 	static void shift_left_near(
 		limb_type *val, std::size_t limb_cnt, int32_t shift
 	) {
+		if (!shift)
+			return;
+
 		limb_type carry(0);
 		limb_type tmp;
 		for (std::size_t c(0); c < limb_cnt; ++c) {
@@ -365,7 +380,7 @@ struct floating_point_to_bcd_bigint {
 					pos + 1
 				) * calc_traits::limb_bits - support::clz(
 					val[pos]
-				);
+				) - 1;
 		} while (pos);
 		return 0;
 	}
@@ -373,12 +388,15 @@ struct floating_point_to_bcd_bigint {
 	static limb_type extract_limb(limb_type *val, std::size_t msb_pos) {
 		auto msb_lpos(msb_pos / calc_traits::limb_bits);
 		auto msb_bpos(msb_pos % calc_traits::limb_bits);
-		if (!msb_bpos)
+
+		if (msb_bpos == (calc_traits::limb_bits - 1))
 			return val[msb_lpos];
 
-		auto rv(val[msb_lpos] << (calc_traits::limb_bits - msb_bpos));
+		auto rv(val[msb_lpos] << (
+			calc_traits::limb_bits - msb_bpos - 1
+		));
 		if (msb_lpos)
-			rv |= val[msb_lpos - 1] >> msb_bpos;
+			rv |= val[msb_lpos - 1] >> (msb_bpos + 1);
 
 		return rv;
 	}
@@ -423,9 +441,6 @@ struct floating_point_to_bcd_bigint {
 		limb_type *l, limb_type *r, std::size_t limb_cnt,
 		limb_type r_mul
 	) {
-		dump("subtract_mul num", l, limb_cnt);
-		dump("subtract_mul denom", r, limb_cnt);
-		printf("subtract_mul mul %zd\n", r_mul);
 		limb_type mul_carry(0);
 		limb_type sub_carry(0);
 		std::size_t pos;
@@ -474,11 +489,12 @@ struct floating_point_to_bcd_bigint {
 	static void dump(
 		char const *label, limb_type *val, std::size_t limb_cnt
 	) {
+		constexpr char const *format = calc_traits::limb_bits > 4 ? "%016lx'" : "%08x'";
 		printf("%s: ", label);
 		auto pos(limb_cnt);
 		do {
 			--pos;
-			printf("%0*zx", calc_traits::limb_bits / 8, val[pos]);
+			printf(format, val[pos]);
 		} while (pos);
 		printf("\n");
 	}

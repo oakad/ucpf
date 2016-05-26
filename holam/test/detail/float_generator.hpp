@@ -62,12 +62,12 @@ struct float_generator_e {
 				last_exponent = 0;
 				continue;
 			}
-			return f(w.get());
+			return f(val.fp);
 		}
 	}
 
 	std::random_device dev;
-	std::uniform_int_distribution<gen_type> dist;
+	std::uniform_int_distribution<mantissa_type> dist;
 	uint32_t last_exponent = 0;
 };
 #if 0

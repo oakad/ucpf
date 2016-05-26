@@ -10,7 +10,7 @@
 #define HPP_B25E3954ACC63CB019CE8FA6DE2DAAA6
 
 #include <holam/support/bitops.hpp>
-
+#include <cstdio>
 namespace ucpf { namespace holam { namespace detail {
 
 template <typename T>
@@ -118,7 +118,7 @@ struct fp_value_t {
 		}
 
 		if (exp) {
-			if (m)
+			if (!m)
 				flags |= NORMAL_POW2;
 			m += mantissa_type(1) << traits_type::mantissa_bits;
 		}
