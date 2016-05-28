@@ -3,4 +3,6 @@ import testing ;
 alias test_case : $(ucpf)//test_case $(ucpf)//holam ;
 
 run format_integral.cpp : : test_case ;
+run floating_point_to_bcd_bigint.cpp : : test_case ;
+
 

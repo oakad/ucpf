@@ -31,7 +31,7 @@ struct bcd_converter;
 
 template <>
 struct bcd_converter<uint8_t> {
-	constexpr static std::size_t bcd_value_size = 2;
+	constexpr static std::size_t storage_size = 2;
 
 	static void to_bcd(uint8_t *out, uint8_t in)
 	{
@@ -47,7 +47,7 @@ struct bcd_converter<uint8_t> {
 
 template <>
 struct bcd_converter<uint16_t> {
-	constexpr static std::size_t bcd_value_size = 3;
+	constexpr static std::size_t storage_size = 3;
 
 	static void to_bcd(uint8_t *out, uint16_t in)
 	{
@@ -80,7 +80,7 @@ struct bcd_converter<uint16_t> {
 
 template <>
 struct bcd_converter<uint32_t> {
-	constexpr static std::size_t bcd_value_size = 5;
+	constexpr static std::size_t storage_size = 5;
 
 	static void to_bcd(uint8_t *out, uint32_t in)
 	{
@@ -111,7 +111,7 @@ struct bcd_converter<uint32_t> {
 
 template <>
 struct bcd_converter<uint64_t> {
-	constexpr static std::size_t bcd_value_size = 10;
+	constexpr static std::size_t storage_size = 10;
 
 	static void to_bcd(uint8_t *out, uint64_t in)
 	{
@@ -139,7 +139,7 @@ struct bcd_converter<uint64_t> {
 
 template <>
 struct bcd_converter<uint128_t> {
-	constexpr static std::size_t bcd_value_size = 20;
+	constexpr static std::size_t storage_size = 20;
 
 	static void to_bcd(uint8_t *out, uint128_t in)
 	{
@@ -184,7 +184,9 @@ struct bcd_converter<uint128_t> {
         }
 };
 
-std::size_t bcd_count_digits(uint8_t const *val, std::size_t count)
+static inline std::size_t count_digits(
+	uint8_t const *val, std::size_t count
+)
 {
 	std::size_t rv(count * 2);
 
@@ -201,25 +203,25 @@ std::size_t bcd_count_digits(uint8_t const *val, std::size_t count)
 }
 
 template <typename ArgDef>
-void emit_bcd_value(
+void emit_digits(
 	uint8_t const *val, std::size_t pos, std::size_t count, ArgDef &arg_def
 )
 {
 	if (pos & 1) {
-		arg_def.formatter.emit_char(0x30 | (val[pos >> 1] & 0xf));
+		arg_def.formatter.emit_char(0x30 + (val[pos >> 1] & 0xf));
 		++pos;
 		--count;
 	}
 
 	while (count >= 2) {
-		arg_def.formatter.emit_char(0x30 | (val[pos >> 1] >> 4));
-		arg_def.formatter.emit_char(0x30 | (val[pos >> 1] & 0xf));
+		arg_def.formatter.emit_char(0x30 + (val[pos >> 1] >> 4));
+		arg_def.formatter.emit_char(0x30 + (val[pos >> 1] & 0xf));
 		pos -= 2;
 		count -= 2;
 	}
 
 	if (count)
-		arg_def.formatter.emit_char(0x30 | (val[pos >> 1] >> 4));
+		arg_def.formatter.emit_char(0x30 + (val[pos >> 1] >> 4));
 }
 
 template <typename T, typename ArgDef, bool IsSighed = true>
@@ -228,22 +230,22 @@ struct format_integral_t {
 	{
 		typedef typename std::make_unsigned<T>::type u_type;
 		typedef bcd_converter<u_type> cnv_type;
-		uint8_t bcd_value[cnv_type::bcd_value_size];
+		uint8_t bcd_value[cnv_type::storage_size];
 
 		bool sign = std::signbit(val_);
 		u_type val(sign ? -val_ : val_);
 
 		cnv_type::to_bcd(bcd_value, val);
-		auto m_size(bcd_count_digits(
-			bcd_value, cnv_type::bcd_value_size
+		auto m_size(count_digits(
+			bcd_value, cnv_type::storage_size
 		));
 
 		if (sign)
 			arg_def.formatter.emit_char('-');
 
-		emit_bcd_value(
+		emit_digits(
 			bcd_value,
-			2 * cnv_type::bcd_value_size - m_size,
+			2 * cnv_type::storage_size - m_size,
 			m_size,
 			arg_def
 		);
@@ -255,16 +257,16 @@ struct format_integral_t<T, ArgDef, false> {
 	static void apply(T const &val, ArgDef &arg_def)
 	{
 		typedef bcd_converter<T> cnv_type;
-		uint8_t bcd_value[cnv_type::bcd_value_size];
+		uint8_t bcd_value[cnv_type::storage_size];
 
 		cnv_type::to_bcd(bcd_value, val);
-		auto m_size(bcd_count_digits(
-			bcd_value, cnv_type::bcd_value_size
+		auto m_size(count_digits(
+			bcd_value, cnv_type::storage_size
 		));
 
-		emit_bcd_value(
+		emit_digits(
 			bcd_value,
-			2 * cnv_type::bcd_value_size - m_size,
+			2 * cnv_type::storage_size - m_size,
 			m_size,
 			arg_def
 		);

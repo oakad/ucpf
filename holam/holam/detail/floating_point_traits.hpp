@@ -11,16 +11,30 @@
 
 #include <holam/support/bitops.hpp>
 #include <cstdio>
+
+#pragma push_macro("NAN")
+#undef NAN
+
 namespace ucpf { namespace holam { namespace detail {
 
 template <typename T>
 struct fp_value_traits;
 
 template <>
+struct fp_value_traits<float> {
+	typedef uint32_t mantissa_type;
+	constexpr static std::size_t mantissa_bits = 23;
+	constexpr static std::size_t exponent_bits = 8;
+	constexpr static std::size_t bcd_storage_size = 5;
+	constexpr static int32_t exponent_bias = 127;
+};
+
+template <>
 struct fp_value_traits<double> {
 	typedef uint64_t mantissa_type;
 	constexpr static std::size_t mantissa_bits = 52;
 	constexpr static std::size_t exponent_bits = 11;
+	constexpr static std::size_t bcd_storage_size = 9;
 	constexpr static int32_t exponent_bias = 1023;
 };
 
@@ -45,8 +59,8 @@ struct bigint_calc_traits<64> {
 	constexpr static std::size_t limb_bits = 64;
 	constexpr static std::size_t base5_digits = 27;
 
-	static int32_t assign_pow5(
-		limb_type *val, int32_t exp5
+	static uint32_t assign_pow5(
+		limb_type *val, uint32_t exp5
 	)
 	{
 		if (exp5 <= max_small_power_5) {
@@ -66,8 +80,8 @@ struct bigint_calc_traits<32> {
 	constexpr static std::size_t limb_bits = 32;
 	constexpr static std::size_t base5_digits = 13;
 
-	static int32_t assign_pow5(
-		limb_type *val, int32_t exp5
+	static uint32_t assign_pow5(
+		limb_type *val, uint32_t exp5
 	)
 	{
 		if (exp5 <= base5_digits) {
@@ -151,4 +165,6 @@ struct fp_value_t {
 };
 
 }}}
+
+#pragma pop_macro("NAN")
 #endif

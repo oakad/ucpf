@@ -22,13 +22,13 @@ std::basic_ostream<CharType, TraitsType> &operator<<(
 )
 {
 	typedef ucpf::holam::detail::bcd_converter<uint128_t> cnv_type;
-	uint8_t bcd_value[cnv_type::bcd_value_size];
+	uint8_t bcd_value[cnv_type::storage_size];
 
 	cnv_type::to_bcd(bcd_value, val);
-	auto m_size(ucpf::holam::detail::bcd_count_digits(
-		bcd_value, cnv_type::bcd_value_size
+	auto m_size(ucpf::holam::detail::count_digits(
+		bcd_value, cnv_type::storage_size
 	));
-	auto pos(2 * cnv_type::bcd_value_size - m_size);
+	auto pos(2 * cnv_type::storage_size - m_size);
 
 	if (pos & 1) {
 		os << os.widen(0x30 | (bcd_value[pos >> 1] & 0xf));
@@ -72,12 +72,12 @@ T from_bcd(uint8_t *in, std::size_t sz)
 BOOST_AUTO_TEST_CASE(format_integral_0)
 {
 	typedef bcd_converter<uint8_t> cnv_type;
-	uint8_t bcd_value[cnv_type::bcd_value_size];
+	uint8_t bcd_value[cnv_type::storage_size];
 
 	for (uint16_t c(0); c < (uint8_t(1) << 8); ++c) {
 		cnv_type::to_bcd(bcd_value, uint8_t(c));
 		auto out(test::from_bcd<uint8_t>(
-			bcd_value, cnv_type::bcd_value_size
+			bcd_value, cnv_type::storage_size
 		));
 		BOOST_REQUIRE_EQUAL(out, uint8_t(c));
 	}
@@ -86,12 +86,12 @@ BOOST_AUTO_TEST_CASE(format_integral_0)
 BOOST_AUTO_TEST_CASE(format_integral_1)
 {
 	typedef bcd_converter<uint16_t> cnv_type;
-	uint8_t bcd_value[cnv_type::bcd_value_size];
+	uint8_t bcd_value[cnv_type::storage_size];
 
 	for (uint32_t c(0); c < (uint32_t(1) << 16); ++c) {
 		cnv_type::to_bcd(bcd_value, uint16_t(c));
 		auto out(test::from_bcd<uint16_t>(
-			bcd_value, cnv_type::bcd_value_size
+			bcd_value, cnv_type::storage_size
 		));
 		BOOST_REQUIRE_EQUAL(out, uint16_t(c));
 	}
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(format_integral_1)
 BOOST_AUTO_TEST_CASE(format_integral_2)
 {
 	typedef bcd_converter<uint32_t> cnv_type;
-	uint8_t bcd_value[cnv_type::bcd_value_size];
+	uint8_t bcd_value[cnv_type::storage_size];
 
 	std::random_device dev;
 	std::uniform_int_distribution<uint32_t> dist;
@@ -109,7 +109,7 @@ BOOST_AUTO_TEST_CASE(format_integral_2)
 		auto v_in(dist(dev));
 		cnv_type::to_bcd(bcd_value, v_in);
 		auto v_out(test::from_bcd<uint32_t>(
-			bcd_value, cnv_type::bcd_value_size
+			bcd_value, cnv_type::storage_size
 		));
 		BOOST_REQUIRE_EQUAL(v_out, v_in);
 	}
@@ -118,7 +118,7 @@ BOOST_AUTO_TEST_CASE(format_integral_2)
 BOOST_AUTO_TEST_CASE(format_integral_3)
 {
 	typedef bcd_converter<uint64_t> cnv_type;
-	uint8_t bcd_value[cnv_type::bcd_value_size];
+	uint8_t bcd_value[cnv_type::storage_size];
 
 	std::random_device dev;
 	std::uniform_int_distribution<uint64_t> dist;
@@ -127,7 +127,7 @@ BOOST_AUTO_TEST_CASE(format_integral_3)
 		auto v_in(dist(dev));
 		cnv_type::to_bcd(bcd_value, v_in);
 		auto v_out(test::from_bcd<uint64_t>(
-			bcd_value, cnv_type::bcd_value_size
+			bcd_value, cnv_type::storage_size
 		));
 		BOOST_REQUIRE_EQUAL(v_out, v_in);
 	}
@@ -136,7 +136,7 @@ BOOST_AUTO_TEST_CASE(format_integral_3)
 BOOST_AUTO_TEST_CASE(format_integral_4)
 {
 	typedef bcd_converter<uint128_t> cnv_type;
-	uint8_t bcd_value[cnv_type::bcd_value_size];
+	uint8_t bcd_value[cnv_type::storage_size];
 
 	std::random_device dev;
 	std::uniform_int_distribution<uint64_t> dist;
@@ -147,7 +147,7 @@ BOOST_AUTO_TEST_CASE(format_integral_4)
 		v_in |= dist(dev);
 		cnv_type::to_bcd(bcd_value, v_in);
 		auto v_out(test::from_bcd<uint128_t>(
-			bcd_value, cnv_type::bcd_value_size
+			bcd_value, cnv_type::storage_size
 		));
 		BOOST_REQUIRE_EQUAL(v_out, v_in);
 	}

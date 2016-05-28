@@ -12,414 +12,218 @@
 #include <cstdint>
 #include <utility>
 
-#if defined(_GLIBCXX_USE_INT128)
-
 namespace ucpf {
+
+#if defined(_GLIBCXX_USE_INT128)
 
 typedef __int128 int128_t;
 typedef unsigned __int128 uint128_t;
 
-namespace holam { namespace support {
+#endif
 
-inline std::pair<uint64_t, uint64_t> multiply(uint64_t l, uint64_t r)
-{
-	int128_t acc(l);
-	acc *= r;
-	return std::make_pair(uint64_t(acc), uint64_t(acc >> 64));
-}
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 
-inline std::pair<uint128_t, uint128_t> multiply(uint128_t l, uint128_t r)
-{
-	uint64_t m[4] = {0};
-	std::size_t m_pos(0);
-	for (int rc(0); rc < 128; rc += 64) {
-		auto n_pos(m_pos);
-		uint64_t c(0);
-		for (int lc(0); lc < 128; lc += 64) {
-			uint128_t acc(uint64_t(r >> rc));
-			acc *= uint64_t(l >> lc);
-			acc += m[n_pos];
-			acc += c;
-			c = acc >> 64;
-			m[n_pos++] = acc;
-		}
-		m[n_pos] = c;
-		++m_pos;
-	}
-	std::pair<uint128_t, uint128_t> rv(m[1], m[3]);
-	rv.first = (rv.first << 64) | m[0];
-	rv.second = (rv.second << 64) | m[2];
-	return rv;
-}
+struct [[gnu::packed]] soft_int128_t {
+	uint64_t low;
+	uint64_t high;
+};
 
-inline uint32_t divide_near(uint128_t &num, uint64_t denom)
-{
-	auto rv(num / denom);
-	num %= denom;
-	return rv;
-}
+struct [[gnu::packed]] soft_uint128_t {
+	soft_uint128_t() = default;
 
-}}
-}
+	soft_uint128_t(uint64_t v)
+	: low(v), high(0)
+	{}
+
+#if defined(_GLIBCXX_USE_INT128)
+	soft_uint128_t(uint128_t v)
+	: low(v), high(v >> 64)
+	{}
+#endif
+
+	uint64_t low;
+	uint64_t high;
+};
+
+struct [[gnu::packed]] soft_uint256_t {
+	soft_uint128_t low;
+	soft_uint128_t high;
+};
 
 #else
 
-namespace ucpf {
+struct [[gnu::packed]] soft_int128_t {
+	uint64_t high;
+	uint64_t low;
+};
+
+struct [[gnu::packed]] soft_uint128_t {
+	soft_uint128_t() = default;
+
+	soft_uint128_t(uint64_t v)
+	: high(0), low(v)
+	{}
+
+#if defined(_GLIBCXX_USE_INT128)
+	soft_uint128_t(uint128_t v)
+	: high(v >> 64), low(v)
+	{}
+#endif
+
+	uint64_t high;
+	uint64_t low;
+};
+
+struct [[gnu::packed]] soft_uint256_t {
+	soft_uint128_t high;
+	soft_uint128_t low;
+};
+
+#endif
+
+#if defined(_GLIBCXX_USE_INT128)
+
 namespace holam { namespace support {
 
-inline std::pair<uint64_t, uint64_t> multiply(uint64_t l, uint64_t r)
+static inline soft_uint128_t multiply(uint64_t l, uint64_t r)
 {
-	uint32_t m[4] = {0};
-	std::size_t m_pos(0);
-	for (int rc(0); rc < 64; rc += 32) {
-		auto n_pos(m_pos);
-		uint32_t c(0);
-		for (int lc(0); lc < 64; lc += 32) {
-			uint64_t acc(uint32_t(r >> rc));
-			acc *= uint32_t(l >> lc);
-			acc += m[n_pos];
-			acc += c;
-			c = acc >> 32;
-			m[n_pos++] = acc;
-		}
-		m[n_pos] = c;
-		++m_pos;
+	uint128_t acc(l);
+	acc *= r;
+	soft_uint128_t rv;
+	rv.low = uint64_t(acc);
+	rv.high = uint64_t(acc >> 64);
+	return rv;
+}
+
+static inline soft_uint256_t multiply(uint128_t l, uint128_t r)
+{
+	soft_uint256_t rv;
+	uint128_t acc((uint64_t(r)));
+	acc *= uint64_t(l);
+	rv.low.low = uint64_t(acc);
+	rv.low.high = uint64_t(acc >> 64);
+
+	acc = r >> 64;
+	acc *= uint64_t(l);
+	rv.high.low = __builtin_uaddll_overflow(
+		rv.low.high, uint64_t(acc),
+		reinterpret_cast<unsigned long long *>(&rv.low.high)
+	) ? uint64_t(acc >> 64) + 1 : uint64_t(acc >> 64);
+
+	acc = uint64_t(r);
+	acc *= l >> 64;
+	if (__builtin_uaddll_overflow(
+		rv.low.high, uint64_t(acc),
+		reinterpret_cast<unsigned long long *>(&rv.low.high)
+	)) {
+		rv.high.high = __builtin_uaddll_overflow(
+			rv.high.low, uint64_t(acc >> 64) + 1,
+			reinterpret_cast<unsigned long long *>(&rv.high.low)
+		) ? 1 : 0;
+	} else {
+		rv.high.high = __builtin_uaddll_overflow(
+			rv.high.low, uint64_t(acc >> 64),
+			reinterpret_cast<unsigned long long *>(&rv.high.low)
+		) ? 1 : 0;
 	}
-	std::pair<uint64_t, uint64_t> rv(m[1], m[3]);
-	rv.first = (rv.first << 32) | m[0];
-	rv.second = (rv.second << 32) | m[2];
+
+	acc = r >> 64;
+	acc *= l >> 64;
+	rv.high.high += __builtin_uaddll_overflow(
+		rv.high.low, uint64_t(acc),
+		reinterpret_cast<unsigned long long *>(&rv.high.low)
+	) ? uint64_t(acc >> 64) + 1 : uint64_t(acc >> 64);
 	return rv;
 }
 
 }}
+#else
 
-struct [[gnu::packed]] int128_t {
-	uint64_t v[2];
+typedef soft_int128_t int128_t;
+typedef soft_uint128_t uint128_t;
 
-	constexpr int128_t()
-	: v{0, 0}
-	{}
+static inline uint128_t &operator-=(uint128_t &l, uint64_t r)
+{
+	if (__builtin_usubll_overflow(l.low, r, &l.low))
+		--l.high;
 
-	constexpr int128_t(int64_t other)
-	: v{uint64_t(other), other >= 0 ? uint64_t(0) : ~uint64_t(0)}
-	{}
-};
+	return l;
+}
 
-struct [[gnu::packed]] uint128_t {
-	uint64_t v[2];
+static inline uint128_t &operator|=(uint128_t &l, uint64_t r)
+{
+	l.low |= r;
+	return l;
+}
 
-	constexpr uint128_t()
-	: v{0, 0}
-	{}
-
-	constexpr uint128_t(uint64_t other)
-	: v{other, 0}
-	{}
-
-	constexpr uint128_t(uint64_t low, uint64_t high)
-	: v{low, high}
-	{}
-
-	constexpr uint128_t(std::pair<uint64_t, uint64_t> other)
-	: v{other.first, other.second}
-	{}
-
-	constexpr explicit operator bool() const
-	{
-		return v[0] || v[1];
+static inline uint128_t &operator<<=(uint128_t &l, int s)
+{
+	if (s < 64) {
+		l.high <<= s;
+		l.high |= l.low >>= 64 - s;
+		l.low <<= s;
+	} else if (s < 128) {
+		l.high = l.low << (s - 64);
+		l.low = 0;
+	} else {
+		l.low = 0;
+		l.high = 0;
 	}
-
-	constexpr explicit operator uint32_t() const
-	{
-		return v[0];
-	}
-
-	constexpr explicit operator uint64_t() const
-	{
-		return v[0];
-	}
-
-	uint128_t &operator++()
-	{
-		if (~v[0])
-			++v[0];
-		else {
-			v[0] = ~v[0];
-			++v[1];
-		}
-		return *this;
-	}
-
-	uint128_t &operator--()
-	{
-		if (v[0])
-			--v[0];
-		else {
-			v[0] = ~v[0];
-			--v[1];
-		}
-		return *this;
-	}
-
-	uint128_t &operator|=(uint64_t other)
-	{
-		v[0] |= other;
-		return *this;
-	}
-
-	uint128_t &operator|=(uint128_t other)
-	{
-		v[0] |= other.v[0];
-		v[1] |= other.v[1];
-		return *this;
-	}
-
-	uint128_t &operator&=(uint128_t other)
-	{
-		v[0] &= other.v[0];
-		v[1] &= other.v[1];
-		return *this;
-	}
-
-	uint128_t &operator+=(uint64_t other)
-	{
-		if ((~uint64_t(0) - v[0]) >= other)
-			v[0] += other;
-		else {
-			v[0] = other - (~uint64_t(0) - v[0]) - 1;
-			++v[1];
-		}
-		return *this;
-	}
-
-	uint128_t &operator+=(uint128_t other)
-	{
-		if ((~uint64_t(0) - v[0]) >= other.v[0]) {
-			v[0] += other.v[0];
-			v[1] += other.v[1];
-		} else {
-			v[0] = other.v[0] - (~uint64_t(0) - v[0]) - 1;
-			v[1] += other.v[1] + 1;
-		}
-		return *this;
-	}
-
-	uint128_t &operator-=(uint64_t other)
-	{
-		if (v[0] >= other)
-			v[0] -= other;
-		else {
-			v[0] = ~uint64_t(0) - (other - v[0]) + 1;
-			--v[1];
-		}
-		return *this;
-	}
-
-	uint128_t &operator*=(uint64_t other)
-	{
-		auto acc_l(ucpf::yesod::detail::multiply(v[0], other));
-		v[0] = acc_l.first;
-		auto acc_h(ucpf::yesod::detail::multiply(v[1], other));
-		v[1] = acc_h.first + acc_l.second;
-		return *this;
-	}
-
-	uint128_t &operator<<=(uint32_t shift)
-	{
-		if (shift & 0x40) {
-			v[1] = v[0] << (shift & 0x3f);
-			v[0] = 0;
-		} else {
-			v[1] <<= shift & 0x3f;
-			v[1] |= v[0] >> (0x40 - (shift & 0x3f));
-			v[0] <<= shift & 0x3f;
-		}
-		return *this;
-	}
-
-	uint128_t &operator>>=(uint32_t shift)
-	{
-		if (shift & 0x40) {
-			v[0] = v[1] >> (shift & 0x3f);
-			v[1] = 0;
-		} else {
-			v[0] >>= shift & 0x3f;
-			v[0] |= v[1] << (0x40 - (shift & 0x3f));
-			v[1] >>= shift & 0x3f;
-		}
-		return *this;
-	}
-
-	constexpr uint128_t operator&(uint128_t other) const
-	{
-		return uint128_t(v[0] & other.v[0], v[1] & other.v[1]);
-	}
-
-	constexpr uint128_t operator+(uint128_t other) const
-	{
-		return ((~uint64_t(0) - v[0]) >= other.v[0]) ? uint128_t(
-			v[0] + other.v[0], v[1] + other.v[1]
-		) : uint128_t(
-			other.v[0] - (~uint64_t(0) - v[0]) - 1,
-			v[1] + other.v[1] + 1
-		);
-	}
-
-	constexpr uint128_t operator-(uint64_t other) const
-	{
-		return (v[0] >= other) ? uint128_t(
-			v[0] - other, v[1]
-		) : uint128_t(
-			~uint64_t(0) - (other - v[0]) + 1, v[1] - 1
-		);
-	}
-
-	constexpr uint128_t operator-(uint128_t other) const
-	{
-		return (v[0] >= other.v[0]) ? uint128_t(
-			v[0] - other.v[0], v[1] - other.v[1]
-		) : uint128_t(
-			~uint64_t(0) - (other.v[0] - v[0]) + 1,
-			v[1] - other.v[1] - 1
-		);
-	}
-
-	uint128_t operator*(uint64_t other) const
-	{
-		auto acc_l(ucpf::holam::support::multiply(v[0], other));
-		auto acc_h(ucpf::holam::support::multiply(v[1], other));
-		return uint128_t(acc_l.first, acc_h.first + acc_l.second);
-	}
-
-	uint128_t operator*(uint128_t other) const;
-
-	constexpr uint128_t operator<<(uint32_t shift) const
-	{
-		return (shift & 0x40) ? uint128_t(
-			0, v[0] << (shift & 0x3f)
-		) : uint128_t(
-			v[0] << (shift & 0x3f),
-			(v[0] >> (0x40 - (shift & 0x3f)))
-			| v[1] << (shift & 0x3f)
-		);
-	}
-
-	constexpr uint128_t operator>>(uint32_t shift) const
-	{
-		return (shift & 0x40) ? uint128_t(
-			v[1] >> (shift & 0x3f), 0
-		) : uint128_t(
-			(v[0] >> (shift & 0x3f))
-			| (v[1] << (0x40 - (shift & 0x3f))),
-			v[1] >> (shift & 0x3f)
-		);
-	}
-
-	constexpr bool operator==(uint128_t other) const
-	{
-		return (v[0] == other.v[0]) && (v[1] == other.v[1]);
-	}
-
-	constexpr bool operator<(uint64_t other) const
-	{
-		return (!v[1]) && (v[0] < other);
-	}
-
-	constexpr bool operator<(uint128_t other) const
-	{
-		return (v[1] == other.v[1]) ? (
-			v[0] < other.v[0]
-		) : (v[1] < other.v[1]);
-	}
-
-	constexpr bool operator<=(uint128_t other) const
-	{
-		return (v[1] == other.v[1]) ? (
-			v[0] <= other.v[0]
-		) : (v[1] < other.v[1]);
-	}
-
-	constexpr bool operator>(uint128_t other) const
-	{
-		return (v[1] == other.v[1]) ? (
-			v[0] > other.v[0]
-		) : (v[1] > other.v[1]);
-	}
-
-	constexpr bool operator>=(uint128_t other) const
-	{
-		return (v[1] == other.v[1]) ? (
-			v[0] >= other.v[0]
-		) : (v[1] > other.v[1]);
-	}
-};
+	return l;
+}
 
 namespace holam { namespace support {
 
-inline std::pair<uint128_t, uint128_t> multiply(uint128_t l, uint128_t r)
+static inline soft_uint128_t multiply(uint64_t l, uint64_t r)
 {
-	uint64_t m[4] = {0};
-	std::size_t m_pos(0);
-	for (int rc(0); rc < 2; ++rc) {
-		auto n_pos(m_pos);
-		uint64_t c(0);
-		for (int lc(0); lc < 2; ++lc) {
-			uint128_t acc(r.v[rc]);
-			acc *= l.v[lc];
-			acc += m[n_pos];
-			acc += c;
-			c = acc.v[1];
-			m[n_pos++] = acc.v[0];
-		}
-		m[n_pos] = c;
-		++m_pos;
-	}
-
-	return std::make_pair(uint128_t(m[0], m[1]), uint128_t(m[2], m[3]));
+	soft_uint128_t rv;
+	rv.low = uint32_t(r);
+	rv.low *= uint32_t(l);
+	uint64_t acc(r >> 32);
+	acc *= uint32_t(l);
+	rv.high = (acc >> 32) + (__builtin_uaddll_overflow(
+		rv.low, acc << 32, &rv.low
+	) ? 1 : 0);
+	acc = uint32_t(r);
+	acc *= l >> 32;
+	rv.high += (acc >> 32) + (__builtin_uaddll_overflow(
+		rv.low, acc << 32, &rv.low
+	) ? 1 : 0);
+	acc = r >> 32;
+	acc *= l >> 32;
+	rv.high += acc;
+	return rv;
 }
 
-inline uint32_t divide_near(uint128_t &num, uint64_t denom)
+static inline soft_uint256_t multiply(uint128_t l, uint128_t r)
 {
-	auto denom_sz(64 - __builtin_clzll(denom));
-	uint32_t rv(0);
+	soft_uint256_t rv;
+	rv.low = multiply(l.low, r.low);
+	soft_uint128_t acc(multiply(l.low, r.high));
+	rv.high.low = acc.high + (__builtin_uaddll_overflow(
+		rv.low.high, acc.low, &rv.low.high
+	) ? 1 : 0);
 
-	while (true) {
-		if (!num.v[1]) {
-			rv += num.v[0] / denom;
-			num.v[0] %= denom;
-			return rv;
-		}
-
-		auto num_sz(128 - __builtin_clzll(num.v[1]));
-		if (num_sz <= (denom_sz + 1)) {
-			while (num.v[1] || (num.v[0] >= denom)) {
-				num -= denom;
-				++rv;
-			}
-			return rv;
-		}
-
-		auto order(num_sz - denom_sz - 1);
-		auto ol(denom << order);
-		auto oh(denom >> (64 - order));
-		if (ol <= num.v[0]) {
-			num.v[0] -= ol;
-			num.v[1] -= oh;
-		} else {
-			num.v[0] = (~uint64_t(0)) - (ol - num.v[0]) + 1;
-			num.v[1] -= oh + 1;
-		}
-		rv += uint32_t(1) << order;
+	acc = multiply(l.high, r.low);
+	if (__builtin_uaddll_overflow(
+		rv.low.high, acc.low, &rv.low.high
+	)) {
+		rv.high.high = __builtin_uaddll_overflow(
+			rv.high.low, acc.high + 1, &rv.high.low
+		) ? 1 : 0;
+	} else {
+		rv.high.high = __builtin_uaddll_overflow(
+			rv.high.low, acc.high, &rv.high.low
+		) ? 1 : 0;
 	}
-}
 
+	acc = multiply(l.high, r.high);
+	rv.high.high += acc.high + (__builtin_uaddll_overflow(
+		rv.high.low, acc.low, &rv.high.low
+	) ? 1 : 0);
+	return rv;
+}
 }}
-
-inline uint128_t uint128_t::operator*(uint128_t other) const
-{
-	return ucpf::holam::support::multiply(*this, other).first;
-}
-
-}
 #endif
+}
 #endif

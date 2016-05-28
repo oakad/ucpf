@@ -14,6 +14,35 @@
 
 namespace ucpf { namespace holam { namespace detail { namespace test {
 
+void expand_bcd(char *out, uint8_t *in, std::size_t len)
+{
+	for (std::size_t pos(0); pos < len; ++pos) {
+		out[pos] = 0x30 + (pos & 1 ? (
+			in[pos / 2] >> 4
+		) : (in[pos / 2] & 0xf));
+	}
+}
+
+template <typename T>
+struct read_float {
+};
+
+template <>
+struct read_float<float> {
+	static float apply(char const *str)
+	{
+		return strtof(str, nullptr);
+	}
+};
+
+template <>
+struct read_float<double> {
+	static double apply(char const *str)
+	{
+		return strtod(str, nullptr);
+	}
+};
+
 template <typename T>
 struct float_generator_r {
 	typedef fp_value_traits<T> value_traits;
@@ -54,14 +83,12 @@ struct float_generator_e {
 		while (true) {
 			val.m = dist(dev);
 			val.m &= (mantissa_type(1) << mantissa_bits) - 1;
-			val.m |= mantissa_type(
-				last_exponent
-			) << mantissa_bits;
+			val.m |= mantissa_type(last_exponent) << mantissa_bits;
 			++last_exponent;
-			if (!std::isnormal(val.fp)) {
+
+			if (last_exponent > 2 * value_traits::exponent_bias)
 				last_exponent = 0;
-				continue;
-			}
+
 			return f(val.fp);
 		}
 	}
@@ -70,6 +97,122 @@ struct float_generator_e {
 	std::uniform_int_distribution<mantissa_type> dist;
 	uint32_t last_exponent = 0;
 };
+
+template <typename T>
+struct float_generator_z {
+	typedef fp_value_traits<T> value_traits;
+	typedef typename value_traits::mantissa_type mantissa_type;
+	constexpr static auto mantissa_bits = value_traits::mantissa_bits;
+	constexpr static auto exponent_bits = value_traits::exponent_bits;
+
+	template <typename Func>
+	auto operator()(Func &&f)
+	{
+		union {
+			T fp;
+			mantissa_type m;
+		} val;
+		for (
+			uint32_t exp(0);
+			exp <= 2 * value_traits::exponent_bias;
+			++exp
+		) {
+			val.m = 0;
+			val.m |= mantissa_type(exp) << mantissa_bits;
+			f(val.fp);
+		}
+	}
+
+	std::random_device dev;
+	std::uniform_int_distribution<mantissa_type> dist;
+};
+
+#if !defined(_GLIBCXX_USE_FLOAT128)
+
+template <>
+struct float_generator_r<float128> {
+	typedef fp_value_traits<float128> value_traits;
+	typedef typename value_traits::mantissa_type mantissa_type;
+
+	template <typename Func>
+	auto operator()(Func &&f)
+	{
+		float128 val;
+		while (true) {
+			val.low = dist(dev);
+			val.high = dist(dev);
+			if (std::isnormal(val))
+				return f(val);
+		}
+	}
+
+	std::random_device dev;
+	std::uniform_int_distribution<uint64_t> dist;
+};
+
+template <>
+struct float_generator_e<float128> {
+	typedef fp_value_traits<T> value_traits;
+	typedef typename value_traits::mantissa_type mantissa_type;
+	constexpr static auto mantissa_bits = value_traits::mantissa_bits;
+	constexpr static auto exponent_bits = value_traits::exponent_bits;
+
+	template <typename Func>
+	auto operator()(Func &&f)
+	{
+		float128 val;
+		while (true) {
+			val.low= dist(dev);
+			val.high = dist(dev);
+			val.high &= (uint64_t(1) << (
+				mantissa_bits - uint64_t
+			)) - 1;
+			val.high |= uint64_t(last_exponent) << (
+				mantissa_bits - 64
+			);
+			++last_exponent;
+
+			if (last_exponent > 2 * value_traits::exponent_bias)
+				last_exponent = 0;
+
+			return f(val);
+		}
+	}
+
+	std::random_device dev;
+	std::uniform_int_distribution<mantissa_type> dist;
+	uint32_t last_exponent = 0;
+};
+
+template <>
+struct float_generator_z<float128> {
+	typedef fp_value_traits<T> value_traits;
+	typedef typename value_traits::mantissa_type mantissa_type;
+	constexpr static auto mantissa_bits = value_traits::mantissa_bits;
+	constexpr static auto exponent_bits = value_traits::exponent_bits;
+
+	template <typename Func>
+	auto operator()(Func &&f)
+	{
+		float128 val;
+		for (
+			uint32_t exp(0);
+			exp <= 2 * value_traits::exponent_bias;
+			++exp
+		) {
+			val.low = 0;
+			val.high = 0;
+			val.high |= uint64_t(exp) << (mantissa_bits - 64);
+
+			return f(val);
+		}
+	}
+
+	std::random_device dev;
+	std::uniform_int_distribution<mantissa_type> dist;
+};
+#endif
+
 #if 0
 template <size_t MaxDigits, uint32_t MaxNegExponent, uint32_t MaxPosExponent>
 struct dec_float_generator {
@@ -282,65 +425,6 @@ struct hex_float_generator {
 	int32_t max_exponent_div;
 };
 
-#if !defined(_GLIBCXX_USE_INT128)
-
-template <>
-struct float_generator_r<128> {
-	typedef yesod::float_t<128> wrapper_type;
-	typedef uint64_t gen_type;
-	typedef typename wrapper_type::machine_type value_type;
-
-	template <typename Func>
-	auto operator()(Func &&f)
-	{
-		
-		while (true) {
-			auto wl(dist(dev));
-			auto wh(dist(dev));
-			wrapper_type w(uint128_t(wl, wh));
-			if (!w.is_special())
-				return f(w.get());
-		}
-	}
-
-	std::random_device dev;
-	std::uniform_int_distribution<gen_type> dist;
-};
-
-template <>
-struct float_generator_e<128> {
-	typedef yesod::float_t<128> wrapper_type;
-	typedef uint64_t gen_type;
-	typedef typename wrapper_type::machine_type value_type;
-	constexpr static uint32_t mantissa_bits
-	= wrapper_type::traits_type::mantissa_bits;
-	constexpr static uint32_t exponent_bits
-	= wrapper_type::traits_type::exponent_bits;
-
-	template <typename Func>
-	auto operator()(Func &&f)
-	{
-		while (true) {
-			auto xl(dist(dev));
-			auto xh(dist(dev));
-			auto x(wrapper_type(uint128_t(xl, xh)).get_mantissa());
-			x |= gen_type(last_exponent) << (mantissa_bits - 1);
-			++last_exponent;
-			wrapper_type w(x);
-			if (w.is_special()) {
-				last_exponent = 0;
-				continue;
-			}
-			return f(w.get());
-		}
-	}
-
-	std::random_device dev;
-	std::uniform_int_distribution<gen_type> dist;
-	uint32_t last_exponent = 0;
-};
-
-#endif
 #endif
 }}}}
 #endif
