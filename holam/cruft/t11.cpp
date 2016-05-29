@@ -38,10 +38,10 @@ int main(int argc, char **argv)
 	double v(2.2250738585072014e-308);
 	verify(v);
 #else
-	ht::float_generator_r<float> gen;
-	
+	ht::float_generator_r<double> gen;
+
 	for (auto c(0); c < 100000; ++c)
-		gen(verify<float>);
+		gen(verify<double>);
 
 	printf("max len %zd\n", max_len);
 #endif

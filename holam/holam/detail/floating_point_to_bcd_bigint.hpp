@@ -37,19 +37,11 @@ struct floating_point_to_bcd_bigint {
 			disc = 0;
 
 		disc = (disc << 1) | (val.is_normal_pow2() ? 1 : 0);
-		std::size_t limb_cnt;
-		limb_type *limbs;
 		switch (disc) {
 		case 0: {
-			limb_cnt = limb_count_estimate(val.exp + 1);
-			limbs = reinterpret_cast<limb_type *>(
-				__builtin_alloca(
-					3 * limb_cnt * sizeof(limb_type)
-				)
-			);
-			__builtin_memset(
-				limbs, 0, 3 * limb_cnt * sizeof(limb_type)
-			);
+			auto limb_cnt(limb_count_estimate(val.exp + 1));
+			limb_type limbs[3 * limb_cnt];
+			__builtin_memset(limbs, 0, sizeof(limbs));
 			setup_high<false>(limbs, limb_cnt, exp10, val);
 			produce_digits_high<false>(
 				limbs, limb_cnt, val, exp10, m_out, m_len,
@@ -58,15 +50,9 @@ struct floating_point_to_bcd_bigint {
 			break;
 		}
 		case 1: {
-			limb_cnt = limb_count_estimate(val.exp + 2);
-			limbs = reinterpret_cast<limb_type *>(
-				__builtin_alloca(
-					3 * limb_cnt * sizeof(limb_type)
-				)
-			);
-			__builtin_memset(
-				limbs, 0, 3 * limb_cnt * sizeof(limb_type)
-			);
+			auto limb_cnt(limb_count_estimate(val.exp + 2));
+			limb_type limbs[3 * limb_cnt];
+			__builtin_memset(limbs, 0, sizeof(limbs));
 			setup_high<true>(limbs, limb_cnt, exp10, val);
 			produce_digits_high<true>(
 				limbs, limb_cnt, val, exp10, m_out, m_len,
@@ -75,15 +61,9 @@ struct floating_point_to_bcd_bigint {
 			break;
 		}
 		case 2: {
-			limb_cnt = limb_count_estimate(1 - val.exp);
-			limbs = reinterpret_cast<limb_type *>(
-				__builtin_alloca(
-					3 * limb_cnt * sizeof(limb_type)
-				)
-			);
-			__builtin_memset(
-				limbs, 0, 3 * limb_cnt * sizeof(limb_type)
-			);
+			auto limb_cnt(limb_count_estimate(1 - val.exp));
+			limb_type limbs[3 * limb_cnt];
+			__builtin_memset(limbs, 0, sizeof(limbs));
 
 			setup_mid<false>(limbs, limb_cnt, exp10, val);
 			produce_digits_high<false>(
@@ -93,15 +73,9 @@ struct floating_point_to_bcd_bigint {
 			break;
 		}
 		case 3: {
-			limb_cnt = limb_count_estimate(2 - val.exp);
-			limbs = reinterpret_cast<limb_type *>(
-				__builtin_alloca(
-					3 * limb_cnt * sizeof(limb_type)
-				)
-			);
-			__builtin_memset(
-				limbs, 0, 3 * limb_cnt * sizeof(limb_type)
-			);
+			auto limb_cnt(limb_count_estimate(2 - val.exp));
+			limb_type limbs[3 * limb_cnt];
+			__builtin_memset(limbs, 0, sizeof(limbs));
 
 			setup_mid<true>(limbs, limb_cnt, exp10, val);
 			produce_digits_high<true>(
@@ -111,16 +85,10 @@ struct floating_point_to_bcd_bigint {
 			break;
 		}
 		case 4: {
-			limb_cnt = limb_count_estimate(1 - val.exp);
+			auto limb_cnt(limb_count_estimate(1 - val.exp));
 			int32_t denom_shift(1 - val.exp);
-			limbs = reinterpret_cast<limb_type *>(
-				__builtin_alloca(
-					2 * limb_cnt * sizeof(limb_type)
-				)
-			);
-			__builtin_memset(
-				limbs, 0, 2 * limb_cnt * sizeof(limb_type)
-			);
+			limb_type limbs[2 * limb_cnt];
+			__builtin_memset(limbs, 0, sizeof(limbs));
 
 			setup_low<false>(limbs, limb_cnt, exp10, val);
 			produce_digits_low<false>(
@@ -130,16 +98,11 @@ struct floating_point_to_bcd_bigint {
 			break;
 		}
 		case 5: {
-			limb_cnt = limb_count_estimate(2 - val.exp);
+			auto limb_cnt(limb_count_estimate(2 - val.exp));
 			int32_t denom_shift(2 - val.exp);
-			limbs = reinterpret_cast<limb_type *>(
-				__builtin_alloca(
-					2 * limb_cnt * sizeof(limb_type)
-				)
-			);
-			__builtin_memset(
-				limbs, 0, 2 * limb_cnt * sizeof(limb_type)
-			);
+			limb_type limbs[2 * limb_cnt];
+			__builtin_memset(limbs, 0, sizeof(limbs));
+
 			setup_low<true>(limbs, limb_cnt, exp10, val);
 			produce_digits_low<true>(
 				limbs, limb_cnt, val, exp10, denom_shift,
