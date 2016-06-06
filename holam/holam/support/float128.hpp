@@ -9,6 +9,9 @@
 #if !defined(HPP_1F38C1F9B81C12198C60CFCF07B7706D)
 #define HPP_1F38C1F9B81C12198C60CFCF07B7706D
 
+#include <limits>
+#include <holam/support/int128.hpp>
+
 #if defined(_GLIBCXX_USE_FLOAT128)
 #include <quadmath.h>
 #endif
@@ -27,11 +30,20 @@ struct [[gnu::packed]] soft_float128_t {
 	soft_float128_t() = default;
 
 #if defined(_GLIBCXX_USE_FLOAT128)
-	soft_uint128_t(float128 v)
+	constexpr soft_float128_t(float128 v)
+	: low(*reinterpret_cast<uint64_t *>(&v)),
+	  high(*(reinterpret_cast<uint64_t *>(&v) + 1))
+	{}
+
+	constexpr operator float128() const
 	{
-		__builtin_memcpy(&low, &v, sizeof(float128));
+		return *reinterpret_cast<float128 const *>(&low);
 	}
 #endif
+
+	constexpr soft_float128_t(uint64_t low_, uint64_t high_)
+	: low(low_), high(high_)
+	{}
 
 	uint64_t low;
 	uint64_t high;
@@ -43,11 +55,20 @@ struct [[gnu::packed]] soft_float128_t {
 	soft_float128_t() = default;
 
 #if defined(_GLIBCXX_USE_FLOAT128)
-	soft_uint128_t(float128 v)
+	constexpr soft_float128_t(float128 v)
+	: high(*reinterpret_cast<uint64_t *>(&v)),
+	  low(*(reinterpret_cast<uint64_t *>(&v) + 1))
+	{}
+
+	constexpr operator float128() const
 	{
-		__builtin_memcpy(&low, &v, sizeof(float128));
+		return *reinterpret_cast<float128 const *>(&high);
 	}
 #endif
+
+	constexpr soft_float128_t(uint64_t low_, uint64_t high_)
+	: high(high_), low(low_)
+	{}
 
 	uint64_t high;
 	uint64_t low;
@@ -57,15 +78,13 @@ struct [[gnu::packed]] soft_float128_t {
 
 namespace holam { namespace detail {
 
-constexpr static soft_float128_t float128_qnan = {
-	.low = 0,
-	.high = 0x7fff800000000000ull
-}
+constexpr static soft_float128_t float128_qnan = soft_float128_t(
+	0, 0x7fff800000000000ull
+);
 
-constexpr static soft_float128_t float128_snan = {
-	.low = 0,
-	.high = 0x7fff400000000000ull
-}
+constexpr static soft_float128_t float128_snan = soft_float128_t(
+	0, 0x7fff400000000000ull
+);
 
 }}
 }
@@ -140,15 +159,15 @@ struct numeric_limits<ucpf::float128> {
 
 	constexpr static ucpf::float128 quiet_NaN() noexcept
 	{
-		return ucpf::holam::detail::float128_qnan.v;
+		return ucpf::holam::detail::float128_qnan;
 	}
 
-	constexpr static ucpf::yesod::float128 signaling_NaN() noexcept
+	constexpr static ucpf::float128 signaling_NaN() noexcept
 	{
-		return ucpf::holam::detail::float128_snan.v;
+		return ucpf::holam::detail::float128_snan;
 	}
 
-	constexpr static ucpf::yesod::float128 denorm_min() noexcept
+	constexpr static ucpf::float128 denorm_min() noexcept
 	{
 		return FLT128_DENORM_MIN;
 	}

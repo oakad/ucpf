@@ -1,4 +1,5 @@
 #include <holam/detail/floating_point_to_bcd_bigint.hpp>
+#include <holam/detail/floating_point_to_bcd_grisu.hpp>
 #include <test/detail/float_generator.hpp>
 #include <cstdio>
 
@@ -6,6 +7,8 @@ namespace h = ucpf::holam::detail;
 namespace ht = ucpf::holam::detail::test;
 
 std::size_t max_len = 5;
+std::size_t grisu_true = 0;
+std::size_t grisu_false = 0;
 template <typename T>
 void verify(T v)
 {
@@ -15,9 +18,15 @@ void verify(T v)
 	int32_t exp10;
 	h::fp_value_t<T> vv(v);
 
-	h::floating_point_to_bcd_bigint<T>::apply(
+	if (h::floating_point_to_bcd_grisu<T>::apply(
 		bcd_val, val_len, exp10, vv
-	);
+	))
+		++grisu_true;
+	else {
+		++grisu_false;
+		return;
+	}
+
 	if (val_len > max_len)
 		max_len = val_len;
 
@@ -35,14 +44,16 @@ void verify(T v)
 int main(int argc, char **argv)
 {
 #if 0
-	double v(2.2250738585072014e-308);
+	double v(4.99239550226548449897e+281);
 	verify(v);
 #else
-	ht::float_generator_r<double> gen;
+	ht::float_generator_r<float> gen;
 
-	for (auto c(0); c < 100000; ++c)
-		gen(verify<double>);
-
-	printf("max len %zd\n", max_len);
+	for (auto c(0); c < 1000000; ++c)
+		gen(verify<float>);
 #endif
+	printf(
+		"max len %zd, true %zd, false %zd, %d\n",
+		max_len, grisu_true, grisu_false, h::floating_point_to_bcd_grisu<float>::max_exp10
+	);
 }

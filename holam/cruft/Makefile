@@ -7,3 +7,6 @@ t10 : t10.cpp
 
 t11 : t11.cpp
 	g++ -std=gnu++14 -g -O3 -o $@ $^ -I ..
+
+t12 : t12.cpp
+	g++ -std=gnu++14 -g -O3 -o $@ $^ -I .. -I ../../mina -I ../../yesod

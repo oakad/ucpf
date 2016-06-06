@@ -9,6 +9,7 @@
 #if !defined(HPP_B25E3954ACC63CB019CE8FA6DE2DAAA6)
 #define HPP_B25E3954ACC63CB019CE8FA6DE2DAAA6
 
+#include <holam/support/float128.hpp>
 #include <holam/support/bitops.hpp>
 #include <cstdio>
 
@@ -27,6 +28,7 @@ struct fp_value_traits<float> {
 	constexpr static std::size_t exponent_bits = 8;
 	constexpr static std::size_t bcd_storage_size = 5;
 	constexpr static int32_t exponent_bias = 127;
+	constexpr static int minimal_target_exp = -28;
 };
 
 template <>
@@ -36,6 +38,17 @@ struct fp_value_traits<double> {
 	constexpr static std::size_t exponent_bits = 11;
 	constexpr static std::size_t bcd_storage_size = 9;
 	constexpr static int32_t exponent_bias = 1023;
+	constexpr static int minimal_target_exp = -60;
+};
+
+template <>
+struct fp_value_traits<ucpf::float128> {
+	typedef ucpf::uint128_t mantissa_type;
+	constexpr static std::size_t mantissa_bits = 112;
+	constexpr static std::size_t exponent_bits = 15;
+	constexpr static std::size_t bcd_storage_size = 17;
+	constexpr static int32_t exponent_bias = 16383;
+	constexpr static int minimal_target_exp = -124;
 };
 
 constexpr uint64_t small_power_5[] = {
@@ -111,6 +124,10 @@ struct fp_value_t {
 	typedef fp_value_traits<T> traits_type;
 	typedef typename traits_type::mantissa_type mantissa_type;
 
+	fp_value_t()
+	: m(0), exp(0), flags(0)
+	{}
+
 	fp_value_t(T const &val)
 	: flags(0)
 	{
@@ -142,6 +159,10 @@ struct fp_value_t {
 		      - traits_type::mantissa_bits;
 	}
 
+	fp_value_t(mantissa_type m_, int32_t exp_)
+	: m(m_), exp(exp_), flags(0)
+	{}
+
 	bool is_normal_pow2() const
 	{
 		return flags & NORMAL_POW2 ? true : false;
@@ -150,6 +171,39 @@ struct fp_value_t {
 	bool is_special() const
 	{
 		return flags & (NAN | INF) ? true : false;
+	}
+
+	fp_value_t normal_form() const
+	{
+		fp_value_t rv(*this);
+		auto shift(support::clz(rv.m));
+		rv.m <<= shift;
+		rv.exp -= shift;
+		return rv;
+	}
+
+	void boundaries(fp_value_t &low, fp_value_t &high) const
+	{
+		high = *this;
+		high.m <<= 1;
+		++high.m;
+		--high.exp;
+		auto shift(support::clz(high.m));
+		high.m <<= shift;
+		high.exp -= shift;
+
+		low = *this;
+		low.m <<= 1;
+		--low.m;
+		--low.exp;
+
+		if ((flags & NORMAL_POW2) && exp) {
+			low.m = (m << 2) - 1;
+			low.exp = exp - 2;
+		}
+
+		low.m <<= low.exp - high.exp;
+		low.exp = high.exp;
 	}
 
 	enum FLAG : uint32_t {
@@ -163,7 +217,6 @@ struct fp_value_t {
 	int32_t exp;
 	uint32_t flags;
 };
-
 }}}
 
 #pragma pop_macro("NAN")

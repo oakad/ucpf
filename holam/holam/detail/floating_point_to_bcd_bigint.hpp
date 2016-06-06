@@ -220,15 +220,9 @@ private:
 		auto denom_msb(find_msb(denom, limb_cnt));
 		m_len = 0;
 		while (true) {
-			auto num_msb(find_msb(num, limb_cnt));
-			limb_type digit(0);
-			if (num_msb >= denom_msb) {
-				digit = extract_limb(num, num_msb)
-					/ extract_limb(denom, num_msb);
-				digit = subtract_mul(
-					num, denom, limb_cnt, digit
-				);
-			}
+			limb_type digit(divide_near(
+				num, denom, limb_cnt, denom_msb
+			));
 
 			int bd_test(0);
 			if (Pow2) {
@@ -431,7 +425,6 @@ private:
 		limb_type *val, std::size_t limb_cnt,
 		typename value_traits::mantissa_type m
 	) {
-		__builtin_memset(val, 0, limb_cnt * sizeof(limb_type));
 		assign_mantissa_t<
 			void,
 			(value_traits::mantissa_bits > calc_traits::limb_bits)
@@ -482,7 +475,6 @@ private:
 	static void assign_pow2(
 		limb_type *val, std::size_t limb_cnt, int32_t exp2
 	) {
-		__builtin_memset(val, 0, limb_cnt * sizeof(limb_type));
 		val[
 			exp2 / calc_traits::limb_bits
 		] |= limb_type(1) << (exp2 % calc_traits::limb_bits);
@@ -492,7 +484,6 @@ private:
 		limb_type *val, std::size_t limb_cnt, int32_t exp5
 	)
 	{
-		__builtin_memset(val, 0, limb_cnt * sizeof(limb_type));
 		multiply_pow5(
 			val, limb_cnt,
 			exp5 - calc_traits::assign_pow5(val, exp5)
@@ -690,6 +681,22 @@ private:
 		return rv;
 	}
 
+	static limb_type divide_near(
+		limb_type *l, limb_type *r, std::size_t limb_cnt,
+		std::size_t r_msb_pos
+	) {
+		auto l_msb_pos(find_msb(l, limb_cnt));
+		limb_type digit(0);
+		if (l_msb_pos >= r_msb_pos) {
+			digit = extract_limb(l, l_msb_pos)
+				/ extract_limb(r, l_msb_pos);
+			digit = subtract_mul(
+				l, r, limb_cnt, digit
+			);
+		}
+		return digit;
+	}
+
 	static limb_type subtract_mul(
 		limb_type *l, limb_type *r, std::size_t limb_cnt,
 		limb_type r_mul
@@ -742,7 +749,8 @@ private:
 	static void dump(
 		char const *label, limb_type *val, std::size_t limb_cnt
 	) {
-		constexpr char const *format = calc_traits::limb_bits > 4 ? "%016lx'" : "%08x'";
+		constexpr char const *format
+		= calc_traits::limb_bits > 4 ? "%016lx'" : "%08x'";
 		printf("%s: ", label);
 		auto pos(limb_cnt);
 		do {
