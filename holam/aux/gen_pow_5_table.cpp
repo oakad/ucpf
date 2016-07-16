@@ -30,20 +30,17 @@ int main(int argc, char **argv)
 {
 	std::vector<int> exp10_values;
 
-	for (int c(-5022); c < -318; c += 24)
+	for (int c(-4966); c < -334; c += 24)
 		exp10_values.push_back(c);
-	for (int c(-318); c < -40; c += 14)
+	for (int c(-334); c < -46; c += 12)
 		exp10_values.push_back(c);
-	for (int c(-40); c < 40; c += 4)
+	for (int c(-46); c < 46; c += 4)
 		exp10_values.push_back(c);
-	for (int c(40); c < 318; c += 14)
+	for (int c(46); c < 334; c += 12)
 		exp10_values.push_back(c);
-	for (int c(318); c <= 5022; c += 24)
+	for (int c(334); c <= 4966; c += 24)
 		exp10_values.push_back(c);
 
-	//int min(-348 - 672), max(340 + 672), step(8);
-	//int min(-10), max(10), step(1);
-	//int min(-344 - 4660), max(340 + 4676), step(8);
 	mpfr_t x;
 	mpfr_t y;
 	mpz_t z;
@@ -52,6 +49,7 @@ int main(int argc, char **argv)
 	mpz_init(z);
 	char c_high[17], c_low[17];
 
+	int pos(0);
 	for (int c: exp10_values) {
 		mpfr_set_ui(x, 5, MPFR_RNDN);
 		mpfr_pow_si(y, x, c, MPFR_RNDN);
@@ -74,9 +72,12 @@ int main(int argc, char **argv)
 		if (mpfr_cmp(x, y) > 0)
 			++exp_2;
 
-		//exp_2 -= 64;
-		printf("{0x%sull, 0x%sull, %ld, %d},\n", c_high, c_low, exp_2, c);
 		free(s);
+
+		printf(
+			"\t\t{0x%sull, 0x%sull, %ld, %d}, //%d\n",
+			c_high, c_low, exp_2, c, pos++
+		);
 	}
 
 	mpfr_clear(x);

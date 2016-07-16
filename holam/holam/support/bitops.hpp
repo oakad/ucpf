@@ -25,13 +25,15 @@ constexpr int clz(uint64_t v)
 
 constexpr int clz(uint128_t v)
 {
-	return (
-		v >> 64u
-	) ? __builtin_clzll(
-		static_cast<uint64_t>(v >> 64u)
-	) : (
-		64 + __builtin_clzll(static_cast<uint64_t>(v))
-	);
+#if defined(_GLIBCXX_USE_INT128)
+	return (v >> 64u)
+		? __builtin_clzll(static_cast<uint64_t>(v >> 64u))
+		: __builtin_clzll(static_cast<uint64_t>(v)) + 64;
+#else
+	return v.high
+		? __builtin_clzll(v.high)
+		: 64 + __builtin_clzll(v.low);
+#endif
 }
 
 }}}

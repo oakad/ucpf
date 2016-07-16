@@ -31,8 +31,12 @@ struct [[gnu::packed]] soft_int128_t {
 struct [[gnu::packed]] soft_uint128_t {
 	soft_uint128_t() = default;
 
-	constexpr soft_uint128_t(uint64_t v)
-	: low(v), high(0)
+	constexpr soft_uint128_t(uint64_t low_)
+	: low(low_), high(0)
+	{}
+
+	constexpr soft_uint128_t(uint64_t high_, uint64_t low_)
+	: low(low_), high(high_)
 	{}
 
 #if defined(_GLIBCXX_USE_INT128)
@@ -42,11 +46,35 @@ struct [[gnu::packed]] soft_uint128_t {
 
 	constexpr operator uint128_t() const
 	{
-		return *reinterpret_cast<uint128_t const *>(&low);
+		return *reinterpret_cast<uint128_t const *>(this);
 	}
 #endif
 
 	uint64_t round_half() const;
+
+	explicit operator bool() const;
+	explicit operator int32_t() const;
+	explicit operator uint32_t() const;
+	soft_uint128_t &operator++();
+	soft_uint128_t &operator--();
+	soft_uint128_t operator+(soft_uint128_t v) const;
+	soft_uint128_t &operator+=(soft_uint128_t v);
+	soft_uint128_t operator-(uint64_t v) const;
+	soft_uint128_t operator-(soft_uint128_t v) const;
+	soft_uint128_t operator*(soft_uint128_t v) const;
+	soft_uint128_t &operator*=(uint64_t v);
+	soft_uint128_t operator&(uint64_t v) const;
+	soft_uint128_t operator&(soft_uint128_t v) const;
+	soft_uint128_t &operator&=(soft_uint128_t v);
+	soft_uint128_t &operator|=(uint64_t v);
+	soft_uint128_t operator>>(std::size_t pos) const;
+	soft_uint128_t &operator>>=(std::size_t pos);
+	soft_uint128_t operator<<(std::size_t pos) const;
+	soft_uint128_t &operator<<=(std::size_t pos);
+	bool operator<(soft_uint128_t v) const;
+	bool operator<=(soft_uint128_t v) const;
+	bool operator>(soft_uint128_t v) const;
+	bool operator>=(soft_uint128_t v) const;
 
 	uint64_t low;
 	uint64_t high;
@@ -69,8 +97,12 @@ struct [[gnu::packed]] soft_int128_t {
 struct [[gnu::packed]] soft_uint128_t {
 	soft_uint128_t() = default;
 
-	constexpr soft_uint128_t(uint64_t v)
-	: high(0), low(v)
+	constexpr soft_uint128_t(uint64_t low_)
+	: high(0), low(low_)
+	{}
+
+	constexpr soft_uint128_t(uint64_t high_, uint64_t low_)
+	: high(high_), low(low_)
 	{}
 
 #if defined(_GLIBCXX_USE_INT128)
@@ -85,6 +117,30 @@ struct [[gnu::packed]] soft_uint128_t {
 #endif
 
 	uint64_t round_half() const;
+
+	explicit operator bool() const;
+	explicit operator int32_t() const;
+	explicit operator uint32_t() const;
+	soft_uint128_t &operator++();
+	soft_uint128_t &operator--();
+	soft_uint128_t operator+(soft_uint128_t v) const;
+	soft_uint128_t &operator+=(soft_uint128_t v);
+	soft_uint128_t operator-(uint64_t v) const;
+	soft_uint128_t operator-(soft_uint128_t v) const;
+	soft_uint128_t operator*(soft_uint128_t v) const;
+	soft_uint128_t &operator*=(uint64_t v);
+	soft_uint128_t operator&(uint64_t v) const;
+	soft_uint128_t operator&(soft_uint128_t v) const;
+	soft_uint128_t &operator&=(soft_uint128_t v);
+	soft_uint128_t &operator|=(uint64_t v);
+	soft_uint128_t operator>>(std::size_t pos) const;
+	soft_uint128_t &operator>>=(std::size_t pos);
+	soft_uint128_t operator<<(std::size_t pos) const;
+	soft_uint128_t &operator<<=(std::size_t pos);
+	bool operator<(soft_uint128_t v) const;
+	bool operator<=(soft_uint128_t v) const;
+	bool operator>(soft_uint128_t v) const;
+	bool operator>=(soft_uint128_t v) const;
 
 	uint64_t high;
 	uint64_t low;
@@ -102,6 +158,192 @@ struct [[gnu::packed]] soft_uint256_t {
 uint64_t soft_uint128_t::round_half() const
 {
 	return high + (low >> 63);
+}
+
+soft_uint128_t::operator bool() const
+{
+	return high || low;
+}
+
+soft_uint128_t::operator int32_t() const
+{
+	return static_cast<int32_t>(low);
+}
+
+soft_uint128_t::operator uint32_t() const
+{
+	return static_cast<uint32_t>(low);
+}
+
+soft_uint128_t &soft_uint128_t::operator++()
+{
+	if (__builtin_add_overflow(low, 1, &low))
+		++high;
+}
+
+soft_uint128_t &soft_uint128_t::operator--()
+{
+	if (__builtin_sub_overflow(low, 1, &low))
+		--high;
+}
+
+soft_uint128_t soft_uint128_t::operator+(soft_uint128_t v) const
+{
+	soft_uint128_t rv;
+	if (__builtin_add_overflow(low, v.low, &rv.low))
+		rv.high = high + v.high + 1;
+	else
+		rv.high = high + v.high;
+
+	return rv;
+}
+
+soft_uint128_t soft_uint128_t::operator-(uint64_t v) const
+{
+	soft_uint128_t rv;
+	if (__builtin_sub_overflow(low, v, &rv.low))
+		rv.high = high - 1;
+	else
+		rv.high = high;
+
+	return rv;
+}
+
+soft_uint128_t soft_uint128_t::operator-(soft_uint128_t v) const
+{
+	soft_uint128_t rv;
+	if (__builtin_sub_overflow(low, v.low, &rv.low))
+		rv.high = high - v.high - 1;
+	else
+		rv.high = high - v.high;
+
+	return rv;
+}
+
+soft_uint128_t &soft_uint128_t::operator+=(soft_uint128_t v)
+{
+	if (__builtin_add_overflow(low, v.low, &low))
+		++high;
+
+	high += v.high;
+	return *this;
+}
+
+soft_uint128_t soft_uint128_t::operator&(uint64_t v) const
+{
+	return soft_uint128_t(0, low & v);
+}
+
+soft_uint128_t soft_uint128_t::operator&(soft_uint128_t v) const
+{
+	return soft_uint128_t(high & v.high, low & v.low);
+}
+
+soft_uint128_t &soft_uint128_t::operator&=(soft_uint128_t v)
+{
+	high &= v.high;
+	low &= v.low;
+	return *this;
+}
+
+soft_uint128_t &soft_uint128_t::operator|=(uint64_t v)
+{
+	low |= v;
+	return *this;
+}
+
+soft_uint128_t soft_uint128_t::operator>>(std::size_t pos) const
+ {
+	if (pos >= 64)
+		return soft_uint128_t(high >> (pos - 64));
+	else
+		return soft_uint128_t(
+			high >> pos,
+			(high << (64 - pos)) | (low >> pos)
+		);
+}
+
+soft_uint128_t &soft_uint128_t::operator>>=(std::size_t pos)
+{
+	if (pos >= 64) {
+		low = high >> (pos - 64);
+		high = 0;
+	} else {
+		low >>= pos;
+		low |= high << (64 - pos);
+		high >>= pos;
+	}
+
+	return *this;
+}
+
+soft_uint128_t soft_uint128_t::operator<<(std::size_t pos) const
+ {
+	if (pos >= 64)
+		return soft_uint128_t(low << (pos - 64), 0);
+	else
+		return soft_uint128_t(
+			high << pos | (low >> (64 - pos)),
+			low << pos
+		);
+}
+
+soft_uint128_t &soft_uint128_t::operator<<=(std::size_t pos)
+{
+	if (pos >= 64) {
+		high = low << (pos - 64);
+		low = 0;
+	} else {
+		high <<= pos;
+		high |= low >> (64 - pos);
+		low <<= pos;
+	}
+
+	return *this;
+}
+
+bool soft_uint128_t::operator<(soft_uint128_t v) const
+{
+	if (high > v.high)
+		return false;
+
+	if (high < v.high)
+		return true;
+
+	return low < v.low;
+}
+
+bool soft_uint128_t::operator<=(soft_uint128_t v) const
+{
+	if (high > v.high)
+		return false;
+
+	if (high < v.high)
+		return true;
+
+	return low <= v.low;
+}
+
+bool soft_uint128_t::operator>(soft_uint128_t v) const
+{
+	if (high < v.high)
+		return false;
+
+	if (high > v.high)
+		return true;
+
+	return low > v.low;
+}
+
+bool soft_uint128_t::operator>=(soft_uint128_t v) const
+{
+	if (high < v.high)
+		return false;
+
+	if (high > v.high)
+		return true;
+
+	return low >= v.low;
 }
 
 soft_uint128_t soft_uint256_t::round_half() const
@@ -167,6 +409,17 @@ static inline soft_uint256_t multiply(uint128_t l, uint128_t r)
 }
 
 }}
+
+soft_uint128_t &soft_uint128_t::operator*=(uint64_t v)
+{
+	auto v0(holam::support::multiply(low, v));
+	auto v1(holam::support::multiply(high, v));
+	low = v0;
+	high = v0 >> 64;
+	high += v1;
+	return *this;
+}
+
 #else
 
 typedef soft_int128_t int128_t;
@@ -223,7 +476,23 @@ static inline soft_uint256_t multiply(uint128_t l, uint128_t r)
 	) ? 1 : 0);
 	return rv;
 }
+
 }}
+
+soft_uint128_t &soft_uint128_t::operator*=(uint64_t v)
+{
+	auto v0(holam::support::multiply(low, v));
+	auto v1(holam::support::multiply(high, v));
+	low = v0.low;
+	high = v0.high + v1.low;
+	return *this;
+}
 #endif
+
+soft_uint128_t soft_uint128_t::operator*(soft_uint128_t v) const
+{
+	return holam::support::multiply(*this, v).low;
+}
+
 }
 #endif

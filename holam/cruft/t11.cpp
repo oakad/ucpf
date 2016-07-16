@@ -37,23 +37,28 @@ void verify(T v)
 	sprintf(c_val + val_len, "%d", exp10);
 	T other(ht::read_float<T>::apply(c_val));
 	if (other != v) {
-		printf("in %0.20e out %s eq %d\n", v, c_val, other == v);
+		std::cout << "in " << v << " out " << c_val << " eq " << (other == v) << '\n';
+		//printf("in %0.20e out %s eq %d\n", v, c_val, other == v);
 	}
 }
 
 int main(int argc, char **argv)
 {
-#if 0
-	double v(4.99239550226548449897e+281);
-	verify(v);
+#if 1
+	//float v0(4.99239550226548449897e+28);
+	//verify(v0);
+	//double v1(4.99239550226548449897e-100);
+	//verify(v1);
+	ucpf::float128 v2(1.61803314321221556254337822347984650764e-4931Q);
+	verify(v2);
 #else
 	ht::float_generator_r<float> gen;
 
-	for (auto c(0); c < 1000000; ++c)
+	for (auto c(0); c < 100/*00000*/; ++c)
 		gen(verify<float>);
 #endif
 	printf(
-		"max len %zd, true %zd, false %zd, %d\n",
-		max_len, grisu_true, grisu_false, h::floating_point_to_bcd_grisu<float>::max_exp10
+		"max len %zd, true %zd, false %zd\n",
+		max_len, grisu_true, grisu_false
 	);
 }

@@ -16,7 +16,9 @@
 #define HPP_F17495057C4D6E59FD92F2FA392D573D
 
 #include <holam/detail/floating_point_traits.hpp>
-#include <holam/detail/binary_pow_10.hpp>
+#include <holam/detail/binary_exp10.hpp>
+
+#include <mina/detail/binary_pow_10.hpp>
 
 namespace ucpf { namespace holam { namespace detail {
 
@@ -39,11 +41,17 @@ struct floating_point_to_bcd_grisu {
 		));
 
 		auto exp_bound(
-			binary_pow_10<>::lookup_pow_10<mantissa_type>(
-				exp2
-			)
+			binary_exp10<>::lookup_exp10<mantissa_type>(exp2)
 		);
-
+		auto e1(
+			mina::detail::binary_pow_10<>::lookup_pow_10<mantissa_type>(exp2)
+		);
+/*
+		printf("exp2: %d, bound: %x, exp10: %d, exp2: %d\n",
+		       exp2, exp_bound.m, exp_bound.exp10, exp_bound.exp2);
+		printf("bound1: %x, exp10: %d, exp2: %d\n",
+		       e1.m, e1.pow_10, e1.pow_2);
+*/
 		{
 			value_type scale(exp_bound.m, exp_bound.exp2);
 			scaled_val = multiply_near(scaled_val, scale);
@@ -67,19 +75,22 @@ struct floating_point_to_bcd_grisu {
 			((unity.exp + sizeof(mantissa_type) * 8 + 1) * 1233)
 			>> 12
 		);
-
+/*
 		auto exp10_bound_low(small_power_10(exp10));
 		if (integral < exp10_bound_low) {
 			--exp10;
 			exp10_bound_low = small_power_10(exp10);
 		}
-
+*/
 		auto exp10_bound_high(exp10 + 1);
+		if (integral < small_power_10(exp10))
+			--exp10;
 
 		mantissa_type scale(1);
 		m_len = 0;
 		while (exp10_bound_high > 0) {
-			uint32_t digit(divide_near(integral, exp10_bound_low));
+			//uint32_t digit(divide_near(integral, exp10_bound_low));
+			uint32_t digit(divide_near_pow10(integral, exp10));
 			--exp10_bound_high;
 			auto remainder(
 				(integral << (-unity.exp)) + fractional
@@ -90,7 +101,8 @@ struct floating_point_to_bcd_grisu {
 					digit,
 					bound_high.m - scaled_val.m,
 					unsafe.m, remainder,
-					exp10_bound_low << (-unity.exp), scale
+					small_power_10(exp10) << (-unity.exp),
+					scale
 				))
 					return false;
 				else {
@@ -113,7 +125,7 @@ struct floating_point_to_bcd_grisu {
 				    : digit;
 				++m_len;
 			}
-			exp10_bound_low /= 10;
+			--exp10;
 		}
 
 		while (true) {
@@ -205,8 +217,8 @@ private:
 		value_type const &l, value_type const &r
 	);
 
-	static uint32_t divide_near(
-		mantissa_type &num, mantissa_type const &denom
+	static uint32_t divide_near_pow10(
+		mantissa_type &num, int32_t exp10
 	);
 };
 
@@ -233,12 +245,13 @@ auto floating_point_to_bcd_grisu<float>::multiply_near(
 }
 
 template <>
-uint32_t floating_point_to_bcd_grisu<float>::divide_near(
-	mantissa_type &num, mantissa_type const &denom
+uint32_t floating_point_to_bcd_grisu<float>::divide_near_pow10(
+	mantissa_type &num, int32_t exp10
 )
 {
-	auto rv(num/denom);
-	num %= denom;
+	auto rv = num / mantissa_type(small_power_5[exp10]);
+	rv >>= exp10;
+	num -= (small_power_5[exp10] * rv) << exp10;
 	return uint32_t(rv);
 }
 
@@ -263,12 +276,13 @@ auto floating_point_to_bcd_grisu<double>::multiply_near(
 }
 
 template <>
-uint32_t floating_point_to_bcd_grisu<double>::divide_near(
-	mantissa_type &num, mantissa_type const &denom
+uint32_t floating_point_to_bcd_grisu<double>::divide_near_pow10(
+	mantissa_type &num, int32_t exp10
 )
 {
-	auto rv(num/denom);
-	num %= denom;
+	auto rv(num / small_power_5[exp10]);
+	rv >>= exp10;
+	num -= (rv * small_power_5[exp10]) << exp10;
 	return uint32_t(rv);
 }
 
@@ -296,6 +310,63 @@ auto floating_point_to_bcd_grisu<float128>::multiply_near(
 	return value_type(
 		rv.round_half(), l.exp + r.exp + 128
 	);
+}
+
+template <>
+uint32_t floating_point_to_bcd_grisu<float128>::divide_near_pow10(
+	mantissa_type &num, int32_t exp10
+)
+{
+#if defined(_GLIBCXX_USE_INT128)
+	auto rv(num / small_power_5[exp10]);
+	rv >>= exp10;
+	num -= (rv * small_power_5[exp10]) << exp10;
+	return uint32_t(rv);
+#else
+	auto denom(small_power_5[exp10]);
+	auto n_shift(support::clz(num));
+	auto rv(((num.high << n_shift) | (num.low >> (64 - n_shift))) / denom);
+	rv >>= exp10;
+	auto m(support::multiply(rv, denom));
+	auto carry(__builtin_sub_overflow(num.low, m.low, &num.low));
+	if (carry)
+		carry = __builtin_sub_overflow(num.high, 1ul, &num.high);
+
+	carry |= __builtin_sub_overflow(num.high, m.high, &num.high);
+
+	if (!carry) {
+		uint64_t d_high;
+		if (!__builtin_sub_overflow(
+			num.high, denom >> (64 - exp10), &d_high
+		)) {
+			uint64_t d_low;
+			carry = __builtin_sub_overflow(
+				num.low, denom << exp10, &d_low
+			);
+			if (carry)
+				carry = __builtin_sub_overflow(
+					d_high, 1ul, &d_high
+				);
+
+			if (!carry) {
+				++rv;
+				num.high = d_high;
+				num.low = d_low;
+			}
+		}
+	} else {
+		--rv;
+		carry = __builtin_add_overflow(
+			num.low, denom << exp10, &num.low
+		);
+		if (carry)
+			++num.high;
+
+		num.high += (denom >> (64 - exp10)) + (carry ? 1 : 0);
+	}
+
+	return uint32_t(rv);
+#endif
 }
 
 }}}

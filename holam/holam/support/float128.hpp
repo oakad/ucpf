@@ -22,6 +22,15 @@ namespace ucpf {
 
 typedef __float128 float128;
 
+namespace holam { namespace support {
+
+union float128_adapter_t {
+	__float128 f;
+	uint64_t w[2];
+};
+
+}}
+
 #endif
 
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
@@ -31,17 +40,17 @@ struct [[gnu::packed]] soft_float128_t {
 
 #if defined(_GLIBCXX_USE_FLOAT128)
 	constexpr soft_float128_t(float128 v)
-	: low(*reinterpret_cast<uint64_t *>(&v)),
-	  high(*(reinterpret_cast<uint64_t *>(&v) + 1))
+	: low(holam::support::float128_adapter_t{v}.w[0]),
+	  high(holam::support::float128_adapter_t{v}.w[1])
 	{}
 
 	constexpr operator float128() const
 	{
-		return *reinterpret_cast<float128 const *>(&low);
+		return *reinterpret_cast<float128 const *>(this);
 	}
 #endif
 
-	constexpr soft_float128_t(uint64_t low_, uint64_t high_)
+	constexpr soft_float128_t(uint64_t high_, uint64_t low_)
 	: low(low_), high(high_)
 	{}
 
@@ -56,17 +65,17 @@ struct [[gnu::packed]] soft_float128_t {
 
 #if defined(_GLIBCXX_USE_FLOAT128)
 	constexpr soft_float128_t(float128 v)
-	: high(*reinterpret_cast<uint64_t *>(&v)),
-	  low(*(reinterpret_cast<uint64_t *>(&v) + 1))
+	: high(holam::support::float128_adapter_t{v}.w[0]),
+	  low(holam::support::float128_adapter_t{v}.w[1])
 	{}
 
 	constexpr operator float128() const
 	{
-		return *reinterpret_cast<float128 const *>(&high);
+		return *reinterpret_cast<float128 const *>(this);
 	}
 #endif
 
-	constexpr soft_float128_t(uint64_t low_, uint64_t high_)
+	constexpr soft_float128_t(uint64_t high_, uint64_t low_)
 	: high(high_), low(low_)
 	{}
 
@@ -76,14 +85,14 @@ struct [[gnu::packed]] soft_float128_t {
 
 #endif
 
-namespace holam { namespace detail {
+namespace holam { namespace support {
 
 constexpr static soft_float128_t float128_qnan = soft_float128_t(
-	0, 0x7fff800000000000ull
+	0x7fff800000000000ull, 0
 );
 
 constexpr static soft_float128_t float128_snan = soft_float128_t(
-	0, 0x7fff400000000000ull
+	0x7fff400000000000ull, 0
 );
 
 }}
@@ -101,6 +110,11 @@ inline constexpr ucpf::float128 abs(ucpf::float128 x)
 inline constexpr bool signbit(ucpf::float128 x)
 {
 	return __builtin_signbit(x);
+}
+
+inline constexpr bool isfinite(ucpf::float128 x)
+{
+	return __builtin_isfinite(x);
 }
 
 template <>
@@ -159,12 +173,12 @@ struct numeric_limits<ucpf::float128> {
 
 	constexpr static ucpf::float128 quiet_NaN() noexcept
 	{
-		return ucpf::holam::detail::float128_qnan;
+		return ucpf::holam::support::float128_qnan;
 	}
 
 	constexpr static ucpf::float128 signaling_NaN() noexcept
 	{
-		return ucpf::holam::detail::float128_snan;
+		return ucpf::holam::support::float128_snan;
 	}
 
 	constexpr static ucpf::float128 denorm_min() noexcept
@@ -196,14 +210,20 @@ static inline constexpr ucpf::float128 abs(ucpf::float128 x)
 {
 	constexpr static uint64_t sign_mask = 0x7fffffffffffffffull;
 	return ucpf::float128{
-		.low = x.low,
-		.high = x.high & sign_mask
+		.high = x.high & sign_mask,
+		.low = x.low
 	};
 }
 
 inline constexpr bool signbit(ucpf::float128 x)
 {
 	return (x.high >> 63) ? true : false;
+}
+
+inline constexpr bool isfinite(ucpf::float128 x)
+{
+	constexpr static uint64_t exp_mask = 0x7fff000000000000ull;
+	return (exp_mask & x.high) != exp_mask;
 }
 
 }

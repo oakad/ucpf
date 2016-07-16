@@ -76,4 +76,22 @@ BOOST_AUTO_TEST_CASE(floating_point_to_bcd_bigint_3)
 	}
 }
 
+BOOST_AUTO_TEST_CASE(floating_point_to_bcd_bigint_4)
+{
+	{
+		test::float_generator_z<float128> gen_0;
+		gen_0(test::verify<float128>);
+	}
+	{
+		test::float_generator_e<float128> gen_1;
+		for (auto c(0); c < CASE_COUNT; ++c)
+			gen_1(test::verify<float128>);
+	}
+	{
+		test::float_generator_r<float128> gen_2;
+		for (auto c(0); c < CASE_COUNT; ++c)
+			gen_2(test::verify<float128>);
+	}
+}
+
 }}}

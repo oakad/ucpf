@@ -716,8 +716,9 @@ private:
 			) ? 1 : 0;
 			mul_carry = acc >> calc_traits::limb_bits;
 		}
-
+#if 0
 		if (sub_carry) {
+			++c0;
 			sub_carry = 0;
 			for (pos = 0; pos < limb_cnt; ++pos) {
 				sub_carry = __builtin_add_overflow(
@@ -731,6 +732,7 @@ private:
 		}
 
 		if (0 <= compare(l, r, limb_cnt)) {
+			++c1;
 			sub_carry = 0;
 			for (pos = 0; pos < limb_cnt; ++pos) {
 				sub_carry = __builtin_sub_overflow(
@@ -742,7 +744,7 @@ private:
 			}
 			return r_mul + 1;
 		}
-
+#endif
 		return r_mul;
 	}
 
@@ -759,6 +761,16 @@ private:
 		} while (pos);
 		printf("\n");
 	}
+
+public:
+	static uint64_t c0;
+	static uint64_t c1;
 };
+
+template <typename T>
+uint64_t floating_point_to_bcd_bigint<T>::c0 = 0;
+template <typename T>
+uint64_t floating_point_to_bcd_bigint<T>::c1 = 0;
+
 }}}
 #endif

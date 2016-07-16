@@ -132,14 +132,14 @@ struct fp_value_t {
 	: flags(0)
 	{
 		__builtin_memcpy(&m, &val, sizeof(m));
-		if (m >> (
-			traits_type::mantissa_bits + traits_type::exponent_bits
-		))
+		if (std::signbit(val))
 			flags |= NEGATIVE;
 
-		exp = (m >> traits_type::mantissa_bits) & (
+		exp = static_cast<int32_t>((
+				m >> traits_type::mantissa_bits
+		) & (
 			(mantissa_type(1) << traits_type::exponent_bits) - 1
-		);
+		));
 		m &= (mantissa_type(1) << traits_type::mantissa_bits) - 1;
 
 		if ((exp + 1) >> traits_type::exponent_bits) {
