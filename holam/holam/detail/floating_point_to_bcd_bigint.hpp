@@ -716,35 +716,7 @@ private:
 			) ? 1 : 0;
 			mul_carry = acc >> calc_traits::limb_bits;
 		}
-#if 0
-		if (sub_carry) {
-			++c0;
-			sub_carry = 0;
-			for (pos = 0; pos < limb_cnt; ++pos) {
-				sub_carry = __builtin_add_overflow(
-					l[pos], sub_carry, &l[pos]
-				) ? 1 : 0;
-				sub_carry |= __builtin_add_overflow(
-					l[pos], r[pos], &l[pos]
-				) ? 1 : 0;
-			}
-			return r_mul - 1;
-		}
 
-		if (0 <= compare(l, r, limb_cnt)) {
-			++c1;
-			sub_carry = 0;
-			for (pos = 0; pos < limb_cnt; ++pos) {
-				sub_carry = __builtin_sub_overflow(
-					l[pos], sub_carry, &l[pos]
-				) ? 1 : 0;
-				sub_carry |= __builtin_sub_overflow(
-					l[pos], r[pos], &l[pos]
-				) ? 1 : 0;
-			}
-			return r_mul + 1;
-		}
-#endif
 		return r_mul;
 	}
 

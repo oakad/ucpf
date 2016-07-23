@@ -33,57 +33,50 @@ union float128_adapter_t {
 
 #endif
 
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+
 
 struct [[gnu::packed]] soft_float128_t {
 	soft_float128_t() = default;
 
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #if defined(_GLIBCXX_USE_FLOAT128)
 	constexpr soft_float128_t(float128 v)
 	: low(holam::support::float128_adapter_t{v}.w[0]),
 	  high(holam::support::float128_adapter_t{v}.w[1])
 	{}
-
-	constexpr operator float128() const
-	{
-		return *reinterpret_cast<float128 const *>(this);
-	}
 #endif
 
 	constexpr soft_float128_t(uint64_t high_, uint64_t low_)
 	: low(low_), high(high_)
 	{}
-
-	uint64_t low;
-	uint64_t high;
-};
-
-#else
-
-struct [[gnu::packed]] soft_float128_t {
-	soft_float128_t() = default;
-
+#else // __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #if defined(_GLIBCXX_USE_FLOAT128)
 	constexpr soft_float128_t(float128 v)
 	: high(holam::support::float128_adapter_t{v}.w[0]),
 	  low(holam::support::float128_adapter_t{v}.w[1])
 	{}
+#endif
 
+	constexpr soft_float128_t(uint64_t high_, uint64_t low_)
+	: high(high_), low(low_)
+	{}
+#endif // __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+
+#if defined(_GLIBCXX_USE_FLOAT128)
 	constexpr operator float128() const
 	{
 		return *reinterpret_cast<float128 const *>(this);
 	}
 #endif
 
-	constexpr soft_float128_t(uint64_t high_, uint64_t low_)
-	: high(high_), low(low_)
-	{}
-
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+	uint64_t low;
+	uint64_t high;
+#else // __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 	uint64_t high;
 	uint64_t low;
+#endif // __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 };
-
-#endif
 
 namespace holam { namespace support {
 
@@ -209,18 +202,15 @@ namespace std {
 static inline constexpr ucpf::float128 abs(ucpf::float128 x)
 {
 	constexpr static uint64_t sign_mask = 0x7fffffffffffffffull;
-	return ucpf::float128{
-		.high = x.high & sign_mask,
-		.low = x.low
-	};
+	return ucpf::float128(x.high & sign_mask, x.low);
 }
 
-inline constexpr bool signbit(ucpf::float128 x)
+static inline constexpr bool signbit(ucpf::float128 x)
 {
 	return (x.high >> 63) ? true : false;
 }
 
-inline constexpr bool isfinite(ucpf::float128 x)
+static inline constexpr bool isfinite(ucpf::float128 x)
 {
 	constexpr static uint64_t exp_mask = 0x7fff000000000000ull;
 	return (exp_mask & x.high) != exp_mask;

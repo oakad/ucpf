@@ -46,7 +46,7 @@ struct fp_value_traits<ucpf::float128> {
 	typedef ucpf::uint128_t mantissa_type;
 	constexpr static std::size_t mantissa_bits = 112;
 	constexpr static std::size_t exponent_bits = 15;
-	constexpr static std::size_t bcd_storage_size = 17;
+	constexpr static std::size_t bcd_storage_size = 18;
 	constexpr static int32_t exponent_bias = 16383;
 	constexpr static int minimal_target_exp = -124;
 };
@@ -136,7 +136,7 @@ struct fp_value_t {
 			flags |= NEGATIVE;
 
 		exp = static_cast<int32_t>((
-				m >> traits_type::mantissa_bits
+			m >> traits_type::mantissa_bits
 		) & (
 			(mantissa_type(1) << traits_type::exponent_bits) - 1
 		));
@@ -184,23 +184,19 @@ struct fp_value_t {
 
 	void boundaries(fp_value_t &low, fp_value_t &high) const
 	{
-		high = *this;
-		high.m <<= 1;
-		++high.m;
-		--high.exp;
+		if (flags & NORMAL_POW2) {
+			low.m = (m << 2) - 1;
+			low.exp = exp - 2;
+		} else {
+			low.m = (m << 1) - 1;
+			low.exp = exp - 1;
+		}
+
+		high.m = (m << 1) + 1;
+		high.exp = exp - 1;
 		auto shift(support::clz(high.m));
 		high.m <<= shift;
 		high.exp -= shift;
-
-		low = *this;
-		low.m <<= 1;
-		--low.m;
-		--low.exp;
-
-		if ((flags & NORMAL_POW2) && exp) {
-			low.m = (m << 2) - 1;
-			low.exp = exp - 2;
-		}
 
 		low.m <<= low.exp - high.exp;
 		low.exp = high.exp;

@@ -13,11 +13,11 @@ template <typename T>
 void verify(T v)
 {
 	uint8_t bcd_val[h::fp_value_traits<T>::bcd_storage_size];
-	char c_val[30] = {0};
+	char c_val[h::fp_value_traits<T>::bcd_storage_size * 2 + 10] = {0};
 	std::size_t val_len;
 	int32_t exp10;
 	h::fp_value_t<T> vv(v);
-
+#if 1
 	if (h::floating_point_to_bcd_grisu<T>::apply(
 		bcd_val, val_len, exp10, vv
 	))
@@ -26,7 +26,11 @@ void verify(T v)
 		++grisu_false;
 		return;
 	}
-
+#else
+	h::floating_point_to_bcd_bigint<T>::apply(
+		bcd_val, val_len, exp10, vv
+	);
+#endif
 	if (val_len > max_len)
 		max_len = val_len;
 
@@ -45,16 +49,16 @@ void verify(T v)
 int main(int argc, char **argv)
 {
 #if 1
-	//float v0(4.99239550226548449897e+28);
+	//float v0(64);
 	//verify(v0);
-	//double v1(4.99239550226548449897e-100);
+	//double v1(5.7089907708238395e+45);
 	//verify(v1);
-	ucpf::float128 v2(1.61803314321221556254337822347984650764e-4931Q);
+	ucpf::float128 v2(3.076044018662234017587819121941070509464e-4932Q);
 	verify(v2);
 #else
 	ht::float_generator_r<float> gen;
 
-	for (auto c(0); c < 100/*00000*/; ++c)
+	for (auto c(0); c < 1000000; ++c)
 		gen(verify<float>);
 #endif
 	printf(

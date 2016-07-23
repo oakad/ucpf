@@ -59,11 +59,12 @@ int main(int argc, char **argv)
 		c_high[16] = 0;
 		memcpy(c_low, s + 16, 16);
 		c_low[16] = 0;
+#if 0
 		if (s[33] > '7') {
 			if (round_up_hex(c_low, 15))
 				round_up_hex(c_high, 15);
 		}
-
+#endif
 		mpfr_mul_2si(x, y, c, MPFR_RNDN);
 		mpfr_log2(y, x, MPFR_RNDN);
 		auto exp_2(mpfr_get_si(y, MPFR_RNDN));
@@ -75,7 +76,7 @@ int main(int argc, char **argv)
 		free(s);
 
 		printf(
-			"\t\t{0x%sull, 0x%sull, %ld, %d}, //%d\n",
+			"\t\t{0x%sull, 0x%sull}, //%ld, %d, %d\n",
 			c_high, c_low, exp_2, c, pos++
 		);
 	}
