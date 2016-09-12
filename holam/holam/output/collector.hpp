@@ -9,11 +9,17 @@
 #if !defined(HPP_1DC3219B893A9C61565ECE60B2DCEDBD)
 #define HPP_1DC3219B893A9C61565ECE60B2DCEDBD
 
+#include <iterator>
+
 namespace ucpf { namespace holam { namespace output {
 
 template <typename ValueType = char, std::size_t BlockSize = 256>
 struct collector {
 	typedef ValueType value_type;
+	typedef void difference_type;
+	typedef void pointer;
+	typedef void reference;
+	typedef std::output_iterator_tag iterator_category;
 
 	static_assert(
 		std::is_pod<value_type>::value,
@@ -144,6 +150,15 @@ struct collector {
 
 		if (cur)
 			f(cur->data, cur_offset);
+	}
+
+	std::size_t count() const
+	{
+		std::size_t rv(0);
+		apply([&rv](auto data, std::size_t count_) {
+			rv += count_;
+		});
+		return rv;
 	}
 
 private:
