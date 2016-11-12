@@ -1,0 +1,4 @@
+import cc-plugin ;
+
+lib ucpf_holam : plugin_main.cpp : <conditional>@cc-plugin.build-config ;
+
