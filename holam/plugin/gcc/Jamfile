@@ -1,4 +1,12 @@
-import cc-plugin ;
+import ../buildtools/cc-plugin ;
+import toolset ;
 
-lib ucpf_holam : plugin_main.cpp : <conditional>@cc-plugin.build-config ;
+cc-plugin.make ucpf_holam : plugin_main.cpp ;
 
+exe test : test.cpp ucpf_holam ;
+
+#[ cc-plugin.apply ucpf_holam :
+#	help
+#	piip
+#	dadap="\"smurf manha fj\""
+#] ;

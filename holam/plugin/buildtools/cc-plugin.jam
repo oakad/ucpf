@@ -1,0 +1,134 @@
+import property-set ;
+import generators ;
+import type ;
+import "class" : new ;
+
+import property ;
+import feature ;
+import toolset ;
+import project ;
+import targets ;
+
+type.register CC_PLUGIN ;
+
+class wrap-plugin-generator : generator
+{
+	rule __init__ (
+		id : source-types + : target-types + : requirements * :
+		optional-properties *
+	)
+	{
+		generator.__init__ $(id) : $(source-types) : $(target-types) :
+			$(requirements) : $(optional-properties) ;
+	}
+
+	rule run ( project name ? : property-set : sources + )
+	{
+		local cmd = [ find-cpp-compiler $(property-set) ] ;
+		local p-dir = [ SHELL "$(cmd) -print-file-name=plugin | tr -d '\\n'" ] ;
+
+		local lg = [ generators.construct $(project) $(name) : LIB : [
+			$(property-set).add-raw <include>$(p-dir)/include
+		] :
+			$(sources) : true
+		] ;
+		echo -x- $(lg[2]) ;
+		return $(lg[1]) [ $(lg[2]).clone-with-different-type CC_PLUGIN ] ;
+	}
+
+	rule find-cpp-compiler ( property-set )
+	{
+		local ts = [ $(property-set).get <toolset> ] ;
+		ts = $(ts:G=) ;
+		local flags = [ modules.peek toolset : .$(ts).flags ] ;
+		local result ;
+		for local f in $(flags)
+		{
+			local var = [ modules.peek toolset :
+				.$(ts).variable.$(f)
+			] ;
+			if $(var) = CONFIG_COMMAND
+			{
+				result = [ modules.peek toolset :
+					.$(ts).values.$(f)
+				] ;
+			}
+		}
+		return $(result) ;
+	}
+}
+
+class apply-plugin-generator : generator
+{
+	rule __init__ (
+		id : source-types + : target-types + : requirements * :
+		optional-properties *
+	)
+	{
+		generator.__init__ $(id) : $(source-types) : $(target-types) :
+			$(requirements) : $(optional-properties) ;
+	}
+
+	rule run ( project name ? : property-set : sources + )
+	{
+		echo -1-  [ $(sources).str ] ;
+		echo -2-  [ $(property-set).str ] ;
+	}
+}
+
+generators.register [
+	new wrap-plugin-generator cc-plugin.wrap-plugin : LIB : CC_PLUGIN :
+	<toolset>gcc
+] ;
+
+generators.register [
+	new apply-plugin-generator cc-plugin.apply-plugin : CPP CC_PLUGIN : OBJ
+] ;
+
+rule apply ( name : args * )
+{
+	local result ;
+
+	result += <cflags>-fplugin=$(name) ;
+
+	for local arg in $(args)
+	{
+		result += <cflags>-fplugin-arg-$(name)-$(arg) ;
+	}
+
+	result += <dependency>$(name) ;
+	result += <conditional>@cc-plugin.apply-impl ;
+	echo ++ $(result) ;
+	return $(result) ;
+}
+
+rule apply-impl ( properties * )
+{
+	local dep = [ property.select <dependency> : $(properties) ] ;
+	dep = $(dep:G=) ;
+	local p = [ project.current ] ;
+	local tgt = [ project.find $(dep) : . ] ;
+	echo zz $(tgt) ;
+	
+}
+
+rule make ( name : sources * : requirements * : default-build * :
+	usage-requirements *
+)
+{
+	local project = [ project.current ] ;
+	result += [ targets.main-target-alternative [
+		new typed-target $(name) : $(project) : CC_PLUGIN : [
+			targets.main-target-sources $(sources) : $(name)
+		] : [
+			targets.main-target-requirements $(r) : $(project)
+		] : [
+			targets.main-target-default-build $(default-build) :
+			$(project)
+		] : [
+			targets.main-target-usage-requirements
+			$(usage-requirements) : $(project)
+		] ] ] ;
+
+	return $(result) ;
+}

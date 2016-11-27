@@ -1,12 +1,21 @@
-using gcc ;
+import option ;
+
+local LTO_JOBS = [ option.get lto-jobs : 4 ] ;
+
+using gcc : : :
+	<compileflags>-flto=$(LTO_JOBS)
+	<cxxflags>-std=gnu++1z
+	<linkflags>"-std=gnu++1z -flto=$(LTO_JOBS)"
+	<archiver>gcc-ar
+	<ranlib>gcc-ranlib ;
 
 path-constant ucpf : . ;
 
-alias test_case : : :
-		: <define>BOOST_TEST_DYN_LINK
-		  <linkflags>-lboost_unit_test_framework
-		  <linkflags>-lboost_prg_exec_monitor ;
+alias test_case : : : :
+	<define>BOOST_TEST_DYN_LINK
+	<linkflags>-lboost_unit_test_framework
+	<linkflags>-lboost_prg_exec_monitor ;
 
 alias yesod : yesod//yesod ;
-alias mina : mina//mina ;
-alias zivug : zivug//zivug ;
+alias mina : mina ;
+alias zivug : zivug ;
