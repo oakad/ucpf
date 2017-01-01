@@ -23,22 +23,18 @@ struct u8string_tokenizer_sce {
 		pos = seq.cbegin();
 	}
 
-	size_t char_count() const
+	auto char_count()
 	{
 		size_t rv(0);
 
 		while (parse([&rv](char c) {
 			++rv;
 		}));
+		reset();
 		return rv;
 	}
 
-	bool leading_separator() const
-	{
-		return seq.front() == sep;
-	}
-
-	size_t next_element(uint8_t *data, size_t &count)
+	auto next_element(uint8_t *data, size_t &count)
 	{
 		return parse([data, &count](char c) {
 			data[count] = c;

@@ -9,20 +9,14 @@
 #if !defined(HPP_36A4C68630035F9450192329A4B78968)
 #define HPP_36A4C68630035F9450192329A4B78968
 
-#include <yesod/memory.hpp>
-#include <yesod/detail/ptr_or_data.hpp>
+#include <yesod/detail/string_path_impl.hpp>
 #include <yesod/string_utils/charseq_adaptor.hpp>
 #include <yesod/string_utils/u8string_tokenizer_sce.hpp>
 
 namespace ucpf::yesod {
-namespace detail {
-
-struct string_path_impl;
-
-}
 
 struct string_path {
-	typedef size_t size_type;
+	typedef typename detail::string_path_impl<>::size_type size_type;
 
 	struct element {
 	private:
@@ -35,11 +29,31 @@ struct string_path {
 	template <typename SeqParser>
 	string_path(SeqParser &&parser)
 	{
+		auto str_sz(parser.char_count());
+		if (detail::string_path_impl<0>::size_limit >= str_sz)
+			detail::string_path_impl<0>::init(
+				data, str_sz, std::forward<SeqParser>(parser)
+			);
+		else
+			detail::string_path_impl<2>::init(
+				data, str_sz, std::forward<SeqParser>(parser)
+			);
 	}
 
 	template <typename SeqParser>
 	string_path(SeqParser &&parser, pmr::memory_resource *mem_alloc)
 	{
+		auto str_sz(parser.char_count());
+		if (detail::string_path_impl<1>::size_limit >= str_sz)
+			detail::string_path_impl<1>::init(
+				data, str_sz, std::forward<SeqParser>(parser),
+				mem_alloc
+			);
+		else
+			detail::string_path_impl<3>::init(
+				data, str_sz, std::forward<SeqParser>(parser),
+				mem_alloc
+			);
 	}
 
 	string_path(string_path &&other);
@@ -54,7 +68,10 @@ struct string_path {
 		CharSeq &&seq, pmr::memory_resource *mem_alloc
 	);
 
-	~string_path();
+	~string_path()
+	{
+		detail::string_path_impl<>::select(data).deallocate(data);
+	}
 
 	element at(std::size_t pos) const;
 
@@ -69,7 +86,12 @@ struct string_path {
 
 	string_path sub_tail(string_path const &other) const;
 
-	size_type size() const;
+	size_type size() const
+	{
+		return detail::string_path_impl<>::select(
+			data
+		).element_count(data);
+	}
 
 	size_type byte_count() const;
 
@@ -78,8 +100,6 @@ struct string_path {
 	size_type common_tail_size(string_path const &other) const;
 
 private:
-	friend struct detail::string_path_impl;
-
 	detail::ptr_or_data data;
 };
 
@@ -90,7 +110,7 @@ string_path string_path::from_posix_like_string(CharSeq &&seq)
 
 	return string_path(string_utils::u8string_tokenizer_sce<
 		typename adaptor_type::result_type
-	>(adaptor_type::apply(seq), '/', '\\'));
+	>(adaptor_type::apply(std::forward<CharSeq>(seq)), '/', '\\'));
 }
 
 template <typename CharSeq>
@@ -102,7 +122,9 @@ string_path string_path::from_posix_like_string(
 
 	return string_path(string_utils::u8string_tokenizer_sce<
 		typename adaptor_type::result_type
-	>(adaptor_type::apply(seq), '/', '\\'), mem_alloc);
+	>(
+		adaptor_type::apply(std::forward<CharSeq>(seq)), '/', '\\'
+	), mem_alloc);
 }
 
 }

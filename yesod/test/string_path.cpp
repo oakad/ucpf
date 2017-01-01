@@ -9,6 +9,7 @@
 #define BOOST_TEST_MODULE yesod
 #include <boost/test/unit_test.hpp>
 
+#include "test.hpp"
 #include <yesod/string_path.hpp>
 #include <yesod/string_utils/u8string_tokenizer_sce.hpp>
 
@@ -17,6 +18,11 @@ namespace ucpf::yesod {
 BOOST_AUTO_TEST_CASE(string_path_0)
 {
 	string_path p0(string_path::from_posix_like_string("aaa/bbb/ccc"));
+	BOOST_CHECK_EQUAL(p0.size(), 3);
+	string_path p1(string_path::from_posix_like_string(
+		"aaaaa/bbbbb/ccccc/ddddd/eeeee/fffff/ggggg"
+	));
+	BOOST_CHECK_EQUAL(p1.size(), 7);
 }
 
 }

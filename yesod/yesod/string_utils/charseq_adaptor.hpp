@@ -61,7 +61,31 @@ struct charseq_adaptor<char const (&) [N]> {
 
 	static auto apply(char const (&str)[N])
 	{
-		return std::experimental::string_view(str, N);
+		return std::experimental::string_view(str, N ? N - 1 : 0);
+	}
+};
+
+template <size_t N>
+struct charseq_adaptor<uint8_t (&) [N]> {
+	typedef std::experimental::string_view result_type;
+
+	static auto apply(uint8_t (&str)[N])
+	{
+		return std::experimental::string_view(
+			reinterpret_cast<char *>(str), N
+		);
+	}
+};
+
+template <>
+struct charseq_adaptor<void * (&)> {
+	typedef std::experimental::string_view result_type;
+
+	static auto apply(void * &str, size_t length)
+	{
+		return std::experimental::string_view(
+			reinterpret_cast<char *>(str), length
+		);
 	}
 };
 
