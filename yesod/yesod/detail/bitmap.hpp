@@ -45,32 +45,42 @@ struct bitmap_base {
 	}
 
 	static auto to_word_ptr(
-		uint8_t const *ptr, size_type &byte_offset
+		uint8_t const *ptr, size_type ptr_bit_offset,
+		size_type &word_bit_offset
 	)
 	{
 		auto ptr_val(reinterpret_cast<uintptr_t>(ptr));
-		byte_offset = ptr_val & word_type_alignment_mask;
+		ptr_val += ptr_bit_offset >> 3;
+		word_bit_offset = ptr_bit_offset & 7;
+		word_bit_offset += (ptr_val & word_type_alignment_mask) << 3;
 		return reinterpret_cast<word_type const *>(
 			ptr_val & ~word_type_alignment_mask
 		);
 	}
 
-	static auto count_ones(uint8_t const *b_map, size_type count)
+	static auto count_ones(
+		uint8_t const *b_map, size_type bit_offset, size_type bit_count
+	)
 	{
 		size_type first_word_offset, last_word_offset;
-		auto first_word(to_word_ptr(b_map, first_word_offset));
-		auto last_word(to_word_ptr(b_map + count, last_word_offset));
+
+		auto first_word(to_word_ptr(
+			b_map, bit_offset, first_word_offset
+		));
+		auto last_word(to_word_ptr(
+			b_map + bit_offset + bit_count, last_word_offset
+		));
 		auto first_word_mask(first_word_offset
 			? bitmap_type::word_bit_mask(
-				first_word_offset << 3,
-				word_type_bits - (first_word_offset << 3)
+				first_word_offset,
+				word_type_bits - first_word_offset
 			)
 			: word_type_ones
 		);
 		auto last_word_mask(last_word_offset
 			? ~bitmap_type::word_bit_mask(
-				last_word_offset << 3,
-				word_type_bits - (last_word_offset << 3)
+				last_word_offset,
+				word_type_bits - last_word_offset
 			)
 			: word_type_zeros
 		);
@@ -82,7 +92,8 @@ struct bitmap_base {
 		else {
 			auto rv(popcount(*first_word & first_word_mask));
 			for (
-				++first_word; first_word < last_word;
+				++first_word;
+				first_word < last_word;
 				++first_word
 			)
 				rv += popcount(*first_word);

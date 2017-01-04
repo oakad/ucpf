@@ -17,17 +17,21 @@ namespace ucpf::yesod {
 
 struct string_path {
 	typedef typename detail::string_path_impl<>::size_type size_type;
-
-	struct element {
-	private:
-		detail::ptr_or_data data;
-	};
+	typedef typename detail::string_path_impl<>::element element;
 
 	struct element_iter {
+	private:
+		element_iter(ptr_or_data const *src_, size_type offset_)
+		: src(src_), offset(offset_) {}
+
+		ptr_or_data const *src;
+		size_type offset;
 	};
 
 	template <typename SeqParser>
-	string_path(SeqParser &&parser)
+	string_path(
+		SeqParser &&parser, pmr::memory_resource *mem_alloc = nullptr
+	)
 	{
 		auto str_sz(parser.char_count());
 		if (detail::string_path_impl<0>::size_limit >= str_sz)
@@ -35,37 +39,28 @@ struct string_path {
 				data, str_sz, std::forward<SeqParser>(parser)
 			);
 		else
-			detail::string_path_impl<2>::init(
-				data, str_sz, std::forward<SeqParser>(parser)
-			);
-	}
-
-	template <typename SeqParser>
-	string_path(SeqParser &&parser, pmr::memory_resource *mem_alloc)
-	{
-		auto str_sz(parser.char_count());
-		if (detail::string_path_impl<1>::size_limit >= str_sz)
 			detail::string_path_impl<1>::init(
 				data, str_sz, std::forward<SeqParser>(parser),
 				mem_alloc
 			);
-		else
-			detail::string_path_impl<3>::init(
-				data, str_sz, std::forward<SeqParser>(parser),
-				mem_alloc
-			);
 	}
 
-	string_path(string_path &&other);
+	string_path(string_path &&other)
+	{
+		data.copy_from(other.data);
+		other.data.reset();
+	}
 
-	string_path(string_path const &other);
-
-	template <typename CharSeq>
-	static string_path from_posix_like_string(CharSeq &&seq);
+	string_path(string_path const &other)
+	{
+		detail::string_path_impl<>::select(other.data).copy(
+			data, other.data
+		);
+	}
 
 	template <typename CharSeq>
 	static string_path from_posix_like_string(
-		CharSeq &&seq, pmr::memory_resource *mem_alloc
+		CharSeq &&seq, pmr::memory_resource *mem_alloc = nullptr
 	);
 
 	~string_path()
@@ -73,18 +68,37 @@ struct string_path {
 		detail::string_path_impl<>::select(data).deallocate(data);
 	}
 
-	element at(std::size_t pos) const;
+	element at(size_type pos) const
+	{
+		return detail::string_path_impl<>::select(data).element_at(
+			data, pos
+		);
+	}
 
-	element_iter begin() const;
+	element_iter begin() const
+	{
+		return element_iter(data, 0);
+	}
 
-	element_iter end() const;
+	element_iter end() const
+	{
+		return element_iter(data, byte_count());
+	}
 
 	template <typename ...PathType>
-	string_path cat(PathType &&...other) const;
+	string_path cat(
+		PathType &&...other, pmr::memory_resource *mem_alloc = nullptr
+	) const;
 
-	string_path sub_head(string_path const &other) const;
+	string_path sub_head(
+		string_path const &other,
+		pmr::memory_resource *mem_alloc = nullptr
+	) const;
 
-	string_path sub_tail(string_path const &other) const;
+	string_path sub_tail(
+		string_path const &other,
+		pmr::memory_resource *mem_alloc = nullptr
+	) const;
 
 	size_type size() const
 	{
@@ -93,7 +107,12 @@ struct string_path {
 		).element_count(data);
 	}
 
-	size_type byte_count() const;
+	size_type byte_count() const
+	{
+		return detail::string_path_impl<>::select(
+			data
+		).byte_count(data);
+	}
 
 	size_type common_head_size(string_path const &other) const;
 
@@ -102,16 +121,6 @@ struct string_path {
 private:
 	detail::ptr_or_data data;
 };
-
-template <typename CharSeq>
-string_path string_path::from_posix_like_string(CharSeq &&seq)
-{
-	typedef string_utils::charseq_adaptor<CharSeq> adaptor_type;
-
-	return string_path(string_utils::u8string_tokenizer_sce<
-		typename adaptor_type::result_type
-	>(adaptor_type::apply(std::forward<CharSeq>(seq)), '/', '\\'));
-}
 
 template <typename CharSeq>
 string_path string_path::from_posix_like_string(

@@ -35,6 +35,12 @@ struct ptr_or_data {
 		return *this;
 	}
 
+	ptr_or_data &copy_from(ptr_or_data const &other)
+	{
+		__builtin_memcpy(bytes, other.bytes, data_size);
+		return *this;
+	}
+
 	template <typename PtrType>
 	auto get_ptr_at(size_t offset)
 	{
@@ -78,6 +84,11 @@ struct ptr_or_data {
 	{
 		return set_extra_bits_lsb(value, offset, count);
 	}
+
+	bool test_extra_bit(size_t offset) const
+	{
+		return extra & (extra_type(1) << offset);
+	}
 #elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 	extra_type get_extra_bits(size_t offset, size_t count) const
 	{
@@ -93,6 +104,11 @@ struct ptr_or_data {
 		return set_extra_bits_lsb(
 			value, extra_type_bits - offset - count, count
 		);
+	}
+
+	bool test_extra_bit(size_t offset) const
+	{
+		return extra & (extra_type(1) << (extra_type_bits - offset));
 	}
 #else
 #error Unknown endianness!
