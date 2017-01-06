@@ -21,10 +21,13 @@ struct string_path {
 
 	struct element_iter {
 	private:
-		element_iter(ptr_or_data const *src_, size_type offset_)
-		: src(src_), offset(offset_) {}
+		friend struct string_path;
 
-		ptr_or_data const *src;
+		element_iter(
+			detail::ptr_or_data const *src_, size_type offset_
+		) : src(src_), offset(offset_) {}
+
+		detail::ptr_or_data const *src;
 		size_type offset;
 	};
 
@@ -77,12 +80,12 @@ struct string_path {
 
 	element_iter begin() const
 	{
-		return element_iter(data, 0);
+		return element_iter(&data, 0);
 	}
 
 	element_iter end() const
 	{
-		return element_iter(data, byte_count());
+		return element_iter(&data, byte_count());
 	}
 
 	template <typename ...PathType>

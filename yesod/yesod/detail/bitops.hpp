@@ -21,6 +21,16 @@ constexpr static inline int clz(uint64_t v)
 	return __builtin_clzll(v);
 }
 
+constexpr static inline int ctz(uint32_t v)
+{
+	return __builtin_ctz(v);
+}
+
+constexpr static inline int ctz(uint64_t v)
+{
+	return __builtin_ctzll(v);
+}
+
 constexpr static inline int popcount(uint32_t v)
 {
 	return __builtin_popcount(v);

@@ -59,16 +59,16 @@ struct bitmap_base {
 	}
 
 	static auto count_ones(
-		uint8_t const *b_map, size_type bit_offset, size_type bit_count
+		uint8_t const *b_map, size_type first, size_type last
 	)
 	{
 		size_type first_word_offset, last_word_offset;
 
 		auto first_word(to_word_ptr(
-			b_map, bit_offset, first_word_offset
+			b_map, first, first_word_offset
 		));
 		auto last_word(to_word_ptr(
-			b_map + bit_offset + bit_count, last_word_offset
+			b_map, last, last_word_offset
 		));
 		auto first_word_mask(first_word_offset
 			? bitmap_type::word_bit_mask(
@@ -101,6 +101,76 @@ struct bitmap_base {
 			return rv + popcount(*last_word & last_word_mask);
 		}
 	}
+
+	static auto find_nth_one(
+		uint8_t const *b_map, size_type pos, size_type first,
+		size_type last
+	)
+	{
+		size_type first_word_offset, last_word_offset;
+
+		auto first_word(to_word_ptr(
+			b_map, first, first_word_offset
+		));
+		auto last_word(to_word_ptr(
+			b_map, last, last_word_offset
+		));
+		auto first_word_mask(first_word_offset
+			? bitmap_type::word_bit_mask(
+				first_word_offset,
+				word_type_bits - first_word_offset
+			)
+			: word_type_ones
+		);
+		auto last_word_mask(last_word_offset
+			? ~bitmap_type::word_bit_mask(
+				last_word_offset,
+				word_type_bits - last_word_offset
+			)
+			: word_type_zeros
+		);
+
+		if (first_word == last_word)
+			auto w(*first_word & first_word_mask & last_word_mask);
+			
+			if (popcount(w) <= pos)
+				return last;
+			else
+				return bitmap_type::find_nth_one(w, pos)
+				       - first_word_offset;
+		else {
+			auto w(*first_word & first_word_mask);
+			auto pc(popcount(w));
+			if (pc > pos) {
+				return bitmap_type::find_nth_one(w, pos)
+				       - first_word_offset;
+			}
+			auto b_pos(word_type_bits - first_word_offset);
+			pos -= pc;
+
+			for (
+				++first_word;
+				first_word < last_word;
+				++first_word
+			) {
+				w = *first_word;
+				pc = popcount(w);
+				if (pc > pos)
+					return bitmap_type::find_nth_one(w, pos)
+					       + b_pos;
+				b_pos += pc;
+				pos -= pc;
+			}
+
+			w = *last_word & last_word_mask;
+			pc = popcount(w);
+			if (pc > pos)
+				return bitmap_type::find_nth_one(w, pos)
+				       + b_pos;
+			else
+				return last;
+		}
+	}
 };
 
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
@@ -116,11 +186,30 @@ struct bitmap : bitmap_base<bitmap> {
 		b_map[pos >> 3] |= 1 << (pos & 7);
 	}
 
+private:
+	friend struct bitmap_base<bitmap>;
+
 	constexpr static word_type word_bit_mask(
 		size_type offset, size_type count
 	)
 	{
 		return ((word_type(1) << count) - 1) << offset;
+	}
+	
+	static auto find_nth_one(word_type w, size_type pos)
+	{
+		size_type w_pos(0);
+		while (true) {
+			auto shift = ctz(w);
+			w >>= shift + 1;
+			w_pos += shift;
+			if (!pos)
+				return w_pos;
+			else {
+				--pos;
+				w_pos++;
+			}
+		}
 	}
 };
 
@@ -137,6 +226,9 @@ struct bitmap : bitmap_base<bitmap> {
 		b_map[pos >> 3] |= 1 << (8 - (pos & 7));
 	}
 
+private:
+	friend struct bitmap_base<bitmap>;
+
 	constexpr static word_type word_bit_mask(
 		size_type offset, size_type count
 	)
@@ -144,6 +236,22 @@ struct bitmap : bitmap_base<bitmap> {
 		return ((word_type(1) << count) - 1) << (
 			word_type_bits - offset - count
 		);
+	}
+
+	static auto find_nth_one(word_type w, size_type pos)
+	{
+		size_type w_pos(0);
+		while (true) {
+			auto shift = clz(w);
+			w <<= shift + 1;
+			w_pos += shift;
+			if (!pos)
+				return w_pos;
+			else {
+				--pos;
+				w_pos++;
+			}
+		}
 	}
 };
 

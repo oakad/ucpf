@@ -13,6 +13,9 @@
 #include <yesod/detail/bitmap.hpp>
 #include <yesod/detail/ptr_or_data.hpp>
 
+#include <experimental/string_view>
+#include <string>
+
 namespace ucpf::yesod::detail {
 
 template <size_t...>
@@ -21,16 +24,7 @@ struct string_path_impl;
 template <>
 struct string_path_impl<> {
 	typedef size_t size_type;
-
-	struct element {
-	private:
-		element(uint8_t const *data_, size_type size_)
-		: data(data_), size(size_)
-		{}
-
-		uint8_t const *data;
-		size_type size;
-	};
+	typedef std::experimental::basic_string_view<uint8_t> element;
 
 	static string_path_impl<> const &select(ptr_or_data const &p);
 
@@ -92,13 +86,27 @@ struct string_path_impl<0> : string_path_impl<> {
 
 	virtual element element_at(ptr_or_data const &p, size_type pos) const
 	{
-		auto bmap_sz(bitmap::byte_count(byte_count()));
+		auto bmap_sz(bitmap::byte_count(byte_count(p)) << 3);
+		auto b_pos(bitmap::find_nth_set(
+			p.bytes + 1, pos, 0, bmap_sz
+		));
+
+		if (b_pos < bmap_sz) {
+			auto e_pos(bitmap::find_nth_one(
+				p.bytes + 1, 1, b_pos, bmap_sz
+			));
+			return element(
+				p.bytes + (bmap_sz >> 3) + b_pos + 1,
+				e_pos - b_pos
+			);
+		} else
+			return element();
 	}
 
 	virtual size_type element_count(ptr_or_data const &p) const
 	{
-		auto bmap_sz(bitmap::byte_count(byte_count()));
-		return bitmap::count_ones(p.bytes + 1, 0, bmap_sz << 3);
+		auto bmap_sz(bitmap::byte_count(byte_count(p)) << 3);
+		return bitmap::count_ones(p.bytes + 1, 0, bmap_sz);
 	}
 
 	virtual size_type byte_count(ptr_or_data const &p) const
@@ -181,12 +189,31 @@ struct string_path_impl<1> : string_path_impl<> {
 		__builtin_memcpy(dst.ptr, src.ptr, sz);
 	}
 
+	virtual element element_at(ptr_or_data const &p, size_type pos) const
+	{
+		auto bmap_sz(bitmap::byte_count(byte_count(p)) << 3);
+		auto ptr(p.get_ptr_at<uint8_t const *>(0));
+		auto b_pos(bitmap::find_nth_set(
+			ptr, pos, 0, bmap_sz
+		));
+
+		if (b_pos < bmap_sz) {
+			auto e_pos(bitmap::find_nth_one(
+				ptr, 1, b_pos, bmap_sz
+			));
+			return element(
+				ptr + (bmap_sz >> 3) + b_pos,
+				e_pos - b_pos
+			);
+		} else
+			return element();
+	}
+
 	virtual size_type element_count(ptr_or_data const &p) const
 	{
-		auto bmap_sz(bitmap::byte_count(byte_count()));
+		auto bmap_sz(bitmap::byte_count(byte_count(p)) << 3);
 		return bitmap::count_ones(
-			p.get_ptr_at<uint8_t const *>(0), 0,
-			bmap_sz << 3
+			p.get_ptr_at<uint8_t const *>(0), 0, bmap_sz
 		);
 	}
 
@@ -201,7 +228,10 @@ constexpr static string_path_impl<1> string_path_impl_1;
 
 string_path_impl<> const &string_path_impl<>::select(ptr_or_data const &p)
 {
-	return p.test_extra_bit(0) ? string_path_impl_1 : string_path_impl_0;
+	if (p.test_extra_bit(0))
+		return string_path_impl_1;
+	else
+		return string_path_impl_0;
 }
 
 }
