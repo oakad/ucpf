@@ -16,6 +16,19 @@
 
 namespace ucpf::yesod::test {
 
+typedef std::basic_string<uint8_t> ustring;
+
+constexpr uint8_t const *operator ""_us(char const *s, size_t len)
+{
+	return reinterpret_cast<uint8_t const *>(s);
+}
+
+std::ostream &operator<<(std::ostream &os, ustring const &s)
+{
+	os << reinterpret_cast<char const *>(s.c_str());
+	return os;
+}
+
 template <typename CharSeq>
 std::ostream &print_hex(std::ostream &os, CharSeq &&seq_)
 {
@@ -43,5 +56,16 @@ std::ostream &print_hex(std::ostream &os, CharSeq &&seq_, size_t length)
 }
 
 }
-#endif
 
+namespace boost::test_tools::tt_detail {
+
+template <>
+struct print_log_value<ucpf::yesod::test::ustring> {
+	void operator()(std::ostream &os, ucpf::yesod::test::ustring const &s)
+	{
+		os << reinterpret_cast<char const *>(s.c_str());
+	}
+};
+
+}
+#endif

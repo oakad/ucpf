@@ -1,5 +1,6 @@
 import testing ;
+import alias ;
 
-alias test_case : $(ucpf)//test_case $(ucpf)//yesod ;
+alias test_case : $(ucpf)//test_case : : : <include>.. ;
 
-run string_path.cpp : : test_case ;
+run string_path.cpp test_case ;

@@ -86,9 +86,9 @@ struct string_path_impl<0> : string_path_impl<> {
 
 	virtual element element_at(ptr_or_data const &p, size_type pos) const
 	{
-		auto bmap_sz(bitmap::byte_count(byte_count(p)) << 3);
-		auto b_pos(bitmap::find_nth_set(
-			p.bytes + 1, pos, 0, bmap_sz
+		size_type bmap_sz(byte_count(p));
+		size_type b_pos(bitmap::find_nth_one(
+			p.bytes + 1, pos, size_type(0), bmap_sz
 		));
 
 		if (b_pos < bmap_sz) {
@@ -96,8 +96,8 @@ struct string_path_impl<0> : string_path_impl<> {
 				p.bytes + 1, 1, b_pos, bmap_sz
 			));
 			return element(
-				p.bytes + (bmap_sz >> 3) + b_pos + 1,
-				e_pos - b_pos
+				p.bytes + bitmap::byte_count(bmap_sz)
+				+ b_pos + 1, e_pos
 			);
 		} else
 			return element();
@@ -105,8 +105,7 @@ struct string_path_impl<0> : string_path_impl<> {
 
 	virtual size_type element_count(ptr_or_data const &p) const
 	{
-		auto bmap_sz(bitmap::byte_count(byte_count(p)) << 3);
-		return bitmap::count_ones(p.bytes + 1, 0, bmap_sz);
+		return bitmap::count_ones(p.bytes + 1, 0, byte_count(p));
 	}
 
 	virtual size_type byte_count(ptr_or_data const &p) const
@@ -124,7 +123,10 @@ struct string_path_impl<1> : string_path_impl<> {
 	)
 	{
 		p.reset();
-		p.set_extra_bits(mem_alloc ? 3 : 2, 0, 2);
+		p.set_extra_bit(0);
+		if (mem_alloc)
+			p.set_extra_bit(1);
+
 		p.set_extra_bits(str_sz, 2, ptr_or_data::extra_type_bits - 2);
 		auto sz(storage_size(p));
 
@@ -142,16 +144,17 @@ struct string_path_impl<1> : string_path_impl<> {
 			std::forward<SeqParser>(parser)
 		);
 
-		*p.get_ptr_at<pmr::memory_resource **>(
-			sz - sizeof(pmr::memory_resource *)
-		) = mem_alloc;
+		if (mem_alloc)
+			*p.get_ptr_at<pmr::memory_resource **>(
+				sz - sizeof(pmr::memory_resource *)
+			) = mem_alloc;
 	}
 
 	static size_type storage_size(ptr_or_data const &p)
 	{
 		auto str_sz(p.get_extra_bits(
-				2, ptr_or_data::extra_type_bits - 2
-			));
+			2, ptr_or_data::extra_type_bits - 2
+		));
 		str_sz += bitmap::byte_count(str_sz);
 
 		if (p.test_extra_bit(1)) {
@@ -181,7 +184,7 @@ struct string_path_impl<1> : string_path_impl<> {
 		dst.extra = src.extra;
 		auto sz = storage_size(src);
 		pmr::memory_resource *mem_alloc = src.test_extra_bit(1)
-			? *src.get_ptr_at<pmr::memory_resource **>(
+			? *src.get_ptr_at<pmr::memory_resource * const *>(
 				sz - sizeof(pmr::memory_resource *)
 			) : pmr::new_delete_resource();
 
@@ -191,10 +194,10 @@ struct string_path_impl<1> : string_path_impl<> {
 
 	virtual element element_at(ptr_or_data const &p, size_type pos) const
 	{
-		auto bmap_sz(bitmap::byte_count(byte_count(p)) << 3);
+		size_type bmap_sz(byte_count(p));
 		auto ptr(p.get_ptr_at<uint8_t const *>(0));
-		auto b_pos(bitmap::find_nth_set(
-			ptr, pos, 0, bmap_sz
+		size_type b_pos(bitmap::find_nth_one(
+			ptr, pos, size_type(0), bmap_sz
 		));
 
 		if (b_pos < bmap_sz) {
@@ -202,8 +205,8 @@ struct string_path_impl<1> : string_path_impl<> {
 				ptr, 1, b_pos, bmap_sz
 			));
 			return element(
-				ptr + (bmap_sz >> 3) + b_pos,
-				e_pos - b_pos
+				ptr + bitmap::byte_count(bmap_sz) + b_pos,
+				e_pos
 			);
 		} else
 			return element();
@@ -211,9 +214,8 @@ struct string_path_impl<1> : string_path_impl<> {
 
 	virtual size_type element_count(ptr_or_data const &p) const
 	{
-		auto bmap_sz(bitmap::byte_count(byte_count(p)) << 3);
 		return bitmap::count_ones(
-			p.get_ptr_at<uint8_t const *>(0), 0, bmap_sz
+			p.get_ptr_at<uint8_t const *>(0), 0, byte_count(p)
 		);
 	}
 

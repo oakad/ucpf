@@ -15,34 +15,36 @@
 
 namespace ucpf::yesod {
 
+using test::operator ""_us;
+
 BOOST_AUTO_TEST_CASE(string_path_0)
 {
-	std::array<std::string, 3> p0_ref{
-		std::string("aaa"), 
-		std::string("bbb"),
-		std::string("ccc")
+	std::array<test::ustring, 3> p0_ref{
+		test::ustring("aaa"_us),
+		test::ustring("bbb"_us),
+		test::ustring("ccc"_us)
 	};
 	string_path p0(string_path::from_posix_like_string("aaa/bbb/ccc"));
 	BOOST_CHECK_EQUAL(p0.size(), p0_ref.size());
-	for (auto c(0); c < p0_ref.size(); c++) {
-		BOOST_CHECK_EQUAL(p0.at(c), p0_ref[c]);
+	for (size_t c(0); c < p0_ref.size(); c++) {
+		BOOST_CHECK_EQUAL(p0.at(c).to_string(), p0_ref[c]);
 	}
 
-	std::array<std::string, 7> p1_ref{
-		std::string("aaaaa"), 
-		std::string("bbbbb"),
-		std::string("ccccc"),
-		std::string("ddddd"), 
-		std::string("eeeee"),
-		std::string("fffff"),
-		std::string("ggggg")
+	std::array<test::ustring, 7> p1_ref{
+		test::ustring("aaaaa"_us), 
+		test::ustring("bbbbb"_us),
+		test::ustring("ccccc"_us),
+		test::ustring("ddddd"_us), 
+		test::ustring("eeeee"_us),
+		test::ustring("fffff"_us),
+		test::ustring("ggggg"_us)
 	};
 	string_path p1(string_path::from_posix_like_string(
 		"aaaaa/bbbbb/ccccc/ddddd/eeeee/fffff/ggggg"
 	));
 	BOOST_CHECK_EQUAL(p1.size(), p1_ref.size());
-	for (auto c(0); c < p1_ref.size(); c++) {
-		BOOST_CHECK_EQUAL(p1.at(c), p1_ref[c]);
+	for (size_t c(0); c < p1_ref.size(); c++) {
+		BOOST_CHECK_EQUAL(p1.at(c).to_string(), p1_ref[c]);
 	}
 }
 

@@ -85,6 +85,12 @@ struct ptr_or_data {
 		return set_extra_bits_lsb(value, offset, count);
 	}
 
+	ptr_or_data &set_extra_bit(size_t offset)
+	{
+		extra |= extra_type(1) << offset;
+		return *this;
+	}
+
 	bool test_extra_bit(size_t offset) const
 	{
 		return extra & (extra_type(1) << offset);
@@ -104,6 +110,12 @@ struct ptr_or_data {
 		return set_extra_bits_lsb(
 			value, extra_type_bits - offset - count, count
 		);
+	}
+
+	ptr_or_data &set_extra_bit(size_t offset)
+	{
+		extra |= extra_type(1) << (extra_type_bits - offset);
+		return *this;
 	}
 
 	bool test_extra_bit(size_t offset) const

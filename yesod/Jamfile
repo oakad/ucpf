@@ -3,4 +3,4 @@ project yesod : requirements
 	<threading>multi
 : default-build release ;
 
-lib yesod : [ glob src/*.cpp ] : <include>. <link>static : : <include>. ;
+lib yesod : [ glob ./src/*.cpp ] : <include>. <link>static : : <include>. ;
