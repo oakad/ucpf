@@ -1,0 +1,7 @@
+import testing ;
+import alias ;
+
+alias test_case : $(ucpf)//test_case : : : <include>../.. ;
+
+run facade.cpp test_case ;
+
