@@ -9,6 +9,7 @@
 #if !defined(HPP_36A4C68630035F9450192329A4B78968)
 #define HPP_36A4C68630035F9450192329A4B78968
 
+#include <yesod/iterator/facade.hpp>
 #include <yesod/detail/string_path_impl.hpp>
 #include <yesod/string_utils/charseq_adaptor.hpp>
 #include <yesod/string_utils/u8string_tokenizer_sce.hpp>
@@ -17,18 +18,61 @@ namespace ucpf::yesod {
 
 struct string_path {
 	typedef typename detail::string_path_impl<>::size_type size_type;
-	typedef typename detail::string_path_impl<>::element element;
+	typedef typename detail::string_path_impl<>::element value_type;
 
-	struct element_iter {
+	struct const_iterator : iterator::facade<
+		const_iterator, value_type const,
+		std::random_access_iterator_tag, value_type const
+	> {
+		const_iterator()
+		: data_ptr(nullptr), pos(0) {}
+
 	private:
 		friend struct string_path;
+		friend struct iterator::core_access;
 
-		element_iter(
-			detail::ptr_or_data const *src_, size_type offset_
-		) : src(src_), offset(offset_) {}
+		const_iterator(
+			detail::ptr_or_data const *data_ptr_, size_type pos_
+		) : data_ptr(data_ptr_), pos(pos_) {}
 
-		detail::ptr_or_data const *src;
-		size_type offset;
+		reference dereference() const
+		{
+			return detail::string_path_impl<>::select(
+				*data_ptr
+			).element_at(*data_ptr, pos);
+		}
+
+		bool equal(const_iterator const &other) const
+		{
+			return (data_ptr == other.data_ptr)
+				&& (pos == other.pos);
+		}
+
+		void increment()
+		{
+			++pos;
+		}
+
+		void decrement()
+		{
+			--pos;
+		}
+
+		void advance(difference_type count)
+		{
+			if (count >= 0)
+				pos += count;
+			else
+				pos -= count;
+		}
+
+		difference_type distance_to(const_iterator const &other) const
+		{
+			return difference_type(other.pos) - pos;
+		}
+
+		detail::ptr_or_data const *data_ptr;
+		size_type pos;
 	};
 
 	template <typename SeqParser>
@@ -71,21 +115,31 @@ struct string_path {
 		detail::string_path_impl<>::select(data).deallocate(data);
 	}
 
-	element at(size_type pos) const
+	auto at(size_type pos) const
 	{
 		return detail::string_path_impl<>::select(data).element_at(
 			data, pos
 		);
 	}
 
-	element_iter begin() const
+	const_iterator begin() const
 	{
-		return element_iter(&data, 0);
+		return const_iterator(&data, 0);
 	}
 
-	element_iter end() const
+	const_iterator cbegin() const
 	{
-		return element_iter(&data, byte_count());
+		return const_iterator(&data, 0);
+	}
+
+	const_iterator end() const
+	{
+		return const_iterator(&data, size());
+	}
+
+	const_iterator cend() const
+	{
+		return const_iterator(&data, size());
 	}
 
 	template <typename ...PathType>

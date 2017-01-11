@@ -25,16 +25,14 @@ BOOST_AUTO_TEST_CASE(string_path_0)
 		test::ustring("ccc"_us)
 	};
 	string_path p0(string_path::from_posix_like_string("aaa/bbb/ccc"));
-	BOOST_CHECK_EQUAL(p0.size(), p0_ref.size());
-	for (size_t c(0); c < p0_ref.size(); c++) {
-		BOOST_CHECK_EQUAL(p0.at(c).to_string(), p0_ref[c]);
-	}
+	BOOST_TEST(p0.size(), p0_ref.size());
+	BOOST_TEST(p0 == p0_ref, boost::test_tools::per_element());
 
 	std::array<test::ustring, 7> p1_ref{
-		test::ustring("aaaaa"_us), 
+		test::ustring("aaaaa"_us),
 		test::ustring("bbbbb"_us),
 		test::ustring("ccccc"_us),
-		test::ustring("ddddd"_us), 
+		test::ustring("ddddd"_us),
 		test::ustring("eeeee"_us),
 		test::ustring("fffff"_us),
 		test::ustring("ggggg"_us)
@@ -42,10 +40,8 @@ BOOST_AUTO_TEST_CASE(string_path_0)
 	string_path p1(string_path::from_posix_like_string(
 		"aaaaa/bbbbb/ccccc/ddddd/eeeee/fffff/ggggg"
 	));
-	BOOST_CHECK_EQUAL(p1.size(), p1_ref.size());
-	for (size_t c(0); c < p1_ref.size(); c++) {
-		BOOST_CHECK_EQUAL(p1.at(c).to_string(), p1_ref[c]);
-	}
+	BOOST_TEST(p1.size(), p1_ref.size());
+	BOOST_TEST(p1 == p1_ref, boost::test_tools::per_element());
 }
 
 }

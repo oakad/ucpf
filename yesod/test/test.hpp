@@ -13,10 +13,12 @@
 #include <yesod/string_utils/ascii_hex_formatter.hpp>
 
 #include <iostream>
+#include <experimental/string_view>
 
 namespace ucpf::yesod::test {
 
 typedef std::basic_string<uint8_t> ustring;
+typedef std::experimental::basic_string_view<uint8_t> ustring_view;
 
 constexpr uint8_t const *operator ""_us(char const *s, size_t len)
 {
@@ -63,7 +65,21 @@ template <>
 struct print_log_value<ucpf::yesod::test::ustring> {
 	void operator()(std::ostream &os, ucpf::yesod::test::ustring const &s)
 	{
-		os << reinterpret_cast<char const *>(s.c_str());
+		os.write(
+			reinterpret_cast<char const *>(s.data()), s.size()
+		);
+	}
+};
+
+template <>
+struct print_log_value<ucpf::yesod::test::ustring_view> {
+	void operator()(
+		std::ostream &os, ucpf::yesod::test::ustring_view const &s
+	)
+	{
+		os.write(
+			reinterpret_cast<char const *>(s.data()), s.size()
+		);
 	}
 };
 
