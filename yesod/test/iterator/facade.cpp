@@ -142,7 +142,7 @@ BOOST_AUTO_TEST_CASE(facade_0)
 	test::writable_iterator_test(
 		test::counter_iterator<test::proxy>(&state), 9, 7
 	);
-	BOOST_CHECK_EQUAL(state, 8);
+	BOOST_TEST(state == 8);
 }
 
 BOOST_AUTO_TEST_CASE(facade_1)
@@ -151,7 +151,7 @@ BOOST_AUTO_TEST_CASE(facade_1)
 	(*p).mutator();
 	p->mutator();
 
-	BOOST_CHECK((std::is_same<                                  \
+	BOOST_TEST((std::is_same<                                   \
 		test::input_iter::pointer, decltype(p.operator->()) \
 	>::value));
 }
@@ -160,16 +160,16 @@ BOOST_AUTO_TEST_CASE(facade_2)
 {
 	int x = 0;
 	test::iterator_with_proxy_reference i(x);
-	BOOST_CHECK_EQUAL(x, 0);
-	BOOST_CHECK_EQUAL(i.m_x, 0);
+	BOOST_TEST(x == 0);
+	BOOST_TEST(i.m_x == 0);
 
 	++(*i).m_x;
-	BOOST_CHECK_EQUAL(x, 1);
-	BOOST_CHECK_EQUAL(i.m_x, 1);
+	BOOST_TEST(x == 1);
+	BOOST_TEST(i.m_x == 1);
 
 	++i->m_x;
-	BOOST_CHECK_EQUAL(x, 2);
-	BOOST_CHECK_EQUAL(i.m_x, 2);
+	BOOST_TEST(x == 2);
+	BOOST_TEST(i.m_x == 2);
 
 }
 

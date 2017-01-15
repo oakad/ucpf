@@ -27,6 +27,12 @@ BOOST_AUTO_TEST_CASE(string_path_0)
 	string_path p0(string_path::from_posix_like_string("aaa/bbb/ccc"));
 	BOOST_TEST(p0.size(), p0_ref.size());
 	BOOST_TEST(p0 == p0_ref, boost::test_tools::per_element());
+	BOOST_TEST(std::equal(
+		std::make_reverse_iterator(p0.end()),
+		std::make_reverse_iterator(p0.begin()),
+		std::make_reverse_iterator(p0_ref.end()),
+		std::make_reverse_iterator(p0_ref.begin())
+	));
 
 	std::array<test::ustring, 7> p1_ref{
 		test::ustring("aaaaa"_us),
@@ -42,6 +48,22 @@ BOOST_AUTO_TEST_CASE(string_path_0)
 	));
 	BOOST_TEST(p1.size(), p1_ref.size());
 	BOOST_TEST(p1 == p1_ref, boost::test_tools::per_element());
+	BOOST_TEST(std::equal(
+		std::make_reverse_iterator(p0.end()),
+		std::make_reverse_iterator(p0.begin()),
+		std::make_reverse_iterator(p0_ref.end()),
+		std::make_reverse_iterator(p0_ref.begin())
+	));
 }
 
+BOOST_AUTO_TEST_CASE(string_path_1)
+{
+	string_path p0(string_path::from_posix_like_string("aaa/bbb/ccc"));
+	string_path p1(string_path::from_posix_like_string("ddd/eee/fff"));
+	string_path p2(string_path::from_posix_like_string("ggg/hhh/iii"));
+	string_path p_ref(string_path::from_posix_like_string(
+		"aaa/bbb/ccc/ddd/eee/fff/ggg/hhh/iii"
+	));
+	BOOST_TEST(string_path::cat(p0, p1, p2) == p_ref);
+}
 }

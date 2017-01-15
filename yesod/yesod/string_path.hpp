@@ -18,78 +18,12 @@ namespace ucpf::yesod {
 
 struct string_path {
 	typedef typename detail::string_path_impl<>::size_type size_type;
-	typedef typename detail::string_path_impl<>::element value_type;
+	typedef typename detail::string_path_impl<>::value_type value_type;
+	typedef typename detail::string_path_impl<>::const_iterator const_iterator;
 
-	struct const_iterator : iterator::facade<
-		const_iterator, value_type const,
-		std::random_access_iterator_tag, value_type const
-	> {
-		const_iterator()
-		: data_ptr(nullptr), pos(0) {}
-
-	private:
-		friend struct string_path;
-		friend struct iterator::core_access;
-
-		const_iterator(
-			detail::ptr_or_data const *data_ptr_, size_type pos_
-		) : data_ptr(data_ptr_), pos(pos_) {}
-
-		reference dereference() const
-		{
-			return detail::string_path_impl<>::select(
-				*data_ptr
-			).element_at(*data_ptr, pos);
-		}
-
-		bool equal(const_iterator const &other) const
-		{
-			return (data_ptr == other.data_ptr)
-				&& (pos == other.pos);
-		}
-
-		void increment()
-		{
-			++pos;
-		}
-
-		void decrement()
-		{
-			--pos;
-		}
-
-		void advance(difference_type count)
-		{
-			if (count >= 0)
-				pos += count;
-			else
-				pos -= count;
-		}
-
-		difference_type distance_to(const_iterator const &other) const
-		{
-			return difference_type(other.pos) - pos;
-		}
-
-		detail::ptr_or_data const *data_ptr;
-		size_type pos;
-	};
-
-	template <typename SeqParser>
-	string_path(
-		SeqParser &&parser, pmr::memory_resource *mem_alloc = nullptr
-	)
+	string_path()
 	{
-		auto str_sz(parser.char_count());
-		if (detail::string_path_impl<0>::size_limit >= str_sz)
-			detail::string_path_impl<0>::init(
-				data, str_sz, std::forward<SeqParser>(parser)
-			);
-		else
-			detail::string_path_impl<1>::init(
-				data, str_sz, std::forward<SeqParser>(parser),
-				mem_alloc
-			);
+		detail::string_path_impl<0>::common_init(data, 0);
 	}
 
 	string_path(string_path &&other)
@@ -105,63 +39,61 @@ struct string_path {
 		);
 	}
 
-	template <typename CharSeq>
-	static string_path from_posix_like_string(
-		CharSeq &&seq, pmr::memory_resource *mem_alloc = nullptr
-	);
+	template <typename SeqParser>
+	string_path(
+		SeqParser &&parser, pmr::memory_resource *mem_alloc = nullptr
+	)
+	{
+		auto str_sz(parser.char_count());
+		if (detail::string_path_impl<0>::size_limit >= str_sz)
+			detail::string_path_impl<0>::init_p(
+				data, str_sz, std::forward<SeqParser>(parser)
+			);
+		else
+			detail::string_path_impl<1>::init_p(
+				data, str_sz, mem_alloc,
+				std::forward<SeqParser>(parser)
+			);
+	}
 
 	~string_path()
 	{
 		detail::string_path_impl<>::select(data).deallocate(data);
 	}
 
-	auto at(size_type pos) const
-	{
-		return detail::string_path_impl<>::select(data).element_at(
-			data, pos
-		);
-	}
-
 	const_iterator begin() const
 	{
-		return const_iterator(&data, 0);
+		return detail::string_path_impl<>::select(
+			data
+		).cbegin(data);
 	}
 
 	const_iterator cbegin() const
 	{
-		return const_iterator(&data, 0);
+		return detail::string_path_impl<>::select(
+			data
+		).cbegin(data);
 	}
 
 	const_iterator end() const
 	{
-		return const_iterator(&data, size());
+		return detail::string_path_impl<>::select(
+			data
+		).cend(data);
 	}
 
 	const_iterator cend() const
 	{
-		return const_iterator(&data, size());
+		return detail::string_path_impl<>::select(
+			data
+		).cend(data);
 	}
-
-	template <typename ...PathType>
-	string_path cat(
-		PathType &&...other, pmr::memory_resource *mem_alloc = nullptr
-	) const;
-
-	string_path sub_head(
-		string_path const &other,
-		pmr::memory_resource *mem_alloc = nullptr
-	) const;
-
-	string_path sub_tail(
-		string_path const &other,
-		pmr::memory_resource *mem_alloc = nullptr
-	) const;
 
 	size_type size() const
 	{
 		return detail::string_path_impl<>::select(
 			data
-		).element_count(data);
+		).value_count(data);
 	}
 
 	size_type byte_count() const
@@ -171,27 +103,94 @@ struct string_path {
 		).byte_count(data);
 	}
 
+	auto at(size_type pos) const
+	{
+		return *(cbegin() + pos);
+	}
+
 	size_type common_head_size(string_path const &other) const;
 
 	size_type common_tail_size(string_path const &other) const;
 
+	string_path head(
+		size_type count,
+		pmr::memory_resource *mem_alloc = nullptr
+	) const;
+
+	string_path tail(
+		size_type count,
+		pmr::memory_resource *mem_alloc = nullptr
+	) const;
+
+	string_path sub_range(
+		const_iterator const &first, const_iterator const &last,
+		pmr::memory_resource *mem_alloc = nullptr
+	) const;
+
+	bool operator==(string_path const &other) const
+	{
+		return detail::string_path_impl<>::equals(
+			cbegin(), other.cbegin()
+		);
+	}
+
+	bool operator!=(string_path const &other) const
+	{
+		return !detail::string_path_impl<>::equals(
+			cbegin(), other.cbegin()
+		);
+	}
+
+	template <typename... StringPathType>
+	static string_path cat(
+		pmr::memory_resource *mem_alloc, StringPathType &&...other
+	)
+	{
+		auto str_sz((size_type(0) + ... + other.byte_count()));
+		string_path rv;
+
+		if (detail::string_path_impl<0>::size_limit >= str_sz)
+			detail::string_path_impl<0>::init_c(
+				rv.data, str_sz,
+				std::forward<StringPathType>(other)...
+			);
+		else
+			detail::string_path_impl<1>::init_c(
+				rv.data, str_sz, mem_alloc,
+				std::forward<StringPathType>(other)...
+			);
+
+		return rv;
+	}
+
+	template <typename... StringPathType>
+	static string_path cat(
+		StringPathType &&...other
+	)
+	{
+		return cat(
+			static_cast<pmr::memory_resource *>(nullptr),
+			std::forward<StringPathType>(other)...
+		);
+	}
+
+	template <typename CharSeq>
+	static string_path from_posix_like_string(
+		CharSeq &&seq, pmr::memory_resource *mem_alloc = nullptr
+	)
+	{
+		typedef string_utils::charseq_adaptor<CharSeq> adaptor_type;
+
+		return string_path(string_utils::u8string_tokenizer_sce<
+			typename adaptor_type::result_type
+		>(
+			adaptor_type::apply(std::forward<CharSeq>(seq)),
+			'/', '\\'
+		), mem_alloc);
+	}
 private:
 	detail::ptr_or_data data;
 };
-
-template <typename CharSeq>
-string_path string_path::from_posix_like_string(
-	CharSeq &&seq, pmr::memory_resource *mem_alloc
-)
-{
-	typedef string_utils::charseq_adaptor<CharSeq> adaptor_type;
-
-	return string_path(string_utils::u8string_tokenizer_sce<
-		typename adaptor_type::result_type
-	>(
-		adaptor_type::apply(std::forward<CharSeq>(seq)), '/', '\\'
-	), mem_alloc);
-}
 
 }
 #endif

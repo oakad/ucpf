@@ -40,7 +40,7 @@ std::ostream &print_hex(std::ostream &os, CharSeq &&seq_)
 	std::ostream_iterator<char> iter(os);
 	string_utils::ascii_hex_formatter<
 		decltype(iter), decltype(seq)
-	>::apply(iter, seq);
+	>::apply(iter, std::move(seq));
 	return os;
 }
 

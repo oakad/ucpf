@@ -1,0 +1,8 @@
+import testing ;
+import alias ;
+
+alias test_case : $(ucpf)//test_case : : : <include>../.. ;
+
+run bitmap.cpp test_case ;
+
+

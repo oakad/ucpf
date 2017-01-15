@@ -31,8 +31,8 @@ struct charseq_adaptor<std::basic_string<CharType, Traits, Alloc>> {
 
 template <typename CharType, typename Traits>
 struct charseq_adaptor<
-	std::experimental::basic_string_view<CharType, Traits
->> {
+	std::experimental::basic_string_view<CharType, Traits>
+> {
 	typedef std::experimental::basic_string_view<
 		CharType, Traits
 	> result_type;
