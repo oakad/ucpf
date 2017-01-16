@@ -87,7 +87,16 @@ struct string_path_impl<> {
 
 		difference_type distance_to(const_iterator const &other) const
 		{
-			return difference_type(other.pos) - pos;
+			if (pos > other.pos) {
+				return -difference_type(bitmap::count_ones(
+					b_ptr, other.pos, pos
+				));
+			} else if (pos < other.pos) {
+				return difference_type(bitmap::count_ones(
+					b_ptr, pos, other.pos
+				));
+			} else
+				return 0;
 		}
 
 		uint8_t const *b_ptr;
@@ -95,8 +104,6 @@ struct string_path_impl<> {
 		size_type data_size;
 		size_type pos;
 	};
-
-	static string_path_impl<> const &select(ptr_or_data const &p);
 
 	template <typename SeqParser>
 	static void populate_p(
@@ -122,6 +129,17 @@ struct string_path_impl<> {
 		pos += iter.data_size;
 	}
 
+	static void populate_i(
+		uint8_t *str, uint8_t *sep_map, const_iterator const &first,
+		const_iterator const &last
+	)
+	{
+		bitmap::copy(sep_map, 0, first.b_ptr, first.pos, last.pos);
+		__builtin_memcpy(
+			str, first.data_ptr + first.pos, last.pos - first.pos
+		);
+	}
+
 	static bool equals(
 		const_iterator const &it0, const_iterator const &it1
 	)
@@ -138,6 +156,99 @@ struct string_path_impl<> {
 			it0.data_ptr, it1.data_ptr, it0.data_size
 		));
 	}
+
+	static size_type byte_distance(
+		const_iterator const &first, const_iterator const &last
+	)
+	{
+		return last.pos - first.pos;
+	}
+
+	static size_type common_head_size(
+		const_iterator const &it0, const_iterator const &it1
+	)
+	{
+		auto c_size(std::min(it0.data_size, it1.data_size));
+		if (!c_size)
+			return 0;
+
+		if (*it0.data_ptr != *it1.data_ptr)
+			return 0;
+
+		bitmap::word_ref<decltype(it0.b_ptr), true> b0(it0.b_ptr, 1);
+		bitmap::word_ref<decltype(it1.b_ptr), true> b1(it1.b_ptr, 1);
+		size_type rv(1);
+		size_type pos(1);
+
+		for (; pos < c_size; ++pos) {
+			bool sep(b0.test());
+			if (sep != b1.test())
+				break;
+
+			if (sep)
+				++rv;
+
+			if (it0.data_ptr[pos] != it1.data_ptr[pos])
+				break;
+
+			b0.increment();
+			b1.increment();
+		}
+
+		if (pos == c_size) {
+			if (it0.data_size > it1.data_size) {
+				if (b0.test())
+					++rv;
+			} else if (it0.data_size < it1.data_size) {
+				if (b1.test())
+					++rv;
+			} else
+				++rv;
+		}
+
+		return rv - 1;
+	}
+
+	static size_type common_tail_size(
+		const_iterator const &it0, const_iterator const &it1
+	)
+	{
+		if (!it0.data_size || !it1.data_size)
+			return 0;
+
+		bitmap::word_ref<decltype(it0.b_ptr), false> b0(
+			it0.b_ptr, it0.data_size - 1
+		);
+		bitmap::word_ref<decltype(it1.b_ptr), false> b1(
+			it1.b_ptr, it1.data_size - 1
+		);
+
+		auto ps0(it0.data_size - 1), ps1(it1.data_size - 1);
+		size_type rv(0);
+
+		while (true) {
+			if (it0.data_ptr[ps0] != it1.data_ptr[ps1])
+				break;
+
+			bool sep(b0.test());
+			if (sep != b1.test())
+				break;
+
+			if (sep)
+				++rv;
+
+			if (!ps0 || !ps1)
+				break;
+			--ps0;
+			--ps1;
+			b0.decrement();
+			b1.decrement();
+		}
+
+		return rv;
+	}
+
+	static string_path_impl<> const &select(ptr_or_data const &p);
 
 	virtual void deallocate(ptr_or_data &p) const
 	{}
@@ -189,6 +300,18 @@ struct string_path_impl<0> : string_path_impl<> {
 			p.bytes + bitmap::byte_count(str_sz) + 1,
 			p.bytes + 1, pos, std::forward<StringPathType>(other)
 		), ...);
+	}
+
+	static void init_i(
+		ptr_or_data &p, size_type str_sz, const_iterator const &first,
+		const_iterator const &last
+	)
+	{
+		common_init(p, str_sz);
+		populate_i(
+			p.bytes + bitmap::byte_count(str_sz) + 1,
+			p.bytes + 1, first, last
+		);
 	}
 
 	static size_type storage_size(ptr_or_data const &p)
@@ -286,6 +409,21 @@ struct string_path_impl<1> : string_path_impl<> {
 			p.get_ptr_at<uint8_t *>(0), pos,
 			std::forward<StringPathType>(other)
 		), ...);
+	}
+
+	static void init_i(
+		ptr_or_data &p, size_type str_sz,
+		pmr::memory_resource *mem_alloc,
+		const_iterator const &first,
+		const_iterator const &last
+	)
+	{
+		common_init(p, str_sz, mem_alloc);
+		populate_i(
+			p.get_ptr_at<uint8_t *>(bitmap::byte_count(str_sz)),
+			p.get_ptr_at<uint8_t *>(0),
+			first, last
+		);
 	}
 
 	static size_type storage_size(ptr_or_data const &p)

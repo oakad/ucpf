@@ -66,4 +66,28 @@ BOOST_AUTO_TEST_CASE(string_path_1)
 	));
 	BOOST_TEST(string_path::cat(p0, p1, p2) == p_ref);
 }
+
+BOOST_AUTO_TEST_CASE(string_path_2)
+{
+	string_path p0(string_path::from_posix_like_string(
+		"aaa/bbb/ccc/ddd/eee"
+	));
+	string_path p1a(string_path::from_posix_like_string("aaa/bbb"));
+	string_path p1b(string_path::from_posix_like_string("aaabbb"));
+	string_path p1c(string_path::from_posix_like_string("aaa/bbbccc"));
+	string_path p2a(string_path::from_posix_like_string("ddd/eee"));
+	string_path p2b(string_path::from_posix_like_string("dddeee"));
+	string_path p2c(string_path::from_posix_like_string("cccddd/eee"));
+
+	BOOST_TEST(p0.common_head_size(p0) == 5);
+	BOOST_TEST(p0.common_tail_size(p0) == 5);
+
+	BOOST_TEST(p0.common_head_size(p1a) == 2);
+	BOOST_TEST(p0.common_head_size(p1b) == 0);
+	BOOST_TEST(p0.common_head_size(p1c) == 1);
+
+	BOOST_TEST(p0.common_tail_size(p2a) == 2);
+	BOOST_TEST(p0.common_tail_size(p2b) == 0);
+	BOOST_TEST(p0.common_tail_size(p2c) == 1);
+}
 }

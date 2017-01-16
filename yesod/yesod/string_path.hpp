@@ -108,24 +108,55 @@ struct string_path {
 		return *(cbegin() + pos);
 	}
 
-	size_type common_head_size(string_path const &other) const;
+	size_type common_head_size(string_path const &other) const
+	{
+		return detail::string_path_impl<>::common_head_size(
+			cbegin(), other.cbegin()
+		);
+	}
 
-	size_type common_tail_size(string_path const &other) const;
+	size_type common_tail_size(string_path const &other) const
+	{
+		return detail::string_path_impl<>::common_tail_size(
+			cend(), other.cend()
+		);
+	}
 
 	string_path head(
-		size_type count,
-		pmr::memory_resource *mem_alloc = nullptr
-	) const;
+		size_type count, pmr::memory_resource *mem_alloc = nullptr
+	) const
+	{
+		return sub_range(cbegin(), cbegin() + count, mem_alloc);
+	}
 
 	string_path tail(
-		size_type count,
-		pmr::memory_resource *mem_alloc = nullptr
-	) const;
+		size_type count, pmr::memory_resource *mem_alloc = nullptr
+	) const
+	{
+		return sub_range(cend(), cend() - count, mem_alloc);
+	}
 
 	string_path sub_range(
 		const_iterator const &first, const_iterator const &last,
 		pmr::memory_resource *mem_alloc = nullptr
-	) const;
+	) const
+	{
+		auto str_sz(detail::string_path_impl<>::byte_distance(
+			first, last
+		));
+		string_path rv;
+
+		if (detail::string_path_impl<0>::size_limit >= str_sz)
+			detail::string_path_impl<0>::init_i(
+				rv.data, str_sz, first, last
+			);
+		else
+			detail::string_path_impl<1>::init_i(
+				rv.data, str_sz, mem_alloc, first, last
+			);
+
+		return rv;
+	}
 
 	bool operator==(string_path const &other) const
 	{

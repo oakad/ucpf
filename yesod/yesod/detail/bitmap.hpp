@@ -210,7 +210,6 @@ struct bitmap_base {
 		}
 	}
 
-protected:
 	template <typename BitmapPtr, bool IsFirst>
 	struct word_ref {
 		word_ref(BitmapPtr b_map, size_type b_offset)
@@ -230,6 +229,30 @@ protected:
 				mask = offset ? ~bitmap_type::word_bit_mask(
 					offset, word_type_bits - offset
 				) : word_type(0);
+		}
+
+		void increment()
+		{
+			++offset;
+			if (offset == word_type_bits) {
+				offset = 0;
+				++ptr;
+			}
+		}
+
+		void decrement()
+		{
+			if (offset)
+				--offset;
+			else {
+				offset = word_type_bits - 1;
+				--ptr;
+			}
+		}
+
+		bool test() const
+		{
+			return *ptr & bitmap_type::word_bit_mask(offset, 1);
 		}
 
 		std::conditional_t<std::is_const<
