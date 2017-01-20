@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 Alex Dubov <oakad@yahoo.com>
+ * Copyright (c) 2016-2017 Alex Dubov <oakad@yahoo.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the  terms of  the GNU General Public License version 3 as publi-
@@ -9,7 +9,6 @@
 #if !defined(HPP_36A4C68630035F9450192329A4B78968)
 #define HPP_36A4C68630035F9450192329A4B78968
 
-#include <yesod/iterator/facade.hpp>
 #include <yesod/detail/string_path_impl.hpp>
 #include <yesod/string_utils/charseq_adaptor.hpp>
 #include <yesod/string_utils/u8string_tokenizer_sce.hpp>

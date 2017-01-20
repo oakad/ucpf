@@ -22,28 +22,10 @@
 #define HPP_8E77828863F45B23BE2CDAC39DB63FF8
 
 #include <iterator>
+#include <yesod/iterator/is_interoperable.hpp>
 
 namespace ucpf::yesod::iterator {
 namespace detail {
-
-template <typename T0, typename T1>
-using is_interoperable = std::integral_constant<
-	bool,
-	std::is_convertible<T0, T1>::value
-	| std::is_convertible<T1, T0>::value
->;
-
-template <typename T0, typename T1, typename Return>
-using enable_if_interoperable = std::enable_if<
-	is_interoperable<T0, T1>::value, Return
->;
-
-template <typename T0, typename T1>
-using choose_difference_type = std::conditional_t<
-	std::is_convertible<T1, T0>::value,
-	typename std::iterator_traits<T0>::difference_type,
-	typename std::iterator_traits<T1>::difference_type
->;
 
 template <typename T>
 struct is_reference_to_const : std::false_type {};
@@ -263,75 +245,82 @@ struct core_access {
 	template <typename... Args>
 	friend struct facade;
 
+	template <typename T0, typename T1>
+	using choose_difference_type = std::conditional_t<
+		std::is_convertible<T1, T0>::value,
+		typename std::iterator_traits<T0>::difference_type,
+		typename std::iterator_traits<T1>::difference_type
+	>;
+
 	template <typename... Tn, typename... Un>
-	friend typename detail::enable_if_interoperable<
+	friend enable_if_interoperable_t<
 		typename facade<Tn...>::derived_type,
 		typename facade<Un...>::derived_type,
 		bool
-	>::type operator==(
+	> operator==(
 		facade<Tn...> const &lhs,
 		facade<Un...> const &rhs
 	);
 
 	template <typename... Tn, typename... Un>
-	friend typename detail::enable_if_interoperable<
+	friend enable_if_interoperable_t<
 		typename facade<Tn...>::derived_type,
 		typename facade<Un...>::derived_type,
 		bool
-	>::type operator!=(
+	> operator!=(
 		facade<Tn...> const &lhs,
 		facade<Un...> const &rhs
 	);
 
 	template <typename... Tn, typename... Un>
-	friend typename detail::enable_if_interoperable<
+	friend enable_if_interoperable_t<
 		typename facade<Tn...>::derived_type,
 		typename facade<Un...>::derived_type,
 		bool
-	>::type operator<(
+	> operator<(
 		facade<Tn...> const &lhs,
 		facade<Un...> const &rhs
 	);
 
 	template <typename... Tn, typename... Un>
-	friend typename detail::enable_if_interoperable<
+	friend enable_if_interoperable_t<
 		typename facade<Tn...>::derived_type,
 		typename facade<Un...>::derived_type,
 		bool
-	>::type operator>(
+	> operator>(
 		facade<Tn...> const &lhs,
 		facade<Un...> const &rhs
 	);
 
 	template <typename... Tn, typename... Un>
-	friend typename detail::enable_if_interoperable<
+	friend enable_if_interoperable_t<
 		typename facade<Tn...>::derived_type,
 		typename facade<Un...>::derived_type,
 		bool
-	>::type operator<=(
+	> operator<=(
 		facade<Tn...> const &lhs,
 		facade<Un...> const &rhs
 	);
 
 	template <typename... Tn, typename... Un>
-	friend typename detail::enable_if_interoperable<
+	friend enable_if_interoperable_t<
 		typename facade<Tn...>::derived_type,
 		typename facade<Un...>::derived_type,
 		bool
-	>::type operator>=(
+	> operator>=(
 		facade<Tn...> const &lhs,
 		facade<Un...> const &rhs
 	);
 
 	template <typename... Tn, typename... Un>
-	friend typename detail::enable_if_interoperable<
+	friend enable_if_interoperable_t<
 		typename facade<Tn...>::derived_type,
 		typename facade<Un...>::derived_type,
-		detail::choose_difference_type<
+		choose_difference_type<
 			typename facade<Tn...>::derived_type,
 			typename facade<Un...>::derived_type
 		>
-	>::type operator-(
+	> operator-(
 		facade<Tn...> const &lhs,
 		facade<Un...> const &rhs
 	);
@@ -416,8 +405,7 @@ struct core_access {
 		>(&f);
 	}
 
-private:
-	core_access();
+	core_access() = delete;
 };
 
 /* Optional arguments in order:
@@ -532,11 +520,11 @@ public:
 };
 
 template <typename... Tn, typename... Un>
-typename detail::enable_if_interoperable<
+enable_if_interoperable_t<
 	typename facade<Tn...>::derived_type,
 	typename facade<Un...>::derived_type,
 	bool
->::type operator==(
+> operator==(
 	facade<Tn...> const &lhs,
 	facade<Un...> const &rhs
 )
@@ -544,7 +532,7 @@ typename detail::enable_if_interoperable<
 	typedef typename facade<Tn...>::derived_type lh_derived;
 	typedef typename facade<Un...>::derived_type rh_derived;
 
-	static_assert(detail::is_interoperable<lh_derived, rh_derived>::value);
+	static_assert(is_interoperable<lh_derived, rh_derived>::value);
 
 	return core_access::equal(
 		*static_cast<lh_derived const *>(&lhs),
@@ -554,11 +542,11 @@ typename detail::enable_if_interoperable<
 }
 
 template <typename... Tn, typename... Un>
-typename detail::enable_if_interoperable<
+enable_if_interoperable_t<
 	typename facade<Tn...>::derived_type,
 	typename facade<Un...>::derived_type,
 	bool
->::type operator!=(
+> operator!=(
 	facade<Tn...> const &lhs,
 	facade<Un...> const &rhs
 )
@@ -566,9 +554,7 @@ typename detail::enable_if_interoperable<
 	typedef typename facade<Tn...>::derived_type lh_derived;
 	typedef typename facade<Un...>::derived_type rh_derived;
 
-	static_assert(
-		detail::is_interoperable<lh_derived, rh_derived>::value
-	);
+	static_assert(is_interoperable<lh_derived, rh_derived>::value);
 
 	return !core_access::equal(
 		*static_cast<lh_derived const *>(&lhs),
@@ -578,11 +564,11 @@ typename detail::enable_if_interoperable<
 }
 
 template <typename... Tn, typename... Un>
-typename detail::enable_if_interoperable<
+enable_if_interoperable_t<
 	typename facade<Tn...>::derived_type,
 	typename facade<Un...>::derived_type,
 	bool
->::type operator<(
+> operator<(
 	facade<Tn...> const &lhs,
 	facade<Un...> const &rhs
 )
@@ -590,9 +576,7 @@ typename detail::enable_if_interoperable<
 	typedef typename facade<Tn...>::derived_type lh_derived;
 	typedef typename facade<Un...>::derived_type rh_derived;
 
-	static_assert(
-		detail::is_interoperable<lh_derived, rh_derived>::value
-	);
+	static_assert(is_interoperable<lh_derived, rh_derived>::value);
 
 	return 0 > core_access::distance_from(
 		*static_cast<lh_derived const *>(&lhs),
@@ -602,11 +586,11 @@ typename detail::enable_if_interoperable<
 }
 
 template <typename... Tn, typename... Un>
-typename detail::enable_if_interoperable<
+enable_if_interoperable_t<
 	typename facade<Tn...>::derived_type,
 	typename facade<Un...>::derived_type,
 	bool
->::type operator>(
+> operator>(
 	facade<Tn...> const &lhs,
 	facade<Un...> const &rhs
 )
@@ -614,9 +598,7 @@ typename detail::enable_if_interoperable<
 	typedef typename facade<Tn...>::derived_type lh_derived;
 	typedef typename facade<Un...>::derived_type rh_derived;
 
-	static_assert(
-		detail::is_interoperable<lh_derived, rh_derived>::value
-	);
+	static_assert(is_interoperable<lh_derived, rh_derived>::value);
 
 	return 0 < core_access::distance_from(
 		*static_cast<lh_derived const *>(&lhs),
@@ -626,11 +608,11 @@ typename detail::enable_if_interoperable<
 }
 
 template <typename... Tn, typename... Un>
-typename detail::enable_if_interoperable<
+enable_if_interoperable_t<
 	typename facade<Tn...>::derived_type,
 	typename facade<Un...>::derived_type,
 	bool
->::type operator<=(
+> operator<=(
 	facade<Tn...> const &lhs,
 	facade<Un...> const &rhs
 )
@@ -638,9 +620,7 @@ typename detail::enable_if_interoperable<
 	typedef typename facade<Tn...>::derived_type lh_derived;
 	typedef typename facade<Un...>::derived_type rh_derived;
 
-	static_assert(
-		detail::is_interoperable<lh_derived, rh_derived>::value
-	);
+	static_assert(is_interoperable<lh_derived, rh_derived>::value);
 
 	return 0 >= core_access::distance_from(
 		*static_cast<lh_derived const *>(&lhs),
@@ -650,11 +630,11 @@ typename detail::enable_if_interoperable<
 }
 
 template <typename... Tn, typename... Un>
-typename detail::enable_if_interoperable<
+enable_if_interoperable_t<
 	typename facade<Tn...>::derived_type,
 	typename facade<Un...>::derived_type,
 	bool
->::type operator>=(
+> operator>=(
 	facade<Tn...> const &lhs,
 	facade<Un...> const &rhs
 )
@@ -662,7 +642,7 @@ typename detail::enable_if_interoperable<
 	typedef typename facade<Tn...>::derived_type lh_derived;
 	typedef typename facade<Un...>::derived_type rh_derived;
 
-	static_assert(detail::is_interoperable<lh_derived, rh_derived>::value);
+	static_assert(is_interoperable<lh_derived, rh_derived>::value);
 
 	return 0 <= core_access::distance_from(
 		*static_cast<lh_derived const *>(&lhs),
@@ -672,14 +652,14 @@ typename detail::enable_if_interoperable<
 }
 
 template <typename... Tn, typename... Un>
-typename detail::enable_if_interoperable<
+enable_if_interoperable_t<
 	typename facade<Tn...>::derived_type,
 	typename facade<Un...>::derived_type,
-	detail::choose_difference_type<
+	core_access::choose_difference_type<
 		typename facade<Tn...>::derived_type,
 		typename facade<Un...>::derived_type
 	>
->::type operator-(
+> operator-(
 	facade<Tn...> const &lhs,
 	facade<Un...> const &rhs
 )
@@ -687,7 +667,7 @@ typename detail::enable_if_interoperable<
 	typedef typename facade<Tn...>::derived_type lh_derived;
 	typedef typename facade<Un...>::derived_type rh_derived;
 
-	static_assert(detail::is_interoperable<lh_derived, rh_derived>::value);
+	static_assert(is_interoperable<lh_derived, rh_derived>::value);
 	
 	return core_access::distance_from(
 		*static_cast<lh_derived const *>(&lhs),

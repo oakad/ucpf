@@ -11,6 +11,7 @@
 
 #include <yesod/memory.hpp>
 #include <yesod/detail/bitmap.hpp>
+#include <yesod/iterator/facade.hpp>
 #include <yesod/detail/ptr_or_data.hpp>
 
 #include <experimental/string_view>
