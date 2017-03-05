@@ -1,0 +1,6 @@
+import testing ;
+import alias ;
+
+alias test_case : $(ucpf)//test_case : : : <include>../.. ;
+
+run phaser_0.cpp test_case ;

@@ -151,19 +151,6 @@ struct thread_data {
 
 template <typename Unused = void>
 struct current_thread_data {
-	static thread_data *allocate_and_get_data();
-
-	static thread_data *get_data()
-	{
-		return holder.data;
-	}
-
-	~current_thread_data()
-	{
-		if (data)
-			data->child_release();
-	}
-
 	struct pcg32_state {
 		pcg32_state()
 		: pcg32_state(std::random_device())
@@ -203,17 +190,52 @@ struct current_thread_data {
 		std::atomic<uint64_t> state;
 	};
 
+	struct thread_exit_handler {
+		~thread_exit_handler()
+		{
+			holder.destroy();
+		}
+	};
 
-	thread_data *data = nullptr;
-	thread_data *(*accessor)() = allocate_and_get_data;
+	void set_data(thread_data *tdata_)
+	{
+		tdata = tdata_;
+		accessor = get_data;
+		exit_handler_ptr = &exit_handler;
+	}
+
+	void destroy()
+	{
+		if (tdata)
+			tdata->child_release();
+	}
+
+	typedef thread_data *(*thread_data_accessor)();
 
 	static thread_local current_thread_data holder;
+	static thread_local thread_exit_handler exit_handler;
+
 	static pcg32_state shared_prng_state;
 	static unsigned int const hardware_concurrency;
+
+	static thread_data *allocate_and_get_data();
+
+	static thread_data *get_data()
+	{
+		return holder.tdata;
+	}
+
+	thread_data *tdata = nullptr;
+	thread_data_accessor accessor = allocate_and_get_data;
+	thread_exit_handler *exit_handler_ptr = nullptr;
 };
 
 template <typename Unused>
 thread_local current_thread_data<Unused> current_thread_data<Unused>::holder;
+
+template <typename Unused>
+thread_local typename current_thread_data<Unused>::thread_exit_handler
+current_thread_data<Unused>::exit_handler;
 
 template <typename Unused>
 typename current_thread_data<Unused>::pcg32_state
@@ -259,9 +281,7 @@ struct thread_data_impl : thread_data {
 
 	void child_attach() override
 	{
-		current_thread_data<>::holder.data = this;
-		current_thread_data<>::holder.accessor
-		= current_thread_data<>::get_data;
+		current_thread_data<>::holder.set_data(this);
 		flags |= FLAG_CHILD_ATTACHED;
 	}
 };
@@ -269,12 +289,12 @@ struct thread_data_impl : thread_data {
 template <typename Unused>
 thread_data *current_thread_data<Unused>::allocate_and_get_data()
 {
-	holder.data = detail::thread_data_impl<std::allocator<void>>::make(
+	auto data = detail::thread_data_impl<std::allocator<void>>::make(
 		std::allocator<void>{}, true
 	);
-	holder.data->handle = __gthread_self();
-	holder.accessor = get_data;
-	return holder.data;
+	data->handle = __gthread_self();
+	holder.set_data(data);
+	return data;
 }
 
 }
@@ -349,13 +369,6 @@ struct thread {
 		swap(other);
 		return *this;
 	}
-
-	struct state {
-		virtual ~state() = default;
-		virtual void run() = 0;
-	};
-
-	using state_ptr = std::unique_ptr<state>;
 
 	typedef __gthread_t native_handle_type;
 
@@ -460,39 +473,45 @@ struct thread {
 	}
 
 private:
-	static void *execute_native_thread_routine(void *p)
+	struct invoker_base {
+		virtual ~invoker_base() = default;
+		virtual void run() = 0;
+		virtual void destroy() = 0;
+	};
+
+	static void *execute_native_thread_routine(void *p_)
 	{
-		state_ptr t{static_cast<state *>(p)};
+		auto p(reinterpret_cast<invoker_base *>(p_));
 
 		try {
-			t->run();
+			p->run();
 		} catch(__cxxabiv1::__forced_unwind const &) {
+			p->destroy();
 			throw;
 		} catch(...) {
+			p->destroy();
 			std::terminate();
 		}
-
+		p->destroy();
 		return nullptr;
 	}
 
-	void start_thread(state_ptr p)
+	void start_thread(invoker_base *p)
 	{
 		auto err(__gthread_create(
-			&tdata->handle,
-			execute_native_thread_routine,
-			p.get()
+			&tdata->handle, execute_native_thread_routine, p
 		));
 
-		if (err)
+		if (err) {
+			p->destroy();
 			throw std::system_error(std::error_code(
 				err, std::generic_category()
 			));
-
-		p.release();
+		}
 	}
 
-	template <typename TupleType>
-	struct invoker : public state {
+	template <typename TupleType, typename Allocator>
+	struct invoker : public invoker_base {
 		template <size_t Index>
 		static std::tuple_element_t<Index, TupleType> &&declval_();
 
@@ -514,6 +533,13 @@ private:
 			invoke(Indices());
 		}
 
+		void destroy() override
+		{
+			yesod::detail::allocated_storage<
+				invoker, Allocator
+			>::to_storage_ptr(this)->destroy();
+		}
+
 		invoker(detail::thread_data *tdata_, TupleType &&t_)
 		: tdata(tdata_), t(std::forward<TupleType>(t_))
 		{}
@@ -523,7 +549,7 @@ private:
 	};
 
 	template<typename Allocator, typename Callable, typename... Args>
-	auto make_invoker(
+	invoker_base *make_invoker(
 		Allocator const &alloc, Callable &&f, Args &&...args
 	)
 	{
@@ -532,11 +558,13 @@ private:
 			typename std::__decay_and_strip<Args>::__type...
 		> tuple_type;
 
-		return state_ptr{new invoker<tuple_type>(tdata, tuple_type(
+		return yesod::detail::allocated_storage<
+			invoker<tuple_type, Allocator>, Allocator
+		>::make(alloc, tdata, tuple_type(
 			std::allocator_arg, alloc,
 			std::forward<Callable>(f),
 			std::forward<Args>(args)...
-		))};
+		))->get();
 	}
 
 	detail::thread_data *tdata = nullptr;
