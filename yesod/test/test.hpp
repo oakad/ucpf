@@ -13,6 +13,7 @@
 #include <yesod/string_utils/ascii_hex_formatter.hpp>
 
 #include <iostream>
+#include <experimental/tuple>
 #include <experimental/string_view>
 
 namespace ucpf::yesod::test {
@@ -57,6 +58,13 @@ std::ostream &print_hex(std::ostream &os, CharSeq &&seq_, size_t length)
 	return os;
 }
 
+template <size_t N>
+void check_all(std::array<boost::test_tools::assertion_result, N> const &res)
+{
+	for (auto &r: res)
+		BOOST_TEST(r);
+}
+
 }
 
 namespace boost::test_tools::tt_detail {
@@ -83,5 +91,79 @@ struct print_log_value<ucpf::yesod::test::ustring_view> {
 	}
 };
 
+typedef std::tuple<
+	::boost::test_tools::assertion_result,
+	::boost::unit_test::lazy_ostream,
+	::boost::unit_test::const_string,
+	std::size_t,
+	::boost::test_tools::tt_detail::tool_level,
+	::boost::test_tools::tt_detail::check_type,
+	std::size_t
+> assertion_report_arg_t;
+
 }
+
+#define BOOST_TEST_DECLARE_LOC_STORE()                              \
+std::vector<::boost::test_tools::tt_detail::assertion_report_arg_t> \
+boost_test_assertions                                               \
+/**/
+
+#define BOOST_TEST_REPORT_LOCALS()                                          \
+do {                                                                        \
+	for (auto &t: boost_test_assertions) {                              \
+		std::experimental::fundamentals_v1::apply(                  \
+			::boost::test_tools::tt_detail::report_assertion, t \
+		);                                                          \
+	}                                                                   \
+} while(::boost::test_tools::tt_detail::dummy_cond())                       \
+/**/
+
+#define BOOST_TEST_TOOL_ET_LOC_IMPL(P, level)                          \
+do {                                                                   \
+	boost_test_assertions.emplace_back(                            \
+		BOOST_TEST_BUILD_ASSERTION(P).evaluate(),              \
+		BOOST_TEST_LAZY_MSG(BOOST_TEST_STRINGIZE(P)),          \
+		BOOST_TEST_L(__FILE__),                                \
+		static_cast<std::size_t>(__LINE__),                    \
+		::boost::test_tools::tt_detail::level,                 \
+		::boost::test_tools::tt_detail::CHECK_BUILT_ASSERTION, \
+		0                                                      \
+	);                                                             \
+} while(::boost::test_tools::tt_detail::dummy_cond())                  \
+/**/
+
+#define BOOST_TEST_TOOL_ET_LOC_IMPL_EX(P, level, arg)                    \
+do {                                                                     \
+	boost_test_assertions.emplace_back(                              \
+		::boost::test_tools::tt_detail::assertion_evaluate(      \
+			BOOST_TEST_BUILD_ASSERTION(P)                    \
+		) << arg,                                                \
+		::boost::test_tools::tt_detail::assertion_text(          \
+			BOOST_TEST_LAZY_MSG(BOOST_TEST_STRINGIZE(P)),    \
+			BOOST_TEST_LAZY_MSG(arg)                         \
+		),                                                       \
+		BOOST_TEST_L(__FILE__),                                  \
+		static_cast<std::size_t>(__LINE__),                      \
+		::boost::test_tools::tt_detail::level,                   \
+		::boost::test_tools::tt_detail::assertion_type() << arg, \
+		0                                                        \
+	);                                                               \
+} while(::boost::test_tools::tt_detail::dummy_cond())                    \
+/**/
+
+#define BOOST_TEST_TOOL_LOC(level, P)     \
+	BOOST_TEST_TOOL_ET_LOC_IMPL(P, level) \
+/**/
+
+#define BOOST_TEST_TOOL_LOC_EX(level, P, ...)             \
+	BOOST_TEST_TOOL_ET_LOC_IMPL_EX(P, level, __VA_ARGS__) \
+/**/
+
+#define BOOST_TEST_LOC( ... ) BOOST_TEST_INVOKE_IF_N_ARGS(     \
+	2, BOOST_TEST_TOOL_LOC, BOOST_TEST_TOOL_LOC_EX, CHECK, \
+	__VA_ARGS__                                            \
+)                                                              \
+/**/
+
+
 #endif
