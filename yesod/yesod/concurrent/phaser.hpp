@@ -24,17 +24,134 @@
 #include <yesod/concurrent/thread.hpp>
 
 namespace ucpf::yesod::concurrent {
+namespace test {
+
+struct phaser_probe;
+
+}
 
 struct phaser {
 	typedef uint64_t state_type;
-	typedef uint32_t phase_type;
+	typedef uint32_t phase_value_type;
 	typedef uint16_t count_type;
 
+	struct phase_type {
+		phase_type()
+		: state(0)
+		{}
+
+		phase_type(phase_value_type v)
+		: state(state_type(v) << state_parties_shift)
+		{}
+
+		phase_value_type value() const
+		{
+			return phase_of(state);
+		}
+
+		bool terminal() const
+		{
+			return termination_flag_set(state);
+		}
+
+		phase_type &operator++()
+		{
+			auto v(state + (state_type(1) << state_phase_shift));
+			v &= state_phase_mask;
+			state &= ~state_phase_mask;
+			state |= v;
+			return *this;
+		}
+
+		phase_type operator+(phase_value_type other) const
+		{
+			auto v(state & state_phase_mask);
+			v += state_type(other) << state_phase_shift;
+
+			return make(v & state_phase_mask);
+		}
+
+		bool operator==(phase_type const &other) const
+		{
+			return state == other.state;
+		}
+
+		bool operator!=(phase_type const &other) const
+		{
+			return state != other.state;
+		}
+
+		enum CONDITION : int {
+			NORMAL = 0,
+			ERRONEOUS = 1,
+			TIMED_OUT = 2,
+			INTERRUPTED = 3
+		};
+
+		CONDITION condition()
+		{
+			auto rv(static_cast<CONDITION>(
+				state & ~state_phase_type_mask
+			));
+			state &= state_phase_type_mask;
+			return rv;
+		}
+
+		bool normal()
+		{
+			return condition() == CONDITION::NORMAL;
+		}
+
+		bool erroneous()
+		{
+			return condition() == CONDITION::ERRONEOUS;
+		}
+
+		bool timed_out()
+		{
+			return condition() == CONDITION::TIMED_OUT;
+		}
+
+		bool interrupted()
+		{
+			return condition() == CONDITION::INTERRUPTED;
+		}
+
+	//private:
+		friend struct phaser;
+
+		static phase_type make(state_type state_)
+		{
+			phase_type rv;
+			rv.state = state_ & state_phase_type_mask;
+			return rv;
+		}
+
+		static phase_type make_err(state_type state_)
+		{
+			phase_type rv;
+			rv.state = (
+				state_ & state_phase_type_mask
+			) + CONDITION::ERRONEOUS;
+			return rv;
+		}
+
+		state_type state;
+	};
+
 	struct notification {
+		virtual ~notification() = default;
+
 		virtual bool on_advance(
-			phase_type phase, count_type registered_parties
+			phaser &p, phase_type phase,
+			count_type registered_parties
 		) = 0;
 	};
+
+	phaser(phaser &) = delete;
+	phaser(phaser &&) = delete;
+	phaser(phaser const &) = delete;
+	phaser(phaser const &&) = delete;
 
 	template <typename Allocator = std::allocator<void>>
 	phaser(
@@ -46,13 +163,13 @@ struct phaser {
 	  even_q_head(nullptr), odd_q_head(nullptr),
 	  notifier(notifier_)
 	{
-		phase_type phase(0);
+		phase_type phase;
 
 		if (parent && parties)
 			phase = parent->do_register(1, alloc_);
 
 		state.store(parties ? define_state(
-			phase, parties, parties
+			phase.value(), parties, parties
 		) : define_state(0, 0, 1));
 	}
 
@@ -87,37 +204,40 @@ struct phaser {
 	{
 		auto s(state.load());
 		state_type next;
-		phase_type phase;
+		phase_type phase_out;
 		count_type unarrived;
 
 		do {
 			if (parent)
 				s = reconcile_state(s);
 
-			phase = phase_of(s);
-			if (termination_flag_set(s))
-				return phase;
+			phase_out = phase_type::make(s);
+			if (phase_out.terminal())
+				return phase_out;
 
 			unarrived = unarrived_of(s);
 			if (!unarrived)
-				throw std::logic_error(
-					"unregistered party arrival"
-				);
+				return phase_type::make_err(s);
+
 			next = s - 1;
 		} while (!state.compare_exchange_weak(s, next));
 
 		s = next;
 
 		if (unarrived > 1)
-			return internal_await_advance_default(phase, alloc);
+			return internal_await_advance_default(
+				phase_out, alloc
+			);
 
 		if (root != this)
 			return parent->arrive_and_await_advance();
 
 		auto next_unarrived(parties_of(s));
-		auto next_phase(phase + 1);
+		auto next_phase(phase_out.value() + 1);
 
-		if (on_advance(phase, next_unarrived))
+		if (notifier.invoke_on_advance(
+			*this, phase_out, next_unarrived
+		))
 			next = define_state(
 				next_phase, next_unarrived, 0
 			) | phaser_terminated_mask;
@@ -129,10 +249,10 @@ struct phaser {
 			);
 
 		if (!state.compare_exchange_strong(s, next))
-			return phase_of(s);
+			return phase_type::make(s);
 
-		release_waiters(phase);
-		return next_phase;
+		release_waiters(get_queue(phase_out));
+		return phase_type::make(next);
 	}
 
 	template <typename Allocator = std::allocator<void>>
@@ -140,16 +260,20 @@ struct phaser {
 		phase_type phase_in, Allocator const &alloc = Allocator()
 	)
 	{
+		if (phase_in.terminal())
+			return phase_in;
+
 		auto s(state.load());
 		if (parent)
 			s = reconcile_state(s);
 
-		auto phase_out(phase_of(s));
-
+		auto phase_out(phase_type::make(s));
 		if (phase_out == phase_in)
-			return internal_await_advance_default(phase_in, alloc);
-
-		return phase_out;
+			return internal_await_advance_default(
+				phase_in, alloc
+			);
+		else
+			return phase_out;
 	}
 
 	template <typename Allocator = std::allocator<void>>
@@ -157,18 +281,20 @@ struct phaser {
 		phase_type phase_in, Allocator const &alloc = Allocator()
 	)
 	{
+		if (phase_in.terminal())
+			return phase_in;
+
 		auto s(state.load());
 		if (parent)
 			s = reconcile_state(s);
 
-		auto phase_out(phase_of(s));
-
+		auto phase_out(phase_type::make(s));
 		if (phase_out == phase_in)
 			return root->internal_await_advance_interruptibly(
 				phase_in, alloc
 			);
-
-		return phase_out;
+		else
+			return phase_out;
 	}
 
 	template <
@@ -181,18 +307,20 @@ struct phaser {
 		Allocator const &alloc = Allocator()
 	)
 	{
+		if (phase_in.terminal())
+			return phase_in;
+
 		auto s(state.load());
 		if (parent)
 			s = reconcile_state(s);
 
-		auto phase_out(phase_of(s));
-
+		auto phase_out(phase_type::make(s));
 		if (phase_out == phase_in)
 			return internal_await_advance_timed(
 				phase_in, rel_time, alloc
 			);
-
-		return phase_out;
+		else
+			return phase_out;
 	}
 
 	void force_termination()
@@ -205,13 +333,13 @@ struct phaser {
 			s, s | phaser_terminated_mask
 		)) {}
 
-		release_waiters(0);
-		release_waiters(1);
+		release_waiters(root->even_q_head);
+		release_waiters(root->odd_q_head);
 	}
 
 	phase_type get_phase() const
 	{
-		return phase_of(state.load());
+		return phase_type::make(state.load());
 	}
 
 	count_type get_registered_parties() const
@@ -247,16 +375,22 @@ struct phaser {
 	}
 
 private:
+	friend struct test::phaser_probe;
+
 	constexpr static size_t state_bits = 64;
 	constexpr static size_t state_phase_bits = 31;
 	constexpr static size_t state_parties_bits = 16;
 	constexpr static size_t state_pending_bits = 16;
 
+	constexpr static size_t termination_bit_shift = state_bits - 1;
 	constexpr static size_t state_phase_shift = 32;
 	constexpr static size_t state_parties_shift = 16;
-	
+
+	constexpr static state_type state_phase_type_mask
+	= ~state_type(0) << state_phase_shift;
+
 	constexpr static state_type phaser_terminated_mask
-	= state_type(1) << (state_bits - 1);
+	= state_type(1) << termination_bit_shift;
 
 	constexpr static state_type state_phase_increment
 	= state_type(1) << state_phase_shift;
@@ -271,10 +405,11 @@ private:
 
 	struct wait_node_base {
 		wait_node_base(
-			phaser &owner_, phase_type phase_, bool interruptible
+			phaser &owner_, phase_type phase_,
+			bool interruptible
 		)
 		: owner(owner_), next(nullptr),
-		  tdata(thread::current_thread_data()),
+		  tdata(this_thread::get_thread_data()),
 		  flags{FLAG_IN_USE | (interruptible ? FLAG_INTERRUPTIBLE : 0)},
 		  phase(phase_)
 		{}
@@ -299,6 +434,9 @@ private:
 		constexpr static uint32_t release_mask
 		= FLAG_IN_USE | FLAG_QUEUED;
 
+		constexpr static uint32_t interrupt_mask
+		= FLAG_WAS_INTERRUPTED | FLAG_INTERRUPTIBLE;
+
 		phaser &owner;
 		wait_node_base *next;
 		std::atomic<detail::thread_data *> tdata;
@@ -310,7 +448,8 @@ private:
 	struct wait_node final : wait_node_base
 	{
 		static wait_node *create(
-			phaser &owner_, phase_type phase_, bool interruptible,
+			phaser &owner_, phase_type phase_,
+			bool interruptible,
 			Allocator const &alloc
 		)
 		{
@@ -331,10 +470,12 @@ private:
 				return true;
 			}
 
-			if (thread::current_thread_data()->is_interrupted(true))
+			if (this_thread::get_thread_data()->is_interrupted(
+				true
+			))
 				flags |= FLAG_WAS_INTERRUPTED;
 
-			if (flags.load() & FLAG_WAS_INTERRUPTED) {
+			if ((flags.load() & interrupt_mask) == interrupt_mask) {
 				tdata.store(nullptr);
 				return true;
 			}
@@ -345,7 +486,7 @@ private:
 		void block() override
 		{
 			while (!is_releasable())
-				thread::current_thread_data()->park();
+				this_thread::get_thread_data()->park();
 		}
 
 		void release() override
@@ -365,7 +506,8 @@ private:
 		}
 
 		wait_node(
-			phaser &owner_, phase_type phase_, bool interruptible
+			phaser &owner_, phase_type phase_,
+			bool interruptible
 		)
 		: wait_node_base(owner_, phase_, interruptible)
 		{}
@@ -375,7 +517,8 @@ private:
 	struct timed_wait_node final : wait_node_base
 	{
 		static wait_node_base *create(
-			phaser &owner_, phase_type phase_, bool interruptible_,
+			phaser &owner_, phase_type phase_,
+			bool interruptible_,
 			std::chrono::nanoseconds wait_time_,
 			Allocator const &alloc
 		)
@@ -398,16 +541,19 @@ private:
 				return true;
 			}
 
-			if (thread::current_thread_data()->is_interrupted(true))
+			if (this_thread::get_thread_data()->is_interrupted(
+				true
+			))
 				flags |= FLAG_WAS_INTERRUPTED;
 
-			if (flags.load() & FLAG_WAS_INTERRUPTED) {
+			if ((flags.load() & interrupt_mask) == interrupt_mask) {
 				tdata.store(nullptr);
 				return true;
 			}
 
 			auto cur_time(std::chrono::steady_clock::now());
 			auto elapsed(cur_time - start_time);
+
 			if (elapsed < wait_time) {
 				wait_time -= elapsed;
 				start_time = cur_time;
@@ -420,10 +566,11 @@ private:
 
 		void block() override
 		{
-			while (!is_releasable())
-				thread::current_thread_data()->park_for(
+			while (!is_releasable()) {
+				this_thread::get_thread_data()->park_for(
 					wait_time
 				);
+			}
 		}
 
 		void release() override
@@ -443,7 +590,8 @@ private:
 		}
 
 		timed_wait_node(
-			phaser &owner_, phase_type phase_, bool interruptible_,
+			phaser &owner_, phase_type phase_,
+			bool interruptible_,
 			std::chrono::nanoseconds wait_time_
 		)
 		: wait_node_base(owner_, phase_, interruptible_),
@@ -456,26 +604,26 @@ private:
 		std::chrono::time_point<std::chrono::steady_clock> start_time;
 	};
 
-	static phase_type phase_of(state_type s)
+	constexpr static phase_value_type phase_of(state_type s)
 	{
-		return static_cast<phase_type>(
+		return static_cast<phase_value_type>(
 			(s & state_phase_mask) >> state_phase_shift
 		);
 	}
 
-	static count_type parties_of(state_type s)
+	constexpr static count_type parties_of(state_type s)
 	{
 		return static_cast<count_type>(
 			(s & state_parties_mask) >> state_parties_shift
 		);
 	}
 
-	static count_type pending_of(state_type s)
+	constexpr static count_type pending_of(state_type s)
 	{
 		return static_cast<count_type>(s & state_pending_mask);
 	}
 
-	static count_type unarrived_of(state_type s)
+	constexpr static count_type unarrived_of(state_type s)
 	{
 		if (parties_of(s))
 			return pending_of(s);
@@ -483,7 +631,7 @@ private:
 			return 0;
 	}
 
-	static count_type arrived_of(state_type s)
+	constexpr static count_type arrived_of(state_type s)
 	{
 		if (parties_of(s))
 			return parties_of(s) - pending_of(s);
@@ -491,7 +639,7 @@ private:
 			return 0;
 	}
 
-	static bool termination_flag_set(state_type s)
+	constexpr static bool termination_flag_set(state_type s)
 	{
 		return s & phaser_terminated_mask;
 	}
@@ -500,35 +648,35 @@ private:
 	{
 		auto s(state.load());
 		state_type next;
-		phase_type phase;
+		phase_type phase_out;
 		count_type unarrived;
 
 		do {
 			if (parent)
 				s = reconcile_state(s);
 
-			phase = phase_of(s);
-			if (termination_flag_set(s))
-				return phase;
+			phase_out = phase_type::make(s);
+			if (phase_out.terminal())
+				return phase_out;
 
 			unarrived = unarrived_of(s);
 			if (!unarrived)
-				throw std::logic_error(
-					"unregistered party arrival"
-				);
+				return phase_type::make_err(s);
 
 			next = s - adjust;
 		} while (!state.compare_exchange_weak(s, next));
 
 		if (unarrived > 1)
-			return phase;
+			return phase_out;
 
 		s = next;
 		auto next_unarrived(parties_of(s));
-		auto next_phase(phase + 1);
+		auto next_phase(phase_out.value() + 1);
 
 		if (root == this) {
-			if (on_advance(phase, next_unarrived))
+			if (notifier.invoke_on_advance(
+				*this, phase_out, next_unarrived
+			))
 				next = define_state(
 					next_phase, next_unarrived, 0
 				) | phaser_terminated_mask;
@@ -540,17 +688,15 @@ private:
 					next_unarrived
 				);
 
-			if (!state.compare_exchange_strong(s, next))
-				return phase_of(s);
-
-			release_waiters(phase);
+			state.compare_exchange_strong(s, next);
+			release_waiters(get_queue(phase_out));
 		} else if (!next_unarrived) {
-			phase = parent->do_arrive(define_state(0, 1, 1));
+			phase_out = parent->do_arrive(define_state(0, 1, 1));
 			state.compare_exchange_strong(s, s | 1);
 		} else
-			phase = parent->do_arrive(define_state(0, 0, 1));
+			phase_out = parent->do_arrive(define_state(0, 0, 1));
 
-		return phase;
+		return phase_out;
 	}
 
 	template <typename Allocator>
@@ -560,29 +706,27 @@ private:
 	{
 		auto adjust(define_state(0, registrations, registrations));
 		state_type s(state.load());
-		phase_type phase;
+		phase_type phase_out;
 
 		while (true) {
 			if (parent)
 				s = reconcile_state(s);
 
-			phase = phase_of(s);
-			if (termination_flag_set(s))
+			phase_out = phase_type::make(s);
+			if (phase_out.terminal())
 				break;
 
 			auto parties(parties_of(s));
 			auto unarrived(pending_of(s));
 
 			if ((registrations + parties) < parties)
-				throw std::out_of_range(
-					"too many registrations"
-				);
+				return phase_type::make_err(s);
 
 			if (parties) {
 				if (!parent || (reconcile_state(s) == s)) {
 					if (!unarrived) {
 						internal_await_advance_default(
-							phase, alloc
+							phase_out, alloc
 						);
 						s = state.load();
 					} else if (state.compare_exchange_weak(
@@ -595,7 +739,8 @@ private:
 					s = state.load();
 			} else if (!parent) {
 				if (state.compare_exchange_weak(s, define_state(
-					phase, registrations, registrations
+					phase_out.value(), registrations,
+					registrations
 				)))
 					break;
 			} else {
@@ -606,12 +751,13 @@ private:
 					continue;
 				}
 
-				phase = parent->do_register(1, alloc);
-				if (parent->is_terminated())
+				phase_out = parent->do_register(1, alloc);
+				if (phase_out.terminal())
 					break;
 
 				auto next(define_state(
-					phase, registrations, registrations
+					phase_out.value(), registrations,
+					registrations
 				));
 
 				while (!state.compare_exchange_weak(s, next)) {
@@ -620,12 +766,15 @@ private:
 						registrations,
 						registrations
 					) | (s & phaser_terminated_mask);
+					phase_out = phase_type::make(
+						root->state.load()
+					);
 				}
-
 				break;
 			}
 		}
-		return phase;
+
+		return phase_out;
 	}
 
 	template <typename Allocator>
@@ -679,7 +828,7 @@ private:
 		auto const concurrency(thread::hardware_concurrency());
 		auto const spins_per_arrival(concurrency > 1 ? 256 : 1);
 
-		release_waiters(phase_in - 1);
+		release_waiters(get_queue<true>(phase_in));
 
 		auto queued(false);
 		phase_type phase_out;
@@ -691,8 +840,8 @@ private:
 
 		while (true) {
 			auto s(state.load());
-			phase_out = phase_of(s);
-			if ((phase_out != phase_in) || termination_flag_set(s))
+			phase_out = phase_type::make(s);
+			if (phase_in != phase_out)
 				break;
 
 			if (!node) {
@@ -705,7 +854,7 @@ private:
 				}
 
 				auto interrupted(
-					thread::current_thread_data()
+					this_thread::get_thread_data()
 					->is_interrupted(true)
 				);
 				if (interrupted || (--spins < 0)) {
@@ -721,20 +870,31 @@ private:
 				node->block();
 		}
 
+		auto cond(phase_type::CONDITION::NORMAL);
 		if (node) {
 			node->tdata.store(nullptr);
-
 			auto f(node->flags.load());
-			if (
-				(f & wait_node_base::FLAG_WAS_INTERRUPTED)
-				&& !(f & wait_node_base::FLAG_INTERRUPTIBLE)
-			)
-				thread::current_thread_data()->interrupt();
+
+			if (phase_in == phase_out)
+				cond = phase_type::CONDITION::TIMED_OUT;
+
+
+			if (f & wait_node_base::FLAG_WAS_INTERRUPTED) {
+				if (!(f & wait_node_base::FLAG_INTERRUPTIBLE))
+					this_thread::get_thread_data()
+					->interrupt();
+
+				if (cond != phase_type::CONDITION::NORMAL)
+					cond = phase_type::CONDITION::INTERRUPTED;
+			}
 
 			node->release();
 		}
 
-		release_waiters(phase_in);
+		if (cond == phase_type::CONDITION::NORMAL)
+			release_waiters(get_queue(phase_in));
+
+		phase_out.state += cond;
 		return phase_out;
 	}
 
@@ -775,7 +935,7 @@ private:
 		node->next = p;
 
 		auto rv((
-			phase_of(state.load()) == phase_in
+			phase_type::make(state.load()) == phase_in
 		) ? head.compare_exchange_weak(p, node) : false);
 
 		if (rv)
@@ -784,9 +944,9 @@ private:
 		return rv;
 	}
 
-	void release_waiters(phase_type phase_in)
+	void release_waiters(std::atomic<wait_node_base *> &q_head)
 	{
-		auto p(get_queue(phase_in).exchange(nullptr));
+		auto p(q_head.exchange(nullptr));
 
 		while (p) {
 			auto t(p->tdata.exchange(nullptr));
@@ -795,12 +955,12 @@ private:
 			auto q(p->next);
 			p->queue_release();
 			p = q;
-		}
+		}	
 	}
 
-
 	constexpr static state_type define_state(
-		phase_type phase, count_type parties, count_type pending
+		phase_value_type phase, count_type parties,
+		count_type pending
 	)
 	{
 		auto rv((
@@ -811,19 +971,42 @@ private:
 		return rv;
 	}
 
+	template <bool InvertSelection = false>
 	std::atomic<wait_node_base *> &get_queue(phase_type phase)
 	{
-		return (phase & 1) ? root->odd_q_head : root->even_q_head;
+		if (InvertSelection)
+			return (phase.state & (state_type(1) << state_phase_shift))
+				? root->even_q_head : root->odd_q_head;
+		else
+			return (phase.state & (state_type(1) << state_phase_shift))
+				? root->odd_q_head : root->even_q_head;
 	}
 
-	bool on_advance(phase_type phase, count_type registered_parties) {
-		if (notifier)
+	struct notification_invoker : notification {
+		notification_invoker(notification *notifier_)
+		: notifier(notifier_ ? notifier_ : this)
+		{}
+
+		bool invoke_on_advance(
+			phaser &p, phase_type phase,
+			count_type registered_parties
+		)
+		{
 			return notifier->on_advance(
-				phase, registered_parties
+				p, phase, registered_parties
 			);
-		else
+		}
+
+		virtual bool on_advance(
+			phaser &p, phase_type phase,
+			count_type registered_parties
+		) override
+		{
 			return !registered_parties;
-	}
+		}
+
+		notification *notifier;
+	};
 
 	phaser *parent;
 	phaser * const root;
@@ -831,8 +1014,36 @@ private:
 	std::atomic<wait_node_base *> even_q_head;
 	std::atomic<wait_node_base *> odd_q_head;
 	std::atomic<state_type> state;
-	notification *notifier;
+	notification_invoker notifier;
 };
 
+namespace test {
+
+struct phaser_probe {
+	static void set_state(
+		phaser &p, phaser::phase_value_type phase,
+		phaser::count_type parties, phaser::count_type unarrived
+	)
+	{
+		p.state.store(phaser::define_state(phase, parties, unarrived));
+	}
+
+	template <typename... Args>
+	static void diag_print(
+		phaser const *p, char const *format_, Args &&...args
+	)
+	{
+		auto fsz(strlen(format_));
+		char format[9 + fsz] = "%p[%p]: ";
+		memcpy(format + 8, format_, fsz);
+		format[8 + fsz] = 0;
+		printf(
+			format, p, this_thread::get_thread_data(),
+			std::forward<Args>(args)...
+		);
+	}
+};
+
+}
 }
 #endif

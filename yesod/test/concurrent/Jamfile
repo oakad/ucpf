@@ -4,3 +4,8 @@ import alias ;
 alias test_case : $(ucpf)//test_case : : : <include>../.. ;
 
 run phaser_0.cpp test_case ;
+run phaser_1.cpp test_case ;
+run phaser_2.cpp test_case ;
+run phaser_3.cpp test_case ;
+run phaser_4.cpp test_case ;
+

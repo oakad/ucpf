@@ -101,11 +101,20 @@ typedef std::tuple<
 	std::size_t
 > assertion_report_arg_t;
 
+typedef std::vector<
+	::boost::test_tools::tt_detail::assertion_report_arg_t
+> local_assertion_store_t;
+
 }
 
-#define BOOST_TEST_DECLARE_LOC_STORE()                              \
-std::vector<::boost::test_tools::tt_detail::assertion_report_arg_t> \
-boost_test_assertions                                               \
+#define BOOST_TEST_DECLARE_LOC_STORE()                  \
+::boost::test_tools::tt_detail::local_assertion_store_t \
+boost_test_assertions                                   \
+/**/
+
+#define BOOST_TEST_DECLARE_LOC_STORE_REF()              \
+::boost::test_tools::tt_detail::local_assertion_store_t \
+&boost_test_assertions                                  \
 /**/
 
 #define BOOST_TEST_REPORT_LOCALS()                                          \
@@ -115,6 +124,7 @@ do {                                                                        \
 			::boost::test_tools::tt_detail::report_assertion, t \
 		);                                                          \
 	}                                                                   \
+	boost_test_assertions.clear();                                      \
 } while(::boost::test_tools::tt_detail::dummy_cond())                       \
 /**/
 

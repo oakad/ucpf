@@ -23,8 +23,23 @@
 #include <boost/test/unit_test.hpp>
 
 #include <yesod/concurrent/phaser.hpp>
+#include "../test.hpp"
 
 #define ATTEMPT_COUNT 10
+
+namespace boost::test_tools::tt_detail {
+
+template <>
+struct print_log_value<ucpf::yesod::concurrent::phaser::phase_type> {
+	void operator()(
+		std::ostream &os,
+		ucpf::yesod::concurrent::phaser::phase_type const &p
+	)
+	{
+		os << p.value();
+	}
+};
+}
 
 namespace ucpf::yesod::concurrent {
 
@@ -32,30 +47,48 @@ using namespace std::chrono_literals;
 
 namespace test {
 
+using ucpf::yesod::test::check_all;
+
 std::atomic<int> cycle_arrive_await_advance(1);
-phaser starting_gate(3);
+phaser default_starting_gate(3);
+phaser *starting_gate = &default_starting_gate;
 
-void to_the_starting_gate()
+void to_the_starting_gate(BOOST_TEST_DECLARE_LOC_STORE_REF())
 {
-	auto expect_next_phase(starting_gate.get_unarrived_parties() == 1);
-	auto phase(starting_gate.get_phase());
+	auto expect_next_phase(starting_gate->get_unarrived_parties() == 1);
+	auto phase(starting_gate->get_phase());
 
-	BOOST_TEST(phase == starting_gate.arrive());
-	auto await_phase(
-		starting_gate.await_advance_for(phase, 30s)
-	);
+	BOOST_TEST_LOC(phase == starting_gate->arrive());
+
+	phaser::phase_type await_phase;
+	bool interrupted(false);
+
+	while (true) {
+		await_phase = starting_gate->await_advance_for(phase, 30s);
+		if (await_phase.interrupted()) {
+			interrupted = true;
+			continue;
+		}
+		if (interrupted)
+			this_thread::get_thread_data()->interrupt();
+		break;
+	}
 
 	if (expect_next_phase)
-		BOOST_TEST(await_phase == (phase + 1));
+		BOOST_TEST_LOC(await_phase.value() == (phase + 1).value());
 	else
-		BOOST_TEST((
-			(await_phase == phase) || (await_phase == (phase + 1))
+		BOOST_TEST_LOC((
+			(await_phase.value() == phase.value())
+			|| (await_phase.value() == (phase + 1).value())
 		));
 }
 
 struct arriver {
+	arriver(arriver const &) = delete;
+	arriver(arriver &&) = delete;
+
 	arriver(phaser &p_)
-	: p(p_), phase(0), advanced(false)
+	: p(p_)
 	{}
 
 	virtual ~arriver()
@@ -63,18 +96,19 @@ struct arriver {
 
 	virtual void operator()()
 	{
-		to_the_starting_gate();
+		to_the_starting_gate(boost_test_assertions);
 		phase = p.arrive();
 	}
 
-	static std::atomic<int> count;
+	void report()
+	{
+		BOOST_TEST_REPORT_LOCALS();
+	}
 
 	phaser &p;
 	phaser::phase_type phase;
-	bool advanced;
+	BOOST_TEST_DECLARE_LOC_STORE();
 };
-
-std::atomic<int> arriver::count(1);
 
 struct awaiter_type_0 {};
 struct awaiter_type_1 {};
@@ -90,7 +124,7 @@ struct awaiter<awaiter_type_0> : arriver {
 
 	virtual void operator()()
 	{
-		to_the_starting_gate();
+		to_the_starting_gate(boost_test_assertions);
 
 		if (!(cycle_arrive_await_advance++ & 1))
 			phase = p.await_advance(p.arrive());
@@ -107,7 +141,7 @@ struct awaiter<awaiter_type_1> : arriver {
 
 	virtual void operator()()
 	{
-		to_the_starting_gate();
+		to_the_starting_gate(boost_test_assertions);
 		phase = p.await_advance_interruptibly(p.arrive());
 	}
 };
@@ -122,7 +156,7 @@ struct awaiter<std::chrono::duration<Rep, Period>> : arriver {
 
 	virtual void operator()()
 	{
-		to_the_starting_gate();
+		to_the_starting_gate(boost_test_assertions);
 		phase = p.await_advance_for(p.arrive(), rel_time);
 	}
 
@@ -186,14 +220,15 @@ void check_terminated(phaser &p)
 	auto unarrived_parties(p.get_unarrived_parties());
 	auto registered_parties(p.get_registered_parties());
 	auto phase(p.get_phase());
+	BOOST_TEST(phase.terminal());
 	BOOST_TEST(phase == p.arrive());
 	BOOST_TEST(phase == p.arrive_and_deregister());
 	BOOST_TEST(phase == p.arrive_and_await_advance());
 	BOOST_TEST(phase == p.register_some(10));
 	BOOST_TEST(phase == p.register_one());
 
-	BOOST_TEST(phase == p.await_advance_interruptibly(0));
-	BOOST_TEST(phase == p.await_advance_for(0, 10s));
+	BOOST_TEST(phase == p.await_advance_interruptibly({}));
+	BOOST_TEST(phase == p.await_advance_for({}, 10s));
 
 	BOOST_TEST(p.get_unarrived_parties() == unarrived_parties);
 	BOOST_TEST(p.get_registered_parties() == registered_parties);
@@ -201,25 +236,31 @@ void check_terminated(phaser &p)
 
 }
 
-BOOST_AUTO_TEST_CASE(phaser_0_0)
+BOOST_AUTO_TEST_SUITE(phaser_0)
+
+BOOST_AUTO_TEST_CASE(t0)
 {
 	phaser p(3);
 	BOOST_TEST(p.get_registered_parties() == 3);
 	BOOST_TEST(p.get_arrived_parties() == 0);
-	BOOST_TEST(p.get_phase() == 0);
+	BOOST_TEST(p.get_phase().value() == 0);
 	BOOST_TEST(!p.is_terminated());
+	BOOST_TEST_DECLARE_LOC_STORE();
 
 	test::arriver_producer a_prod(p);
-	phaser::phase_type phase(0);
+	phaser::phase_type phase;
 
 	for (int c(0); c < ATTEMPT_COUNT; ++c) {
 		BOOST_TEST(p.get_phase() == phase);
 		++phase;
 		auto a0(a_prod.next());
 		auto a1(a_prod.next());
-		thread a0t(*a0);
-		thread a1t(*a1);
-		test::to_the_starting_gate();
+		thread a0t(std::ref(*a0));
+		thread a1t(std::ref(*a1));
+		test::to_the_starting_gate(boost_test_assertions);
+		BOOST_TEST_REPORT_LOCALS();
+		a0->report();
+		a1->report();
 
 		p.arrive_and_await_advance();
 
@@ -233,20 +274,24 @@ BOOST_AUTO_TEST_CASE(phaser_0_0)
 	}
 }
 
-BOOST_AUTO_TEST_CASE(phaser_0_1)
+BOOST_AUTO_TEST_CASE(t1)
 {
 	phaser p(3);
 	test::arriver_producer a_prod(p);
-	phaser::phase_type phase(0);
+	phaser::phase_type phase;
+	BOOST_TEST_DECLARE_LOC_STORE();
 
 	for (int c(0); c < ATTEMPT_COUNT; ++c) {
 		BOOST_TEST(p.get_phase() == phase);
 		test::awaiter<decltype(30s)> a0(p, 30s);
 		auto a1(a_prod.next());
-		thread a0t(a0);
-		thread a1t(*a1);
+		thread a0t(std::ref(a0));
+		thread a1t(std::ref(*a1));
 
-		test::to_the_starting_gate();
+		test::to_the_starting_gate(boost_test_assertions);
+		BOOST_TEST_REPORT_LOCALS();
+		a0.report();
+		a1->report();
 
 		a0t.interrupt();
                 a0t.join();
@@ -254,6 +299,8 @@ BOOST_AUTO_TEST_CASE(phaser_0_1)
 		p.arrive_and_await_advance();
 
 		a1t.join();
+		BOOST_TEST(a0.phase.interrupted());
+		BOOST_TEST(a1->phase.normal());
 
 		BOOST_TEST(!p.is_terminated());
 		BOOST_TEST(p.get_registered_parties() == 3);
@@ -263,28 +310,31 @@ BOOST_AUTO_TEST_CASE(phaser_0_1)
 	}
 }
 
-BOOST_AUTO_TEST_CASE(phaser_0_2)
+BOOST_AUTO_TEST_CASE(t2)
 {
+	BOOST_TEST_DECLARE_LOC_STORE();
 	for (int c(0); c < ATTEMPT_COUNT; ++c) {
 		phaser p(3);
 		test::awaiter_producer a_prod(p);
-
 		auto a0(a_prod.next());
 		auto a1(a_prod.next());
-		thread a0t(*a0);
-		thread a1t(*a1);
+		thread a0t(std::ref(*a0));
+		thread a1t(std::ref(*a1));
 
-		test::to_the_starting_gate();
+		test::to_the_starting_gate(boost_test_assertions);
+		BOOST_TEST_REPORT_LOCALS();
+		a0->report();
+		a1->report();
 
 		while (p.get_arrived_parties() < 2)
 			std::this_thread::yield();
 
-		BOOST_TEST(p.get_phase() == 0);
+		BOOST_TEST(p.get_phase().value() == 0);
 		p.force_termination();
 		a0t.join();
 		a1t.join();
-		BOOST_TEST(a0->phase == 0);
-		BOOST_TEST(a1->phase == 0);
+		BOOST_TEST(a0->phase.terminal());
+		BOOST_TEST(a1->phase.terminal());
 		auto arrived_parties(p.get_arrived_parties());
 		test::check_terminated(p);
 		BOOST_TEST(p.get_arrived_parties() == arrived_parties);
@@ -292,5 +342,169 @@ BOOST_AUTO_TEST_CASE(phaser_0_2)
 		delete a1;
 	}
 }
+
+BOOST_AUTO_TEST_CASE(t3)
+{
+	struct arr {
+		arr(test::arriver *a_)
+		: a(a_)
+		{}
+
+		arr(arr &&other)
+		: a(other.a), t(std::move(other.t))
+		{
+			other.a = nullptr;
+		}
+
+		void start()
+		{
+			t = thread(std::ref(*a));
+		}
+
+		~arr()
+		{
+			delete a;
+		}
+
+		test::arriver *a;
+		thread t;
+	};
+
+	phaser p(1);
+	test::arriver_producer a_prod(p);
+	std::vector<arr> arriver_list;
+	auto phase(p.get_phase());
+	BOOST_TEST_DECLARE_LOC_STORE();
+
+	for (size_t c(1); c < 5; ++c) {
+		phaser sg(1 + (3 * c));
+		test::starting_gate = &sg;
+		BOOST_TEST(p.get_phase() == phase);
+
+		p.register_one();
+		p.register_one();
+		p.register_one();
+
+		for (size_t d(0); d < (3 * c); ++d)
+			arriver_list.emplace_back(a_prod.next());
+
+		for (auto &a: arriver_list)
+			a.start();
+
+		test::to_the_starting_gate(boost_test_assertions);
+		BOOST_TEST_REPORT_LOCALS();
+
+		p.arrive_and_await_advance();
+
+		for (auto &a: arriver_list) {
+			a.t.join();
+			a.a->report();
+			BOOST_TEST(a.a->phase.normal());
+		}
+
+		BOOST_TEST(p.get_registered_parties(), 1 + (3 * c));
+		BOOST_TEST(p.get_arrived_parties() == 0);
+		arriver_list.clear();
+		++phase;
+	}
+
+	test::starting_gate = &test::default_starting_gate;
+}
+
+BOOST_AUTO_TEST_CASE(t4)
+{
+	phaser p(3);
+	test::arriver_producer a_prod(p);
+	BOOST_TEST_DECLARE_LOC_STORE();
+
+	for (auto tm: {0ms, 12ms}) {
+		test::awaiter<decltype(tm)> a0(p, tm);
+		auto a1(a_prod.next());
+		thread a0t(std::ref(a0));
+		thread a1t(std::ref(*a1));
+		test::to_the_starting_gate(boost_test_assertions);
+		BOOST_TEST_REPORT_LOCALS();
+		a0.report();
+		a1->report();
+
+		a0t.join();
+		BOOST_TEST(a0.phase.timed_out());
+
+		p.arrive();
+		a1t.join();
+		BOOST_TEST(a1->phase.normal());
+		BOOST_TEST(!p.is_terminated());
+		delete a1;
+	}
+}
+
+BOOST_AUTO_TEST_CASE(t5)
+{
+	phaser *q;
+	struct nn_ : phaser::notification {
+		bool on_advance(
+			phaser &p, phaser::phase_type phase,
+			phaser::count_type registered_parties
+		) override
+		{
+			auto count_phase = count++;
+			BOOST_TEST(count_phase == phase.value());
+			BOOST_TEST((*q)->get_phase() == phase);
+			BOOST_TEST(
+				(*q)->get_registered_parties(),
+				registered_parties
+			);
+			return phase.value() >= 3;
+		}
+
+		nn_(phaser **q_)
+		: q(q_)
+		{}
+
+		std::atomic<uint32_t> count = {0};
+		phaser **q;
+	} nn(&q);
+
+	phaser p(3, nullptr, &nn);
+	q = &p;
+	test::awaiter_producer a_prod(p);
+	BOOST_TEST_DECLARE_LOC_STORE();
+	BOOST_TEST(p.get_registered_parties() == 3);
+
+	for (size_t c(0); c < 4; ++c) {
+		auto a0(a_prod.next());
+		auto a1(a_prod.next());
+		thread a0t(std::ref(*a0));
+		thread a1t(std::ref(*a1));
+		test::to_the_starting_gate(boost_test_assertions);
+		BOOST_TEST_REPORT_LOCALS();
+		a0->report();
+		a1->report();
+
+		while (p.get_arrived_parties() < 2)
+			std::this_thread::yield();
+
+		p.arrive();
+		a0t.join();
+		a1t.join();
+
+		BOOST_TEST(a0->phase.normal());
+		BOOST_TEST(a1->phase.normal());
+		BOOST_TEST(nn.count.load(), c + 1);
+		if (c < 3) {
+			BOOST_TEST(!p.is_terminated());
+			BOOST_TEST(p.get_registered_parties() == 3);
+			BOOST_TEST(p.get_arrived_parties() == 0);
+			BOOST_TEST(p.get_unarrived_parties() == 3);
+			BOOST_TEST(p.get_phase().value() == nn.count.load());
+		} else
+			test::check_terminated(p);
+
+		delete a0;
+		delete a1;
+	}
+}
+
+BOOST_AUTO_TEST_SUITE_END()
 
 }

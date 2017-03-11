@@ -299,6 +299,15 @@ thread_data *current_thread_data<Unused>::allocate_and_get_data()
 
 }
 
+struct thread;
+
+namespace this_thread {
+
+static thread get();
+static detail::thread_data *get_thread_data();
+
+}
+
 struct thread {
 	thread() noexcept = default;
 	thread(thread &) = delete;
@@ -308,19 +317,6 @@ struct thread {
 	thread(thread &&t) noexcept
 	{
 		swap(t);
-	}
-
-	static thread current()
-	{
-		thread t;
-		t.owner = false;
-		t.tdata = detail::current_thread_data<>::holder.accessor();
-		return t;
-	}
-
-	static detail::thread_data *current_thread_data()
-	{
-		return detail::current_thread_data<>::holder.accessor();
 	}
 
 	template <typename Allocator, typename Callable, typename... Args>
@@ -467,12 +463,20 @@ struct thread {
 			: detail::thread_data::native_handle_type{};
 	}
 
+	detail::thread_data *get_thread_data() const
+	{
+		return tdata;
+	}
+
 	static unsigned int hardware_concurrency()
 	{
 		return detail::current_thread_data<>::hardware_concurrency;
 	}
 
 private:
+	friend thread this_thread::get();
+	friend detail::thread_data *this_thread::get_thread_data();
+
 	struct invoker_base {
 		virtual ~invoker_base() = default;
 		virtual void run() = 0;
@@ -576,6 +580,22 @@ inline void swap(thread &first, thread &second) noexcept
 	first.swap(second);
 }
 
+namespace this_thread {
+
+static inline thread get()
+{
+	thread t;
+	t.owner = false;
+	t.tdata = detail::current_thread_data<>::holder.accessor();
+	return t;
+}
+
+static inline detail::thread_data *get_thread_data()
+{
+	return detail::current_thread_data<>::holder.accessor();
+}
+
+}
 }
 
 #endif
