@@ -39,10 +39,10 @@ struct state {
 	  start_time(std::chrono::steady_clock::now())
 	{}
 
-	static constexpr std::chrono::milliseconds test_duration_default = 10ms;//10s;
+	static constexpr std::chrono::milliseconds test_duration_default = 10s;
 	std::chrono::milliseconds test_duration;
 	std::chrono::time_point<std::chrono::steady_clock> start_time;
-	size_t chunk_size = 10;//00;
+	size_t chunk_size = 1000;
 	std::atomic<size_t> count = {0};
 };
 
@@ -54,24 +54,26 @@ struct runner {
 
 	runner(runner &&other)
 	: s(other.s), p(other.p), t(std::move(other.t)),
-	  boost_test_assertions(std::move(boost_test_assertions))
+	  boost_test_assertions(std::move(boost_test_assertions)),
+	  print(other.print)
 	{}
 
-	runner(state &s_, phaser &p_)
-	: s(s_), p(p_)
+	runner(state &s_, phaser &p_, bool print_)
+	: s(s_), p(p_), print(print_)
 	{}
 
 	void operator()()
 	{
 		phaser::phase_type prev_phase(0x7fffffff);
+
 		for (size_t m(1); true; ++m) {
 			for (size_t n(0); n < s.chunk_size; ++n) {
 				auto phase(p.register_one());
 				if (phase.terminal())
 					break;
+
 				BOOST_TEST_LOC(
-					phase.value()
-					== (prev_phase + 1).value()
+					phase.value() >= (prev_phase + 1).value()
 				);
 
 				prev_phase = phase;
@@ -80,15 +82,16 @@ struct runner {
 					== p.arrive_and_deregister().value()
 				);
 
+				auto next_phase(p.await_advance(phase));
 				BOOST_TEST_LOC(
-					phase.value()
-					< p.await_advance(phase).value()
+					phase.value() < next_phase.value()
 				);
 			}
 
 			auto elapsed(
 				std::chrono::steady_clock::now() - s.start_time
 			);
+
 			if (elapsed > s.test_duration) {
 				s.count.fetch_add(m * s.chunk_size);
 				break;
@@ -110,6 +113,7 @@ struct runner {
 	phaser &p;
 	thread t;
 	BOOST_TEST_DECLARE_LOC_STORE();
+	bool print;
 };
 
 }
@@ -126,10 +130,10 @@ BOOST_AUTO_TEST_CASE(t0)
 		{
 			return false;
 		}
-	} no_advance;
+	} never_terminate;
 	test::state s;
 
-	phaser parent(0, nullptr, &no_advance);
+	phaser parent(0, nullptr, &never_terminate);
 	phaser child0(0, &parent);
 	phaser child1(0, &parent);
 	phaser subchild0(0, &child0);
@@ -141,11 +145,11 @@ BOOST_AUTO_TEST_CASE(t0)
 
 	std::vector<test::runner> runners;
 	for (size_t c(0); c < 4; ++c) {
-		runners.emplace_back(s, subchild0);
-		runners.emplace_back(s, child0);
-		runners.emplace_back(s, parent);
-		runners.emplace_back(s, child1);
-		runners.emplace_back(s, subchild1);
+		runners.emplace_back(s, subchild0, true);
+		runners.emplace_back(s, child0, true);
+		runners.emplace_back(s, parent, true);
+		runners.emplace_back(s, child1, true);
+		runners.emplace_back(s, subchild1, true);
 	}
 
 	for (auto &r: runners)

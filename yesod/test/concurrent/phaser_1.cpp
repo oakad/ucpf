@@ -66,7 +66,7 @@ BOOST_DATA_TEST_CASE(t0, boost::unit_test::data::xrange(10))
 			BOOST_TEST_LOC(s.starting_gate.get_phase().value() == 1);
 			auto phase(s.p.arrive());
 
-			BOOST_TEST(phase.value() < 2);
+			BOOST_TEST_LOC(phase.value() < 2);
 			if (phase.value() == 0)
 				++s.count0;
 			else if (phase.value() == 1)

@@ -9,6 +9,7 @@
 #if !defined(HPP_F5B061E5D859AF9ED545F3614F19D749)
 #define HPP_F5B061E5D859AF9ED545F3614F19D749
 
+#include <yesod/concurrent/thread.hpp>
 #include <yesod/string_utils/charseq_adaptor.hpp>
 #include <yesod/string_utils/ascii_hex_formatter.hpp>
 
@@ -20,6 +21,70 @@ namespace ucpf::yesod::test {
 
 typedef std::basic_string<uint8_t> ustring;
 typedef std::experimental::basic_string_view<uint8_t> ustring_view;
+
+template <typename Unused = void>
+struct tls_diag {
+	static std::ostream &dump(std::ostream &os)
+	{
+		for (size_t c(0); c < instance.pos; ++c)
+			os << instance.data[c];
+
+		return os;
+	}
+
+	static void reset()
+	{
+		for (size_t c(0); c < instance.pos; ++c) {
+			free(instance.data[c]);
+			instance.data[c] = nullptr;
+		}
+		instance.pos = 0;
+	}
+
+	template <typename... Args>
+	static void print(char const *format, Args &&...args)
+	{
+		if (instance.pos >= depth)
+			return;
+		asprintf(
+			&instance.data[instance.pos++], format,
+			std::forward<Args>(args)...
+		);
+	}
+
+private:
+	constexpr static size_t depth = 20;
+	char *data[depth] = {nullptr};
+	size_t pos = 0;
+	static thread_local tls_diag instance;
+};
+
+template <typename Unused>
+thread_local tls_diag<Unused> tls_diag<Unused>::instance;
+
+template <typename... Args>
+std::ostream &print_diag(
+	std::ostream &os, void const *p, char const *format_, Args &&...args
+)
+{
+	auto fsz(strlen(format_));
+	char format[9 + fsz] = "%p[%p]: ";
+	memcpy(format + 8, format_, fsz);
+	format[8 + fsz] = 0;
+	char *data_;
+	asprintf(
+		&data_, format, p,
+		::ucpf::yesod::concurrent::this_thread::get_thread_data(),
+		std::forward<Args>(args)...
+	);
+	auto deleter = [](char *p)
+	{
+		free(p);
+	};
+	std::unique_ptr<char, decltype(deleter)> data(data_, deleter);
+	os << data_;
+	return os;
+}
 
 constexpr uint8_t const *operator ""_us(char const *s, size_t len)
 {
@@ -130,8 +195,11 @@ do {                                                                        \
 
 #define BOOST_TEST_TOOL_ET_LOC_IMPL(P, level)                          \
 do {                                                                   \
+	auto res(BOOST_TEST_BUILD_ASSERTION(P).evaluate());            \
+	if (res)                                                       \
+		break;                                                 \
 	boost_test_assertions.emplace_back(                            \
-		BOOST_TEST_BUILD_ASSERTION(P).evaluate(),              \
+		std::move(res),                                        \
 		BOOST_TEST_LAZY_MSG(BOOST_TEST_STRINGIZE(P)),          \
 		BOOST_TEST_L(__FILE__),                                \
 		static_cast<std::size_t>(__LINE__),                    \
@@ -144,15 +212,17 @@ do {                                                                   \
 
 #define BOOST_TEST_TOOL_ET_LOC_IMPL_EX(P, level, arg)                    \
 do {                                                                     \
+	auto res(::boost::test_tools::tt_detail::assertion_evaluate(     \
+		BOOST_TEST_BUILD_ASSERTION(P)                            \
+	) << arg);                                                       \
+	if (res)                                                         \
+		break;                                                   \
 	boost_test_assertions.emplace_back(                              \
-		::boost::test_tools::tt_detail::assertion_evaluate(      \
-			BOOST_TEST_BUILD_ASSERTION(P)                    \
-		) << arg,                                                \
+		std::move(res),                                          \
 		::boost::test_tools::tt_detail::assertion_text(          \
 			BOOST_TEST_LAZY_MSG(BOOST_TEST_STRINGIZE(P)),    \
 			BOOST_TEST_LAZY_MSG(arg)                         \
-		),                                                       \
-		BOOST_TEST_L(__FILE__),                                  \
+		), BOOST_TEST_L(__FILE__),                               \
 		static_cast<std::size_t>(__LINE__),                      \
 		::boost::test_tools::tt_detail::level,                   \
 		::boost::test_tools::tt_detail::assertion_type() << arg, \
@@ -161,11 +231,11 @@ do {                                                                     \
 } while(::boost::test_tools::tt_detail::dummy_cond())                    \
 /**/
 
-#define BOOST_TEST_TOOL_LOC(level, P)     \
+#define BOOST_TEST_TOOL_LOC(level, P)         \
 	BOOST_TEST_TOOL_ET_LOC_IMPL(P, level) \
 /**/
 
-#define BOOST_TEST_TOOL_LOC_EX(level, P, ...)             \
+#define BOOST_TEST_TOOL_LOC_EX(level, P, ...)                 \
 	BOOST_TEST_TOOL_ET_LOC_IMPL_EX(P, level, __VA_ARGS__) \
 /**/
 
@@ -174,6 +244,5 @@ do {                                                                     \
 	__VA_ARGS__                                            \
 )                                                              \
 /**/
-
 
 #endif

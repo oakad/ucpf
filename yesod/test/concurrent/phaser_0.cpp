@@ -259,13 +259,14 @@ BOOST_AUTO_TEST_CASE(t0)
 		thread a1t(std::ref(*a1));
 		test::to_the_starting_gate(boost_test_assertions);
 		BOOST_TEST_REPORT_LOCALS();
-		a0->report();
-		a1->report();
 
 		p.arrive_and_await_advance();
 
 		a0t.join();
 		a1t.join();
+		a0->report();
+		a1->report();
+
 		BOOST_TEST(!p.is_terminated());
 		BOOST_TEST(p.get_registered_parties() == 3);
 		BOOST_TEST(p.get_arrived_parties() == 0);
@@ -290,8 +291,6 @@ BOOST_AUTO_TEST_CASE(t1)
 
 		test::to_the_starting_gate(boost_test_assertions);
 		BOOST_TEST_REPORT_LOCALS();
-		a0.report();
-		a1->report();
 
 		a0t.interrupt();
                 a0t.join();
@@ -299,6 +298,8 @@ BOOST_AUTO_TEST_CASE(t1)
 		p.arrive_and_await_advance();
 
 		a1t.join();
+		a0.report();
+		a1->report();
 		BOOST_TEST(a0.phase.interrupted());
 		BOOST_TEST(a1->phase.normal());
 
@@ -323,8 +324,6 @@ BOOST_AUTO_TEST_CASE(t2)
 
 		test::to_the_starting_gate(boost_test_assertions);
 		BOOST_TEST_REPORT_LOCALS();
-		a0->report();
-		a1->report();
 
 		while (p.get_arrived_parties() < 2)
 			std::this_thread::yield();
@@ -333,6 +332,8 @@ BOOST_AUTO_TEST_CASE(t2)
 		p.force_termination();
 		a0t.join();
 		a1t.join();
+		a0->report();
+		a1->report();
 		BOOST_TEST(a0->phase.terminal());
 		BOOST_TEST(a1->phase.terminal());
 		auto arrived_parties(p.get_arrived_parties());
@@ -424,14 +425,15 @@ BOOST_AUTO_TEST_CASE(t4)
 		thread a1t(std::ref(*a1));
 		test::to_the_starting_gate(boost_test_assertions);
 		BOOST_TEST_REPORT_LOCALS();
-		a0.report();
-		a1->report();
-
 		a0t.join();
 		BOOST_TEST(a0.phase.timed_out());
 
 		p.arrive();
 		a1t.join();
+
+		a0.report();
+		a1->report();
+
 		BOOST_TEST(a1->phase.normal());
 		BOOST_TEST(!p.is_terminated());
 		delete a1;
@@ -478,8 +480,6 @@ BOOST_AUTO_TEST_CASE(t5)
 		thread a1t(std::ref(*a1));
 		test::to_the_starting_gate(boost_test_assertions);
 		BOOST_TEST_REPORT_LOCALS();
-		a0->report();
-		a1->report();
 
 		while (p.get_arrived_parties() < 2)
 			std::this_thread::yield();
@@ -487,6 +487,8 @@ BOOST_AUTO_TEST_CASE(t5)
 		p.arrive();
 		a0t.join();
 		a1t.join();
+		a0->report();
+		a1->report();
 
 		BOOST_TEST(a0->phase.normal());
 		BOOST_TEST(a1->phase.normal());

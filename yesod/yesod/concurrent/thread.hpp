@@ -25,7 +25,13 @@
 #include <condition_variable>
 
 namespace ucpf::yesod::concurrent {
+
+struct thread;
+
 namespace detail {
+
+template <typename Unused = void>
+struct current_thread_data;
 
 struct thread_data {
 	typedef __gthread_t native_handle_type;
@@ -41,7 +47,8 @@ struct thread_data {
 	virtual void child_release() = 0;
 	virtual void child_attach() = 0;
 
-	void park()
+	template <typename BeforeWaitCallback = std::true_type>
+	void park(BeforeWaitCallback &&cb = std::true_type{})
 	{
 		auto f(flags.fetch_and(~FLAG_PARK_RELEASE));
 		if (f & FLAG_PARK_RELEASE)
@@ -50,24 +57,28 @@ struct thread_data {
 		if (f & FLAG_INTERRUPTED)
 			return;
 
-		if (!park_lock.try_lock())
+		std::unique_lock<std::mutex> lk(park_lock, std::try_to_lock);
+		if (!lk)
 			return;
 
 		f = flags.fetch_and(~FLAG_PARK_RELEASE);
-		if (f & FLAG_PARK_RELEASE) {
-			park_lock.unlock();
+		if (f & FLAG_PARK_RELEASE)
 			return;
-		}
 
-		park_cv.wait(park_lock);
+		if (cb())
+			park_cv.wait(lk);
+
 		flags &= ~FLAG_PARK_RELEASE;
-		park_lock.unlock();
 		return;
 	}
 
-	template <typename Rep, typename Period>
+	template <
+		typename Rep, typename Period,
+		typename BeforeWaitCallback = std::true_type
+	>
 	bool park_for(
-		std::chrono::duration<Rep, Period> const &rel_time
+		std::chrono::duration<Rep, Period> const &rel_time,
+		BeforeWaitCallback &&cb = std::true_type{}
 	)
 	{
 		auto f(flags.fetch_and(~FLAG_PARK_RELEASE));
@@ -77,20 +88,21 @@ struct thread_data {
 		if (f & FLAG_INTERRUPTED)
 			return true;
 
-		if (!park_lock.try_lock())
+		std::unique_lock<std::mutex> lk(park_lock, std::try_to_lock);
+		if (!lk)
 			return true;
 
 		f = flags.fetch_and(~FLAG_PARK_RELEASE);
-		if (f & FLAG_PARK_RELEASE) {
-			park_lock.unlock();
+		if (f & FLAG_PARK_RELEASE)
 			return true;
-		}
 
-		auto rv(park_cv.wait_for(
-			park_lock, rel_time
-		) == std::cv_status::no_timeout);
+		auto rv(true);
+		if (cb())
+			rv = park_cv.wait_for(
+				lk, rel_time
+			) == std::cv_status::no_timeout;
+
 		flags &= ~FLAG_PARK_RELEASE;
-		park_lock.unlock();
 		return rv;
 	}
 
@@ -132,6 +144,11 @@ struct thread_data {
 		return tl_prng_state;
 	}
 
+protected:
+	friend struct ucpf::yesod::concurrent::thread;
+	template <typename Unused>
+	friend struct current_thread_data;
+
 	enum : uint32_t {
 		FLAG_PARENT_ATTACHED = 1,
 		FLAG_CHILD_ATTACHED = 2,
@@ -146,10 +163,10 @@ struct thread_data {
 	std::atomic<uint32_t> flags;
 	uint32_t tl_prng_state;
 	std::mutex park_lock;
-	std::condition_variable_any park_cv;
+	std::condition_variable park_cv;
 };
 
-template <typename Unused = void>
+template <typename Unused>
 struct current_thread_data {
 	struct pcg32_state {
 		pcg32_state()
@@ -298,8 +315,6 @@ thread_data *current_thread_data<Unused>::allocate_and_get_data()
 }
 
 }
-
-struct thread;
 
 namespace this_thread {
 

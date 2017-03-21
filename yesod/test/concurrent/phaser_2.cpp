@@ -33,9 +33,9 @@ void check_state(
 	phaser::count_type parties, phaser::count_type unarrived
 )
 {
-	BOOST_TEST(phase, p.get_phase().value());
-	BOOST_TEST(parties, p.get_registered_parties());
-	BOOST_TEST(unarrived, p.get_unarrived_parties());
+	BOOST_TEST(phase == p.get_phase().value());
+	BOOST_TEST(parties == p.get_registered_parties());
+	BOOST_TEST(unarrived == p.get_unarrived_parties());
 }
 
 }

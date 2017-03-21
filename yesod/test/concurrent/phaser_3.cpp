@@ -37,7 +37,7 @@ struct state {
 	  start_time(std::chrono::steady_clock::now())
 	{}
 
-	static constexpr std::chrono::milliseconds test_duration_default = 10ms;//10s;
+	static constexpr std::chrono::milliseconds test_duration_default = 10s;
 	std::chrono::milliseconds test_duration;
 	std::chrono::time_point<std::chrono::steady_clock> start_time;
 };
@@ -68,10 +68,13 @@ struct runner {
 			BOOST_TEST_LOC(
 				phase.value() == (prev_phase + 1).value()
 			);
+
 			auto ph(p.get_phase());
+
 			BOOST_TEST_LOC((
 				ph.terminal() || (ph.value() == phase.value())
 			));
+
 			prev_phase = phase;
 		}
 	}
@@ -112,7 +115,9 @@ BOOST_AUTO_TEST_CASE(t0)
 	phaser::phase_type prev_phase, phase;
 	while (true) {
 		phase = child1.get_phase();
+
 		BOOST_TEST(phase.value() >= prev_phase.value());
+
 		auto elapsed(
 			std::chrono::steady_clock::now() - s.start_time
 		);
@@ -124,8 +129,8 @@ BOOST_AUTO_TEST_CASE(t0)
 	}
 
 	r0.t.join();
-	r0.report();
 	r1.t.join();
+	r0.report();
 	r1.report();
 }
 
