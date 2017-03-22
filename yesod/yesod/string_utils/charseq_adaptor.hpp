@@ -56,6 +56,16 @@ struct charseq_adaptor<char const *> {
 };
 
 template <>
+struct charseq_adaptor<char * (&)> {
+	typedef std::experimental::string_view result_type;
+
+	static auto apply(char * &str, size_t length)
+	{
+		return std::experimental::string_view(str, length);
+	}
+};
+
+template <>
 struct charseq_adaptor<uint8_t const * (&)> {
 	typedef std::experimental::string_view result_type;
 

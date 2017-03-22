@@ -70,7 +70,7 @@ void to_the_starting_gate(BOOST_TEST_DECLARE_LOC_STORE_REF())
 			continue;
 		}
 		if (interrupted)
-			this_thread::get_thread_data()->interrupt();
+			this_thread::get().interrupt();
 		break;
 	}
 

@@ -17,6 +17,8 @@
 #include <experimental/tuple>
 #include <experimental/string_view>
 
+#include <sys/syscall.h>
+
 namespace ucpf::yesod::test {
 
 typedef std::basic_string<uint8_t> ustring;
@@ -68,13 +70,12 @@ std::ostream &print_diag(
 )
 {
 	auto fsz(strlen(format_));
-	char format[9 + fsz] = "%p[%p]: ";
+	char format[9 + fsz] = "%p[%d]: ";
 	memcpy(format + 8, format_, fsz);
 	format[8 + fsz] = 0;
 	char *data_;
 	asprintf(
-		&data_, format, p,
-		::ucpf::yesod::concurrent::this_thread::get_thread_data(),
+		&data_, format, p, ::syscall(SYS_gettid),
 		std::forward<Args>(args)...
 	);
 	auto deleter = [](char *p)

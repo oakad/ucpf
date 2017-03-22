@@ -239,26 +239,26 @@ struct phaser {
 
 		if (unarrived > 1)
 			return root->internal_await_advance_default(
-				phase_out, *root, alloc
+				phase_out, alloc
 			);
 
-		if (root != this)
+		if (parent)
 			return parent->arrive_and_await_advance();
 
 		auto next_unarrived(parties_of(s));
-		auto next_phase(phase_out.value() + 1);
+		auto next_phase(phase_out + 1);
 
 		if (notifier.invoke_on_advance(
 			*this, phase_out, next_unarrived
 		))
-			next = define_state(
-				next_phase, next_unarrived, 0
+			next = next_phase.to_state(
+				next_unarrived, 0
 			) | phaser_terminated_mask;
 		else if (!next_unarrived)
-			next = define_state(next_phase, 0, 1);
+			next = next_phase.to_state(0, 1);
 		else
-			next = define_state(
-				next_phase, next_unarrived, next_unarrived
+			next = next_phase.to_state(
+				next_unarrived, next_unarrived
 			);
 
 		if (!state.compare_exchange_strong(s, next))
@@ -289,7 +289,7 @@ struct phaser {
 		auto phase_out(phase_type::make(s));
 		if (phase_out == phase_in)
 			return root->internal_await_advance_default(
-				phase_in, *root, alloc
+				phase_in, alloc
 			);
 		else
 			return phase_out;
@@ -310,7 +310,7 @@ struct phaser {
 		auto phase_out(phase_type::make(s));
 		if (phase_out == phase_in)
 			return root->internal_await_advance_interruptibly(
-				phase_in, *this, alloc
+				phase_in, alloc
 			);
 		else
 			return phase_out;
@@ -336,7 +336,7 @@ struct phaser {
 		auto phase_out(phase_type::make(s));
 		if (phase_out == phase_in)
 			return root->internal_await_advance_timed(
-				phase_in, *this, rel_time, alloc
+				phase_in, rel_time, alloc
 			);
 		else
 			return phase_out;
@@ -429,12 +429,12 @@ private:
 		wait_node_base(wait_node_base const &&) = delete;
 
 		wait_node_base(
-			phaser &owner_, phase_type phase_,
+			phaser const *root_, phase_type phase_,
 			bool interruptible
 		)
-		: owner(owner_), next(nullptr),
+		: root(root_), next(nullptr),
 		  flags{FLAG_IN_USE | (interruptible ? FLAG_INTERRUPTIBLE : 0)},
-		  phase(phase_), tdata(this_thread::get_thread_data())
+		  phase(phase_), waiter(this_thread::get())
 		{}
 
 		virtual ~wait_node_base()
@@ -459,9 +459,8 @@ private:
 			if (!((flags &= ~FLAG_QUEUED) & release_mask))
 				destroy();
 			else {
-				auto t(tdata.load());
-				if (t)
-					t->unpark();
+				if (waiter)
+					waiter.unpark();
 			}
 		}
 
@@ -483,18 +482,18 @@ private:
 		constexpr static uint32_t interrupt_mask
 		= FLAG_WAS_INTERRUPTED | FLAG_INTERRUPTIBLE;
 
-		phaser &owner;
+		phaser const *root;
 		wait_node_base *next;
 		std::atomic<uint32_t> flags;
 		phase_type const phase;
-		std::atomic<detail::thread_data *> tdata;
+		thread waiter;
 	};
 
 	template <typename Allocator>
 	struct wait_node final : wait_node_base
 	{
 		static wait_node *create(
-			phaser &owner_, phase_type phase_,
+			phaser const *root_, phase_type phase_,
 			bool interruptible,
 			Allocator const &alloc
 		)
@@ -502,27 +501,25 @@ private:
 			return yesod::detail::allocated_storage<
 				wait_node, Allocator
 			>::make(
-				alloc, owner_, phase_, interruptible
+				alloc, root_, phase_, interruptible
 			)->get();
 		}
 
 		bool is_releasable() override
 		{
-			if (!tdata.load())
+			if (!waiter)
 				return true;
 
-			if (owner.get_phase() != phase) {
-				tdata.store(nullptr);
+			if (phase_type::make(root->state.load()) != phase) {
+				waiter.release();
 				return true;
 			}
 
-			if (this_thread::get_thread_data()->is_interrupted(
-				true
-			))
+			if (this_thread::get().is_interrupted(true))
 				flags |= FLAG_WAS_INTERRUPTED;
 
 			if ((flags.load() & interrupt_mask) == interrupt_mask) {
-				tdata.store(nullptr);
+				waiter.release();
 				return true;
 			}
 
@@ -534,7 +531,7 @@ private:
 		> &q_head) override
 		{
 			try {
-				this_thread::get_thread_data()->park([this, &q_head]() {
+				this_thread::get().park([this, &q_head]() {
 					auto p(q_head.load());
 
 					while (!is_releasable()) {
@@ -548,8 +545,8 @@ private:
 					}
 					return false;
 				});
-			} catch (__cxxabiv1::__forced_unwind &) {
-				tdata.store(nullptr);
+			} catch (__cxxabiv1::__forced_unwind const &) {
+				waiter.release();
 				throw;
 			}
 		}
@@ -562,10 +559,10 @@ private:
 		}
 
 		wait_node(
-			phaser &owner_, phase_type phase_,
+			phaser const *root_, phase_type phase_,
 			bool interruptible
 		)
-		: wait_node_base(owner_, phase_, interruptible)
+		: wait_node_base(root_, phase_, interruptible)
 		{}
 	};
 
@@ -573,7 +570,7 @@ private:
 	struct timed_wait_node final : wait_node_base
 	{
 		static wait_node_base *create(
-			phaser &owner_, phase_type phase_,
+			phaser const *root_, phase_type phase_,
 			bool interruptible_,
 			std::chrono::nanoseconds wait_time_,
 			Allocator const &alloc
@@ -582,28 +579,26 @@ private:
 			return yesod::detail::allocated_storage<
 				timed_wait_node, Allocator
 			>::make(
-				alloc, owner_, phase_, interruptible_,
+				alloc, root_, phase_, interruptible_,
 				wait_time_
 			)->get();
 		}
 
 		bool is_releasable() override
 		{
-			if (!tdata.load())
+			if (!waiter)
 				return true;
 
-			if (owner.get_phase() != phase) {
-				tdata.store(nullptr);
+			if (phase_type::make(root->state.load()) != phase) {
+				waiter.release();
 				return true;
 			}
 
-			if (this_thread::get_thread_data()->is_interrupted(
-				true
-			))
+			if (this_thread::get().is_interrupted(true))
 				flags |= FLAG_WAS_INTERRUPTED;
 
 			if ((flags.load() & interrupt_mask) == interrupt_mask) {
-				tdata.store(nullptr);
+				waiter.release();
 				return true;
 			}
 
@@ -615,7 +610,7 @@ private:
 				start_time = cur_time;
 				return false;
 			} else {
-				tdata.store(nullptr);
+				waiter.release();
 				return true;
 			}
 		}
@@ -625,7 +620,7 @@ private:
 		> &q_head) override
 		{
 			try {
-				this_thread::get_thread_data()->park_for(wait_time, [this, &q_head]() {
+				this_thread::get().park_for(wait_time, [this, &q_head]() {
 					auto p(q_head.load());
 
 					while (!is_releasable()) {
@@ -639,8 +634,8 @@ private:
 					}
 					return false;
 				});
-			} catch (__cxxabiv1::__forced_unwind &) {
-				tdata.store(nullptr);
+			} catch (__cxxabiv1::__forced_unwind const &) {
+				waiter.release();
 				throw;
 			}
 		}
@@ -653,11 +648,11 @@ private:
 		}
 
 		timed_wait_node(
-			phaser &owner_, phase_type phase_,
+			phaser const *root_, phase_type phase_,
 			bool interruptible_,
 			std::chrono::nanoseconds wait_time_
 		)
-		: wait_node_base(owner_, phase_, interruptible_),
+		: wait_node_base(root_, phase_, interruptible_),
 		  wait_time(wait_time_),
 		  start_time(std::chrono::steady_clock::now())
 		{}
@@ -784,7 +779,7 @@ private:
 				if (!parent || (reconcile_state(s) == s)) {
 					if (!unarrived) {
 						root->internal_await_advance_default(
-							phase_out, *root, alloc
+							phase_out, alloc
 						);
 						s = state.load();
 					} else if (state.compare_exchange_weak(
@@ -836,14 +831,13 @@ private:
 
 	template <typename Allocator>
 	phase_type internal_await_advance_default(
-		phase_type phase_in, phaser &caller, Allocator const &alloc
+		phase_type phase_in, Allocator const &alloc
 	)
 	{
 		return internal_await_advance<false>(
-			phase_in, caller,
-			[&alloc](phase_type phase_, phaser &caller) {
+			phase_in, [this, &alloc](phase_type phase_) {
 				return wait_node<Allocator>::create(
-					caller, phase_, false, alloc
+					this, phase_, false, alloc
 				);
 			}
 		);
@@ -851,14 +845,13 @@ private:
 
 	template <typename Allocator>
 	phase_type internal_await_advance_interruptibly(
-		phase_type phase_in, phaser &caller, Allocator const &alloc
+		phase_type phase_in, Allocator const &alloc
 	)
 	{
 		return internal_await_advance<true>(
-			phase_in, caller,
-			[&alloc](phase_type phase_, phaser &caller) {
+			phase_in, [this, &alloc](phase_type phase_) {
 				return wait_node<Allocator>::create(
-					caller, phase_, true, alloc
+					this, phase_, true, alloc
 				);
 			}
 		);
@@ -866,15 +859,14 @@ private:
 
 	template <typename Allocator>
 	phase_type internal_await_advance_timed(
-		phase_type phase_in, phaser &caller,
-		std::chrono::nanoseconds rel_time, Allocator const &alloc
+		phase_type phase_in, std::chrono::nanoseconds rel_time,
+		Allocator const &alloc
 	)
 	{
 		return internal_await_advance<true>(
-			phase_in, caller,
-			[rel_time, &alloc](phase_type phase, phaser &caller) {
+			phase_in, [this, rel_time, &alloc](phase_type phase) {
 				return timed_wait_node<Allocator>::create(
-					caller, phase, true, rel_time, alloc
+					this, phase, true, rel_time, alloc
 				);
 			}
 		);
@@ -882,7 +874,7 @@ private:
 
 	template <bool HasNode, typename WaitNodeSupplier>
 	phase_type internal_await_advance(
-		phase_type phase_in, phaser &caller, WaitNodeSupplier &&w_supp
+		phase_type phase_in, WaitNodeSupplier &&w_supp
 	)
 	{
 		auto const concurrency(thread::hardware_concurrency());
@@ -893,9 +885,7 @@ private:
 		phase_type phase_out;
 		count_type last_unarrived(0);
 		auto spins(spins_per_arrival);
-		wait_node_base *node(
-			HasNode ? w_supp(phase_in, caller) : nullptr
-		);
+		wait_node_base *node(HasNode ? w_supp(phase_in) : nullptr);
 
 		while (true) {
 			auto s(state.load());
@@ -917,21 +907,21 @@ private:
 				}
 
 				auto interrupted(
-					this_thread::get_thread_data()
-					->is_interrupted(true)
+					this_thread::get().is_interrupted(true)
 				);
 				if (interrupted || (--spins < 0)) {
-					node = w_supp(phase_in, caller);
-					node->flags |= interrupted
-						? wait_node_base::FLAG_WAS_INTERRUPTED
-						: 0;
+					node = w_supp(phase_in);
+					node->flags
+					|= interrupted
+					? wait_node_base::FLAG_WAS_INTERRUPTED
+					: 0;
 				}
 			}
 		}
 
 		auto cond(phase_type::CONDITION::NORMAL);
 		if (node) {
-			node->tdata.store(nullptr);
+			node->waiter.release();
 			auto f(node->flags.load());
 
 			if (phase_in == phase_out)
@@ -942,8 +932,7 @@ private:
 
 			if (f & wait_node_base::FLAG_WAS_INTERRUPTED) {
 				if (!(f & wait_node_base::FLAG_INTERRUPTIBLE))
-					this_thread::get_thread_data()
-					->interrupt();
+					this_thread::get().interrupt();
 
 				if (cond != phase_type::CONDITION::NORMAL)
 					cond = phase_type::CONDITION::INTERRUPTED;

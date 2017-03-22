@@ -15,7 +15,7 @@ namespace ucpf::yesod {
 
 namespace pmr = std::experimental::pmr;
 
-template<class ForwardIt, class Size>
+template <typename ForwardIt, typename Size>
 ForwardIt uninitialized_default_construct_n(ForwardIt first, Size n)
 {
 	typedef typename std::iterator_traits<
@@ -37,13 +37,13 @@ ForwardIt uninitialized_default_construct_n(ForwardIt first, Size n)
 	}
 }
 
-template<class T>
-void destroy_at(T* p) 
-{ 
-	p->~T(); 
+template <typename T>
+void destroy_at(T* p)
+{
+	p->~T();
 }
 
-template<class ForwardIt, class Size>
+template <typename ForwardIt, typename Size>
 ForwardIt destroy_n(ForwardIt first, Size n)
 {
 	for (; n > 0; (void)++first, --n)

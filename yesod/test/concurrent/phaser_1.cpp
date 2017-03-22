@@ -32,8 +32,8 @@ BOOST_AUTO_TEST_SUITE(phaser_1)
 
 BOOST_DATA_TEST_CASE(t0, boost::unit_test::data::xrange(10))
 {
-	auto n(1 + (this_thread::get_thread_data()->next_seed() % 10));
-	
+	auto n(1 + (this_thread::get().next_seed() % 10));
+
 	struct state_t {
 		state_t(uint32_t n)
 		: starting_gate(n), p(n), count0(0), count1(0)

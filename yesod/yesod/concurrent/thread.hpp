@@ -34,21 +34,25 @@ template <typename Unused = void>
 struct current_thread_data;
 
 struct thread_data {
+protected:
+	friend struct ucpf::yesod::concurrent::thread;
+
+	template <typename Unused>
+	friend struct current_thread_data;
+
 	typedef __gthread_t native_handle_type;
 
-	thread_data(bool child_init, uint32_t tl_prng_seed_)
-	: handle{},
-	  flags{child_init ? FLAG_CHILD_ATTACHED : FLAG_PARENT_ATTACHED},
+	thread_data(uint32_t tl_prng_seed_)
+	: handle{}, flags{0}, use_count{1},
 	  tl_prng_state(tl_prng_seed_), park_lock{}, park_cv{}
 	{}
 
 	~thread_data() = default;
-	virtual void parent_release() = 0;
-	virtual void child_release() = 0;
+	virtual void release() = 0;
 	virtual void child_attach() = 0;
 
-	template <typename BeforeWaitCallback = std::true_type>
-	void park(BeforeWaitCallback &&cb = std::true_type{})
+	template <typename BeforeWaitCallback>
+	void park(BeforeWaitCallback &&cb)
 	{
 		auto f(flags.fetch_and(~FLAG_PARK_RELEASE));
 		if (f & FLAG_PARK_RELEASE)
@@ -73,12 +77,11 @@ struct thread_data {
 	}
 
 	template <
-		typename Rep, typename Period,
-		typename BeforeWaitCallback = std::true_type
+		typename Rep, typename Period, typename BeforeWaitCallback
 	>
 	bool park_for(
 		std::chrono::duration<Rep, Period> const &rel_time,
-		BeforeWaitCallback &&cb = std::true_type{}
+		BeforeWaitCallback &&cb
 	)
 	{
 		auto f(flags.fetch_and(~FLAG_PARK_RELEASE));
@@ -144,23 +147,14 @@ struct thread_data {
 		return tl_prng_state;
 	}
 
-protected:
-	friend struct ucpf::yesod::concurrent::thread;
-	template <typename Unused>
-	friend struct current_thread_data;
-
 	enum : uint32_t {
-		FLAG_PARENT_ATTACHED = 1,
-		FLAG_CHILD_ATTACHED = 2,
-		FLAG_INTERRUPTED = 4,
-		FLAG_PARK_RELEASE = 8
+		FLAG_INTERRUPTED = 1,
+		FLAG_PARK_RELEASE = 2
 	};
-
-	constexpr static uint32_t release_mask
-	= FLAG_PARENT_ATTACHED | FLAG_CHILD_ATTACHED;
 
 	native_handle_type handle;
 	std::atomic<uint32_t> flags;
+	std::atomic<uint32_t> use_count;
 	uint32_t tl_prng_state;
 	std::mutex park_lock;
 	std::condition_variable park_cv;
@@ -224,7 +218,7 @@ struct current_thread_data {
 	void destroy()
 	{
 		if (tdata)
-			tdata->child_release();
+			tdata->release();
 	}
 
 	typedef thread_data *(*thread_data_accessor)();
@@ -265,7 +259,7 @@ unsigned int const current_thread_data<
 
 template <typename Allocator>
 struct thread_data_impl : thread_data {
-	static thread_data *make(Allocator const &alloc, bool child_init)
+	static thread_data *make(Allocator const &alloc)
 	{
 		auto tl_seed(current_thread_data<>::shared_prng_state.next());
 		while (!tl_seed)
@@ -273,24 +267,22 @@ struct thread_data_impl : thread_data {
 
 		return yesod::detail::allocated_storage<
 			thread_data_impl, Allocator
-		>::make(alloc, child_init, tl_seed)->get();
+		>::make(alloc, tl_seed)->get();
 	}
 
-	thread_data_impl(bool child_init, uint32_t tl_prng_seed)
-	: thread_data(child_init, tl_prng_seed)
+	thread_data_impl(uint32_t tl_prng_seed)
+	: thread_data(tl_prng_seed)
 	{}
 
-	void parent_release() override
-	{
-		if (!((flags &= ~FLAG_PARENT_ATTACHED) & release_mask))
-			yesod::detail::allocated_storage<
-				thread_data_impl, Allocator
-			>::to_storage_ptr(this)->destroy();
-	}
+protected:
+	friend struct ucpf::yesod::concurrent::thread;
 
-	void child_release() override
+	template <typename Unused>
+	friend struct current_thread_data;
+
+	void release() override
 	{
-		if (!((flags &= ~FLAG_CHILD_ATTACHED) & release_mask))
+		if (!(--use_count))
 			yesod::detail::allocated_storage<
 				thread_data_impl, Allocator
 			>::to_storage_ptr(this)->destroy();
@@ -298,8 +290,8 @@ struct thread_data_impl : thread_data {
 
 	void child_attach() override
 	{
+		++use_count;
 		current_thread_data<>::holder.set_data(this);
-		flags |= FLAG_CHILD_ATTACHED;
 	}
 };
 
@@ -307,7 +299,7 @@ template <typename Unused>
 thread_data *current_thread_data<Unused>::allocate_and_get_data()
 {
 	auto data = detail::thread_data_impl<std::allocator<void>>::make(
-		std::allocator<void>{}, true
+		std::allocator<void>{}
 	);
 	data->handle = __gthread_self();
 	holder.set_data(data);
@@ -319,7 +311,6 @@ thread_data *current_thread_data<Unused>::allocate_and_get_data()
 namespace this_thread {
 
 static thread get();
-static detail::thread_data *get_thread_data();
 
 }
 
@@ -329,17 +320,16 @@ struct thread {
 	thread(thread const &) = delete;
 	thread(thread const &&) = delete;
 
-	thread(thread &&t) noexcept
-	{
-		swap(t);
-	}
+	thread(thread &&other) noexcept
+	: tdata{other.tdata.exchange(nullptr)}, transient{other.transient}
+	{}
 
 	template <typename Allocator, typename Callable, typename... Args>
 	explicit thread(
 		std::allocator_arg_t tag, Allocator const &alloc,
 		Callable &&f, Args &&...args
 	)
-	: tdata(detail::thread_data_impl<Allocator>::make(alloc, false))
+	: tdata{detail::thread_data_impl<Allocator>::make(alloc)}
 	{
 		start_thread(make_invoker(
 			alloc, std::forward<Callable>(f),
@@ -366,104 +356,115 @@ struct thread {
 
 	~thread()
 	{
-		if (joinable())
-			std::terminate();
+		release();
+	}
+
+	void release()
+	{
+		auto tdata_(tdata.exchange(nullptr));
+		if (tdata_) {
+			if (transient)
+				tdata_->release();
+			else
+				std::terminate();
+		}
 	}
 
 	thread &operator=(thread const &) = delete;
 
 	thread &operator=(thread &&other) noexcept
 	{
-		if (joinable())
+		if (tdata.load())
 			std::terminate();
 
-		swap(other);
+		tdata.store(other.tdata.exchange(nullptr));
+		transient = other.transient;
 		return *this;
 	}
 
 	typedef __gthread_t native_handle_type;
 
-	void swap(thread &other) noexcept
+	explicit operator bool()
 	{
-		std::swap(tdata, other.tdata);
-		std::swap(owner, other.owner);
+		return tdata.load() != nullptr;
 	}
 
 	bool joinable() const noexcept
 	{
-		return owner && (tdata != nullptr);
+		return tdata.load() != nullptr;
 	}
 
 	void join()
 	{
 		int err(EINVAL);
 
-		err = __gthread_join(tdata->handle, 0);
+		err = __gthread_join(tdata.load()->handle, 0);
 
 		if (err)
 			throw std::system_error(std::error_code(
 				err, std::generic_category()
 			));
 
-		if (owner) {
-			tdata->parent_release();
-			tdata = nullptr;
-		}
+		tdata.exchange(nullptr)->release();
 	}
 
 	void detach()
 	{
 		int err(EINVAL);
 
-		err = __gthread_detach(tdata->handle);
+		err = __gthread_detach(tdata.load()->handle);
 
 		if (err)
 			throw std::system_error(std::error_code(
 				err, std::generic_category()
 			));
 
-		if (owner) {
-			tdata->parent_release();
-			tdata = nullptr;
-		}
+		tdata.exchange(nullptr)->release();
 	}
 
 	void interrupt()
 	{
-		tdata->interrupt();
+		tdata.load()->interrupt();
 	}
 
 	bool is_interrupted()
 	{
-		return tdata->is_interrupted();
+		return tdata.load()->is_interrupted();
 	}
 
 	bool is_interrupted(bool clear_interrupted)
 	{
-		return tdata->is_interrupted(clear_interrupted);
+		return tdata.load()->is_interrupted(clear_interrupted);
 	}
 
-	void park()
+	template <typename BeforeWaitCallback = std::true_type>
+	void park(BeforeWaitCallback &&cb = std::true_type{})
 	{
-		tdata->park();
+		tdata.load()->park(std::forward<BeforeWaitCallback>(cb));
 	}
 
-	template <typename Rep, typename Period>
+	template <
+		typename Rep, typename Period,
+		typename BeforeWaitCallback = std::true_type
+	>
 	bool park_for(
-		std::chrono::duration<Rep, Period> const &rel_time
+		std::chrono::duration<Rep, Period> const &rel_time,
+		BeforeWaitCallback &&cb = std::true_type{}
 	)
 	{
-		return tdata->park_for(rel_time);
+		return tdata.load()->park_for(
+			rel_time, std::forward<BeforeWaitCallback>(cb)
+		);
 	}
 
 	void unpark()
 	{
-		tdata->unpark();
+		tdata.load()->unpark();
 	}
 
 	uint32_t next_seed()
 	{
-		return tdata->next_seed();
+		return tdata.load()->next_seed();
 	}
 
 	std::thread::id get_id() const noexcept
@@ -473,14 +474,9 @@ struct thread {
 
 	native_handle_type native_handle() const noexcept
 	{
-		return tdata
-			? tdata->handle 
+		return tdata.load()
+			? tdata.load()->handle 
 			: detail::thread_data::native_handle_type{};
-	}
-
-	detail::thread_data *get_thread_data() const
-	{
-		return tdata;
 	}
 
 	static unsigned int hardware_concurrency()
@@ -490,7 +486,12 @@ struct thread {
 
 private:
 	friend thread this_thread::get();
-	friend detail::thread_data *this_thread::get_thread_data();
+
+	explicit thread(detail::thread_data *tdata_)
+	: tdata{tdata_}, transient{true}
+	{
+		++tdata_->use_count;
+	}
 
 	struct invoker_base {
 		virtual ~invoker_base() = default;
@@ -518,7 +519,7 @@ private:
 	void start_thread(invoker_base *p)
 	{
 		auto err(__gthread_create(
-			&tdata->handle, execute_native_thread_routine, p
+			&tdata.load()->handle, execute_native_thread_routine, p
 		));
 
 		if (err) {
@@ -586,28 +587,15 @@ private:
 		))->get();
 	}
 
-	detail::thread_data *tdata = nullptr;
-	bool owner = true;
+	std::atomic<detail::thread_data *> tdata = {nullptr};
+	bool transient = false;
 };
-
-inline void swap(thread &first, thread &second) noexcept
-{
-	first.swap(second);
-}
 
 namespace this_thread {
 
 static inline thread get()
 {
-	thread t;
-	t.owner = false;
-	t.tdata = detail::current_thread_data<>::holder.accessor();
-	return t;
-}
-
-static inline detail::thread_data *get_thread_data()
-{
-	return detail::current_thread_data<>::holder.accessor();
+	return thread(detail::current_thread_data<>::holder.accessor());
 }
 
 }
