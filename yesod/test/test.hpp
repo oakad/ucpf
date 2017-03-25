@@ -69,8 +69,10 @@ std::ostream &print_diag(
 	std::ostream &os, void const *p, char const *format_, Args &&...args
 )
 {
+	constexpr static char const *format_prefix = "%p[%d]: ";
 	auto fsz(strlen(format_));
-	char format[9 + fsz] = "%p[%d]: ";
+	char format[9 + fsz];
+	memcpy(format, format_prefix, 8);
 	memcpy(format + 8, format_, fsz);
 	format[8 + fsz] = 0;
 	char *data_;
@@ -87,7 +89,7 @@ std::ostream &print_diag(
 	return os;
 }
 
-constexpr uint8_t const *operator ""_us(char const *s, size_t len)
+static inline uint8_t const *operator ""_us(char const *s, size_t len)
 {
 	return reinterpret_cast<uint8_t const *>(s);
 }

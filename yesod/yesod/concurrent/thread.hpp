@@ -227,7 +227,6 @@ struct current_thread_data {
 	static thread_local thread_exit_handler exit_handler;
 
 	static pcg32_state shared_prng_state;
-	static unsigned int const hardware_concurrency;
 
 	static thread_data *allocate_and_get_data();
 
@@ -251,11 +250,6 @@ current_thread_data<Unused>::exit_handler;
 template <typename Unused>
 typename current_thread_data<Unused>::pcg32_state
 current_thread_data<Unused>::shared_prng_state;
-
-template <typename Unused>
-unsigned int const current_thread_data<
-	Unused
->::hardware_concurrency = std::thread::hardware_concurrency();
 
 template <typename Allocator>
 struct thread_data_impl : thread_data {
@@ -477,11 +471,6 @@ struct thread {
 		return tdata.load()
 			? tdata.load()->handle 
 			: detail::thread_data::native_handle_type{};
-	}
-
-	static unsigned int hardware_concurrency()
-	{
-		return detail::current_thread_data<>::hardware_concurrency;
 	}
 
 private:

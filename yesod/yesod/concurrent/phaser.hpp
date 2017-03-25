@@ -30,6 +30,70 @@ struct phaser_probe;
 
 }
 
+struct phaser_config {
+	virtual ~phaser_config() = default;
+
+	enum class RELEASE_POLICY {
+		WAKING_THREAD = 0,
+		COOPERATIVE = 1
+	};
+
+	virtual RELEASE_POLICY waiter_release_policy() const = 0;
+
+	virtual int spins_per_arrival() const = 0;
+
+	virtual unsigned int concurrency() const = 0;
+
+	virtual void yield_on_conflict() const = 0;
+};
+
+namespace detail {
+
+template <typename Unused = void>
+struct default_phaser_config : phaser_config {
+	default_phaser_config()
+	: concurrency_value(
+		std::thread::hardware_concurrency()
+	), spins_per_arrival_value(
+		concurrency_value > 1 ? 256 : 1
+	)
+	{}
+
+	RELEASE_POLICY waiter_release_policy() const override
+	{
+		return RELEASE_POLICY::COOPERATIVE;
+	}
+
+	int spins_per_arrival() const override
+	{
+		return spins_per_arrival_value;
+	}
+
+	unsigned int concurrency() const override
+	{
+		return concurrency_value;
+	}
+
+	void yield_on_conflict() const override
+	{
+		auto seed(this_thread::get().next_seed());
+
+		if (!(seed & 0x7f))
+			std::this_thread::yield();
+	}
+
+	static default_phaser_config instance;
+
+private:
+	unsigned int concurrency_value;
+	int spins_per_arrival_value;
+};
+
+template <typename Unused>
+default_phaser_config<Unused> default_phaser_config<Unused>::instance;
+
+}
+
 struct phaser {
 	typedef uint64_t state_type;
 	typedef uint32_t phase_value_type;
@@ -165,11 +229,18 @@ struct phaser {
 	phaser(
 		count_type parties = 0, phaser *parent_ = nullptr,
 		notification *notifier_ = nullptr,
-		Allocator const &alloc_ = Allocator()
+		Allocator const &alloc_ = Allocator(),
+		phaser_config const &config_
+		= detail::default_phaser_config<>::instance
 	)
 	: parent(parent_), root(parent ? parent->root : this),
 	  even_q_head(nullptr), odd_q_head(nullptr),
-	  notifier(notifier_)
+	  notifier(notifier_), config(config_),
+	  release_waiters(select_release_waiters_method(
+		config.waiter_release_policy()
+	  )), invalid_ptr(select_invalid_ptr_method(
+		config.waiter_release_policy()
+	  ))
 	{
 		phase_type phase;
 
@@ -242,30 +313,30 @@ struct phaser {
 				phase_out, alloc
 			);
 
-		if (parent)
+		if (!parent) {
+			auto next_unarrived(parties_of(s));
+			auto next_phase(phase_out + 1);
+
+			if (notifier.invoke_on_advance(
+				*this, phase_out, next_unarrived
+			))
+				next = next_phase.to_state(
+					next_unarrived, 0
+				) | phaser_terminated_mask;
+			else if (!next_unarrived)
+				next = next_phase.to_state(0, 1);
+			else
+				next = next_phase.to_state(
+					next_unarrived, next_unarrived
+				);
+
+			if (!state.compare_exchange_strong(s, next))
+				return phase_type::make(s);
+
+			(this->*release_waiters)(get_queue(phase_out));
+			return phase_type::make(next);
+		} else
 			return parent->arrive_and_await_advance();
-
-		auto next_unarrived(parties_of(s));
-		auto next_phase(phase_out + 1);
-
-		if (notifier.invoke_on_advance(
-			*this, phase_out, next_unarrived
-		))
-			next = next_phase.to_state(
-				next_unarrived, 0
-			) | phaser_terminated_mask;
-		else if (!next_unarrived)
-			next = next_phase.to_state(0, 1);
-		else
-			next = next_phase.to_state(
-				next_unarrived, next_unarrived
-			);
-
-		if (!state.compare_exchange_strong(s, next))
-			return phase_type::make(s);
-
-		release_waiters(get_queue(phase_out));
-		return phase_type::make(next);
 	}
 
 	struct diag {
@@ -352,8 +423,8 @@ struct phaser {
 			s, s | phaser_terminated_mask
 		)) {}
 
-		release_waiters(root->even_q_head);
-		release_waiters(root->odd_q_head);
+		(root->*release_waiters)(root->even_q_head);
+		(root->*release_waiters)(root->odd_q_head);
 	}
 
 	phase_type get_phase() const
@@ -535,12 +606,20 @@ private:
 					auto p(q_head.load());
 
 					while (!is_releasable()) {
+						if ((root->*(
+							root->invalid_ptr
+						))(p)) {
+							root->config.yield_on_conflict();
+							p = q_head.load();
+							continue;
+						}
+
 						next = p;
 						if (q_head.compare_exchange_weak(
 							p, this
 						)) {
 							flags |= wait_node_base::FLAG_QUEUED;
-							return true;
+							return !is_releasable();
 						}
 					}
 					return false;
@@ -624,12 +703,20 @@ private:
 					auto p(q_head.load());
 
 					while (!is_releasable()) {
+						if ((root->*(
+							root->invalid_ptr
+						))(p)) {
+							root->config.yield_on_conflict();
+							p = q_head.load();
+							continue;
+						}
+
 						next = p;
 						if (q_head.compare_exchange_weak(
 							p, this
 						)) {
 							flags |= wait_node_base::FLAG_QUEUED;
-							return true;
+							return !is_releasable();
 						}
 					}
 					return false;
@@ -741,7 +828,7 @@ private:
 				);
 
 			state.compare_exchange_strong(s, next);
-			release_waiters(get_queue(phase_out));
+			(this->*release_waiters)(get_queue(phase_out));
 		} else if (!next_unarrived) {
 			phase_out = parent->do_arrive(define_state(0, 1, 1));
 			state.compare_exchange_strong(
@@ -877,14 +964,11 @@ private:
 		phase_type phase_in, WaitNodeSupplier &&w_supp
 	)
 	{
-		auto const concurrency(thread::hardware_concurrency());
-		int const spins_per_arrival(concurrency > 1 ? 256 : 1);
-
-		release_waiters(get_queue<true>(phase_in));
+		(this->*release_waiters)(get_queue<true>(phase_in));
 
 		phase_type phase_out;
 		count_type last_unarrived(0);
-		auto spins(spins_per_arrival);
+		auto spins(config.spins_per_arrival());
 		wait_node_base *node(HasNode ? w_supp(phase_in) : nullptr);
 
 		while (true) {
@@ -902,8 +986,12 @@ private:
 
 				if (unarrived != last_unarrived) {
 					last_unarrived = unarrived;
-					if (last_unarrived < concurrency)
-						spins += spins_per_arrival;
+					if (
+						last_unarrived
+						< config.concurrency()
+					)
+						spins
+						+= config.spins_per_arrival();
 				}
 
 				auto interrupted(
@@ -941,8 +1029,10 @@ private:
 			node->release();
 		}
 
-		if (cond == phase_type::CONDITION::NORMAL)
-			release_waiters(get_queue(phase_in));
+		if ((
+			cond == phase_type::CONDITION::NORMAL
+		) || termination_flag_set(state.load()))
+			(this->*release_waiters)(get_queue(phase_in));
 
 		phase_out.state += cond;
 		return phase_out;
@@ -969,7 +1059,7 @@ private:
 		}
 	}
 
-	void release_waiters(std::atomic<wait_node_base *> &q_head)
+	void release_waiters_single(std::atomic<wait_node_base *> &q_head)
 	{
 		auto p(q_head.exchange(nullptr));
 
@@ -978,6 +1068,40 @@ private:
 			p->queue_release();
 			p = q;
 		}
+	}
+
+	void release_waiters_cooperative(std::atomic<wait_node_base *> &q_head)
+	{
+		auto lock_value(reinterpret_cast<wait_node_base *>(this));
+		auto p(q_head.load());
+
+		while (true) {
+			if (!p)
+				return;
+
+			if (p == lock_value) {
+				config.yield_on_conflict();
+				p = q_head.load();
+				continue;
+			}
+
+			if (q_head.compare_exchange_weak(p, lock_value)) {
+				auto q(p->next);
+				q_head.store(q);
+				p->queue_release();
+				p = q;
+			}
+		}
+	}
+
+	bool invalid_ptr_none(wait_node_base *p) const
+	{
+		return false;
+	}
+
+	bool invalid_ptr_cooperative(wait_node_base *p) const
+	{
+		return p == reinterpret_cast<wait_node_base const *>(this);
 	}
 
 	constexpr static state_type define_state(
@@ -1030,13 +1154,52 @@ private:
 		notification *notifier;
 	};
 
-	phaser *parent;
+	typedef void (phaser::* const release_waiters_t)(
+		std::atomic<wait_node_base *> &q_head
+	);
+
+	typedef bool (phaser::* const invalid_ptr_t)(
+		wait_node_base *p
+	) const;
+
+	constexpr static release_waiters_t select_release_waiters_method(
+		phaser_config::RELEASE_POLICY p
+	)
+	{
+		switch (p) {
+		case phaser_config::RELEASE_POLICY::WAKING_THREAD:
+			return &phaser::release_waiters_single;
+		case phaser_config::RELEASE_POLICY::COOPERATIVE:
+			return &phaser::release_waiters_cooperative;
+		default:
+			return &phaser::release_waiters_single;
+		}
+	}
+
+	constexpr static invalid_ptr_t select_invalid_ptr_method(
+		phaser_config::RELEASE_POLICY p
+	)
+	{
+		switch (p) {
+		case phaser_config::RELEASE_POLICY::WAKING_THREAD:
+			return &phaser::invalid_ptr_none;
+		case phaser_config::RELEASE_POLICY::COOPERATIVE:
+			return &phaser::invalid_ptr_cooperative;
+		default:
+			return &phaser::invalid_ptr_none;
+		}
+	}
+
+	phaser * const parent;
 	phaser * const root;
 	std::mutex self_lock;
 	std::atomic<wait_node_base *> even_q_head;
 	std::atomic<wait_node_base *> odd_q_head;
 	std::atomic<state_type> state;
 	notification_invoker notifier;
+	phaser_config const &config;
+	release_waiters_t release_waiters;
+	invalid_ptr_t invalid_ptr;
 };
 
 namespace test {
