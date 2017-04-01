@@ -18,7 +18,7 @@
 #if !defined(HPP_8F2B97F0410D56C208DC74711E273730)
 #define HPP_8F2B97F0410D56C208DC74711E273730
 
-#include <yesod/detail/allocated_storage.hpp>
+#include <yesod/detail/allocated_object.hpp>
 #include <thread>
 #include <atomic>
 #include <random>
@@ -253,15 +253,15 @@ current_thread_data<Unused>::shared_prng_state;
 
 template <typename Allocator>
 struct thread_data_impl : thread_data {
-	static thread_data *make(Allocator const &alloc)
+	static thread_data *create(Allocator const &alloc)
 	{
 		auto tl_seed(current_thread_data<>::shared_prng_state.next());
 		while (!tl_seed)
 			current_thread_data<>::shared_prng_state.next();
 
-		return yesod::detail::allocated_storage<
+		return yesod::detail::allocated_object<
 			thread_data_impl, Allocator
-		>::make(alloc, tl_seed)->get();
+		>::create(alloc, tl_seed)->get();
 	}
 
 	thread_data_impl(uint32_t tl_prng_seed)
@@ -277,7 +277,7 @@ protected:
 	void release() override
 	{
 		if (!(--use_count))
-			yesod::detail::allocated_storage<
+			yesod::detail::allocated_object<
 				thread_data_impl, Allocator
 			>::to_storage_ptr(this)->destroy();
 	}
@@ -292,7 +292,7 @@ protected:
 template <typename Unused>
 thread_data *current_thread_data<Unused>::allocate_and_get_data()
 {
-	auto data = detail::thread_data_impl<std::allocator<void>>::make(
+	auto data = detail::thread_data_impl<std::allocator<void>>::create(
 		std::allocator<void>{}
 	);
 	data->handle = __gthread_self();
@@ -323,7 +323,7 @@ struct thread {
 		std::allocator_arg_t tag, Allocator const &alloc,
 		Callable &&f, Args &&...args
 	)
-	: tdata{detail::thread_data_impl<Allocator>::make(alloc)}
+	: tdata{detail::thread_data_impl<Allocator>::create(alloc)}
 	{
 		start_thread(make_invoker(
 			alloc, std::forward<Callable>(f),
@@ -544,7 +544,7 @@ private:
 
 		void destroy() override
 		{
-			yesod::detail::allocated_storage<
+			yesod::detail::allocated_object<
 				invoker, Allocator
 			>::to_storage_ptr(this)->destroy();
 		}
@@ -567,9 +567,9 @@ private:
 			typename std::__decay_and_strip<Args>::__type...
 		> tuple_type;
 
-		return yesod::detail::allocated_storage<
+		return yesod::detail::allocated_object<
 			invoker<tuple_type, Allocator>, Allocator
-		>::make(alloc, tdata, tuple_type(
+		>::create(alloc, tdata, tuple_type(
 			std::allocator_arg, alloc,
 			std::forward<Callable>(f),
 			std::forward<Args>(args)...
